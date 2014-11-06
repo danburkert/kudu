@@ -10,6 +10,7 @@
 #define BASE_AUXILIARY_ATOMICOPS_INTERNALS_MACOSX_H_
 
 typedef int32_t Atomic32;
+typedef int64_t Atomic64;
 
 // MacOS uses long for intptr_t, AtomicWord and Atomic32 are always different
 // on the Mac, even when they are the same size.  Similarly, on __ppc64__,
@@ -75,6 +76,7 @@ inline int64_t OSAtomicAdd64Barrier(
 namespace base {
 namespace subtle {
 
+typedef int32_t Atomic32;
 typedef int64_t Atomic64;
 
 inline void MemoryBarrier() {
