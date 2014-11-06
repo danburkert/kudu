@@ -57,6 +57,7 @@
 #endif
 #include "kudu/gutil/sysinfo.h"
 #include "kudu/gutil/dynamic_annotations.h"   // for RunningOnValgrind
+#include "kudu/gutil/macros.h"
 #include "kudu/gutil/walltime.h"
 #include <glog/logging.h>
 
