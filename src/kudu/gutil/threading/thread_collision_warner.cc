@@ -31,7 +31,11 @@ static subtle::Atomic32 CurrentThread() {
 #else
 
 static subtle::Atomic32 CurrentThread() {
+#if defined(linux)
   return syscall(__NR_gettid);
+#elif defined(__APPLE__)
+  return pthread_mach_thread_np(pthread_self());
+#endif
 }
 #endif
 

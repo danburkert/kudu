@@ -24,6 +24,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#if defined(__APPLE__)
+#include <mach/clock.h>
+#include <mach/mach.h>
+#endif  // defined(__APPLE__)
+
 // This is exactly like mktime() except it is guaranteed to return -1 on
 // failure.  Some versions of glibc allow mktime() to return negative
 // values which the standard says are undefined.  See the standard at
@@ -150,7 +155,17 @@ bool WallTime_Parse_Timezone(const char* time_spec,
 
 WallTime WallTime_Now() {
   timespec ts;
+#if defined(linux)
   clock_gettime(CLOCK_REALTIME, &ts);
+#elif defined(__APPLE__)
+  clock_serv_t cclock;
+  mach_timespec_t mts;
+  host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
+  clock_get_time(cclock, &mts);
+  mach_port_deallocate(mach_task_self(), cclock);
+  ts.tv_sec = mts.tv_sec;
+  ts.tv_nsec = mts.tv_nsec;
+#endif  // defined(OS_LINUX)
   return ts.tv_sec + ts.tv_nsec / static_cast<double>(1e9);
 }
 
