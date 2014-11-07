@@ -75,6 +75,13 @@ add_custom_target(gen_version_info
 # kudu_util
 #######################################
 
+
+if (APPLE)
+  set(SEMAPHORE_CC "semaphore_macosx.cc")
+else ()
+  set(SEMAPHORE_CC "semaphore.cc")
+endif()
+
 set(UTIL_SRCS
   atomic.cc
   bitmap.cc
@@ -128,7 +135,7 @@ set(UTIL_SRCS
   resettable_heartbeater.cc
   rolling_log.cc
   rwc_lock.cc
-  semaphore.cc
+  ${SEMAPHORE_CC}
   slice.cc
   spinlock_profiling.cc
   status.cc
