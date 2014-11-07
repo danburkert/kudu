@@ -1255,11 +1255,21 @@ class PosixEnv : public Env {
     int size = 64;
     while (true) {
       gscoped_ptr<char[]> buf(new char[size]);
-      ssize_t rc = readlink("/proc/self/exe", buf.get(), size);
+      ssize_t rc;
+#ifdef linux
+      rc = readlink("/proc/self/exe", buf.get(), size);
       if (rc == -1) {
         return Status::IOError("Unable to determine own executable path", "",
                                errno);
       }
+#else
+      uint32_t needed = size;
+      if (_NSGetExecutablePath(buf.get(), &needed) == 0) {
+        rc = strlen(buf.get());
+      } else {
+        rc = size; // force a resize
+      }
+#endif
       if (rc < size) {
         path->assign(&buf[0], rc);
         break;
