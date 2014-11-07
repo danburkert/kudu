@@ -159,15 +159,20 @@ set(UTIL_LIBS
   boost_system
   boost_thread
   crcutil
+  gflags
   glog
   gutil
   histogram_proto
   pb_util_proto
   protobuf
   vmem
-  rt
   version_info_proto
   zlib)
+
+if(NOT APPLE)
+  target_link_libraries(kudu_util
+    rt)
+endif()
 
 # We use MallocExtension and HeapChecker, but not in the exported version of
 # the library.

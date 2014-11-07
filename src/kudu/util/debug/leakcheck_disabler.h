@@ -29,9 +29,9 @@ class ScopedLeakCheckDisabler {
   ScopedLeakCheckDisabler() {}
 
  private:
-#ifdef TCMALLOC_ENABLED
+#if defined(TCMALLOC_ENABLED) && !defined(__APPLE__)
   HeapLeakChecker::Disabler hlc_disabler;
-#endif
+#endif // TCMALLOC_ENABLED && !defined(__APPLE__)
 
 #if defined(__has_feature)
 #  if __has_feature(address_sanitizer)
