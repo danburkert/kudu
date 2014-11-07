@@ -292,7 +292,7 @@ uint64_t HdrHistogram::ValueAtPercentile(double percentile) const {
   uint64_t count_at_percentile =
     static_cast<uint64_t>(((requested_percentile / 100.0) * count) + 0.5); // Round
   // Make sure we at least reach the first recorded entry
-  count_at_percentile = std::max(count_at_percentile, 1LU);
+  count_at_percentile = std::max(count_at_percentile, 1LLU);
 
   uint64_t total_to_current_iJ = 0;
   for (int i = 0; i < bucket_count_; i++) {
