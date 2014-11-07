@@ -28,8 +28,22 @@
 # If KUDU_REPORT_TEST_RESULTS is non-zero, then tests are reported to the
 # central test server.
 
+if [[ "$OSTYPE" =~ ^linux ]]; then
+  READLINK=readlink
+  if [[ -z "$(which readlink)" ]]; then
+    echo "readlink not found"
+    exit 1
+  fi
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+  READLINK=greadlink
+  if [[ -z "$(which greadlink)" ]]; then
+    echo "greadlink not found"
+    exit 1
+  fi
+fi
+
 ME=$(dirname $BASH_SOURCE)
-ROOT=$(readlink -f $ME/..)
+ROOT=$($READLINK -f $ME/..)
 
 TEST_LOGDIR=$ROOT/build/test-logs
 mkdir -p $TEST_LOGDIR
@@ -37,7 +51,7 @@ mkdir -p $TEST_LOGDIR
 TEST_DEBUGDIR=$ROOT/build/test-debug
 mkdir -p $TEST_DEBUGDIR
 
-TEST_EXECUTABLE=$(readlink -f $1)
+TEST_EXECUTABLE=$($READLINK -f $1)
 shift
 TEST_NAME=$(basename $TEST_EXECUTABLE | perl -pe 's/\..+?$//') # Remove path and extension (if any).
 
