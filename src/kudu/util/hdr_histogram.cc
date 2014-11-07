@@ -100,7 +100,7 @@ void HdrHistogram::Init() {
           kMinValidNumSignificantDigits, kMaxValidNumSignificantDigits);
 
   uint32_t largest_value_with_single_unit_resolution =
-      2 * static_cast<uint32_t>(pow(10, num_significant_digits_));
+      2 * static_cast<uint32_t>(pow((double)10, num_significant_digits_));
 
   // We need to maintain power-of-two sub_bucket_count_ (for clean direct
   // indexing) that is large enough to provide unit resolution to at least
@@ -117,7 +117,7 @@ void HdrHistogram::Init() {
       (sub_bucket_count_magnitude >= 1) ? sub_bucket_count_magnitude - 1 : 0;
 
   // sub_bucket_count_ is approx. 10^num_sig_digits (as a power of 2)
-  sub_bucket_count_ = pow(2, sub_bucket_half_count_magnitude_ + 1);
+  sub_bucket_count_ = pow((double)2, sub_bucket_half_count_magnitude_ + 1);
   sub_bucket_mask_ = sub_bucket_count_ - 1;
   sub_bucket_half_count_ = sub_bucket_count_ / 2;
 
@@ -472,8 +472,8 @@ void PercentileIterator::IncrementIterationLevel() {
   percentile_level_to_iterate_from_ = percentile_level_to_iterate_to_;
   // TODO: Can this expression be simplified?
   uint64_t percentile_reporting_ticks = percentile_ticks_per_half_distance_ *
-    static_cast<uint64_t>(pow(2,
-      static_cast<uint64_t>(
+    static_cast<uint64_t>(pow((long double)2,
+      (long double)(
         log(100.0 / (100.0 - (percentile_level_to_iterate_to_))) / log(2)) + 1));
   percentile_level_to_iterate_to_ += 100.0 / percentile_reporting_ticks;
 }
