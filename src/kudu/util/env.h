@@ -309,7 +309,7 @@ class RandomAccessFile {
                       uint8_t *scratch) const = 0;
 
   // Returns the size of the file
-  virtual Status Size(uint64_t *size) const = 0;
+  virtual Status Size(size_t *size) const = 0;
 
   // Returns the filename provided when the RandomAccessFile was constructed.
   virtual const std::string& filename() const = 0;

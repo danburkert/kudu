@@ -243,7 +243,7 @@ class RandomAccessFileImpl : public RandomAccessFile {
     return file_->Read(offset, n, result, scratch);
   }
 
-  virtual Status Size(uint64_t *size) const OVERRIDE {
+  virtual Status Size(size_t *size) const OVERRIDE {
     *size = file_->Size();
     return Status::OK();
   }

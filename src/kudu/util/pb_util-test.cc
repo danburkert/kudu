@@ -85,7 +85,7 @@ Status TestPBUtil::BitFlipFileByteRange(const string& path, uint64_t offset, uin
   {
     gscoped_ptr<RandomAccessFile> file;
     RETURN_NOT_OK(env_->NewRandomAccessFile(path, &file));
-    uint64_t size;
+    size_t size;
     RETURN_NOT_OK(file->Size(&size));
     Slice slice;
     faststring scratch(size);

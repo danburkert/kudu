@@ -235,7 +235,7 @@ class PosixRandomAccessFile: public RandomAccessFile {
     return s;
   }
 
-  virtual Status Size(uint64_t *size) const OVERRIDE {
+  virtual Status Size(size_t *size) const OVERRIDE {
     TRACE_EVENT1("io", "PosixRandomAccessFile::Size", "path", filename_);
     ThreadRestrictions::AssertIOAllowed();
     struct stat st;
@@ -281,7 +281,7 @@ class PosixMmapReadableFile: public RandomAccessFile {
     return s;
   }
 
-  virtual Status Size(uint64_t *size) const OVERRIDE {
+  virtual Status Size(size_t *size) const OVERRIDE {
     *size = length_;
     return Status::OK();
   }

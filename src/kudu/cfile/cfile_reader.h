@@ -108,7 +108,7 @@ class CFileReader {
   bool GetMetadataEntry(const string &key, string *val);
 
   // Can be called before Init().
-  uint64_t file_size() const {
+  size_t file_size() const {
     return file_size_;
   }
 

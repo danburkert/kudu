@@ -235,8 +235,14 @@ Status BloomFileReader::ParseBlockHeader(const Slice &block,
 Status BloomFileReader::CheckKeyPresent(const BloomKeyProbe &probe,
                                         bool *maybe_present) {
   DCHECK(init_once_.initted());
-
+#if defined(linux)
   int cpu = sched_getcpu();
+#else
+  // Use just one lock in OSX.
+  int cpu = 0;
+#endif  // define(linux)
+  CHECK_LT(cpu, iter_locks_.size());
+
   BlockPointer bblk_ptr;
   {
     boost::lock_guard<simple_spinlock> lock(iter_locks_[cpu]);

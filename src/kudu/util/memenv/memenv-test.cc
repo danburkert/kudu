@@ -239,7 +239,7 @@ TEST_F(MemEnvTest, Reopen) {
   // Check that the file has both strings.
   shared_ptr<RandomAccessFile> reader;
   ASSERT_OK(env_util::OpenFileForRandom(env_, "some file", &reader));
-  uint64_t size;
+  size_t size;
   ASSERT_OK(reader->Size(&size));
   ASSERT_EQ(first.length() + second.length(), size);
   Slice s;

@@ -15,7 +15,9 @@
 #include "kudu/cfile/cfile_writer.h"
 
 #include <boost/foreach.hpp>
+#if defined(linux)
 #include <endian.h>
+#endif  // define(linux)
 #include <glog/logging.h>
 #include <string>
 #include <utility>
