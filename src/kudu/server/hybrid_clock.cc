@@ -14,6 +14,9 @@
 
 #include <algorithm>
 #include <boost/thread/locks.hpp>
+#if defined(__APPLE__)
+#include <time.h>
+#endif  // defined(__APPLE__)
 #include <glog/logging.h>
 #include <sys/timex.h>
 

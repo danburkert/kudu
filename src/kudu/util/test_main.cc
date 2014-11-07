@@ -34,6 +34,9 @@ static void CreateAndStartTimer(timer_t* timerid, struct sigevent* sevp, struct 
 static void KillTestOnTimeout(sigval_t sigval);
 
 int main(int argc, char **argv) {
+#if defined(__APPLE__)
+  int ret = 0;
+#else
   google::InstallFailureSignalHandler();
   // InitGoogleTest() must precede ParseCommandLineFlags(), as the former
   // removes gtest-related flags from argv that would trip up the latter.
@@ -49,6 +52,7 @@ int main(int argc, char **argv) {
   int ret = RUN_ALL_TESTS();
 
   CHECK_ERR(::timer_delete(timerid));
+#endif
   return ret;
 }
 
