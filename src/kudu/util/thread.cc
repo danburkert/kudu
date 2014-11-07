@@ -20,7 +20,9 @@
 #include <boost/foreach.hpp>
 #include <map>
 #include <set>
+#ifdef linux
 #include <sys/prctl.h>
+#endif
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <tr1/memory>
@@ -117,12 +119,12 @@ class ThreadMgr {
 
     const string& name() const { return name_; }
     const string& category() const { return category_; }
-    pthread_t thread_id() const { return thread_id_; }
+    int64_t thread_id() const { return thread_id_; }
 
    private:
     string name_;
     string category_;
-    pthread_t thread_id_;
+    int64_t thread_id_;
   };
 
   // A ThreadCategory is a set of threads that are logically related.
@@ -165,12 +167,16 @@ void ThreadMgr::SetThreadName(const string& name, int64 tid) {
     return;
   }
 
+#ifdef linux
   // http://0pointer.de/blog/projects/name-your-threads.html
   // Set the name for the LWP (which gets truncated to 15 characters).
   // Note that glibc also has a 'pthread_setname_np' api, but it may not be
   // available everywhere and it's only benefit over using prctl directly is
   // that it can set the name of threads other than the current thread.
   int err = prctl(PR_SET_NAME, name.c_str());
+#else
+  int err = pthread_setname_np(name.c_str());
+#endif
   // We expect EPERM failures in sandboxed processes, just ignore those.
   if (err < 0 && errno != EPERM) {
     PLOG(ERROR) << "prctl(PR_SET_NAME)";
@@ -457,7 +463,11 @@ Status Thread::StartThread(const std::string& category, const std::string& name,
 
 void* Thread::SuperviseThread(void* arg) {
   Thread* t = static_cast<Thread*>(arg);
+#ifdef linux
   int64_t system_tid = syscall(SYS_gettid);
+#else
+  int64_t system_tid = syscall(pthread_mach_thread_np(pthread_self()));
+#endif
   if (system_tid == -1) {
     string error_msg = ErrnoToString(errno);
     KLOG_EVERY_N(INFO, 100) << "Could not determine thread ID: " << error_msg;

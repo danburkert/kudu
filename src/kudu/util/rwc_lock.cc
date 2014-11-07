@@ -65,7 +65,13 @@ bool RWCLock::HasReaders() const {
 bool RWCLock::HasWriteLock() const {
   MutexLock l(lock_);
 #ifndef NDEBUG
-  return last_writer_tid_ == static_cast<pid_t>(syscall(SYS_gettid));
+  return last_writer_tid_ == static_cast<pid_t>(
+#ifdef __APPLE__
+    pthread_mach_thread_np(pthread_self())
+#else
+    syscall(SYS_gettid)
+#endif
+  );
 #else
   return write_locked_;
 #endif
@@ -79,7 +85,13 @@ void RWCLock::WriteLock() {
   }
 #ifndef NDEBUG
   last_writelock_acquire_time_ = GetCurrentTimeMicros();
-  last_writer_tid_ = static_cast<pid_t>(syscall(SYS_gettid));
+  last_writer_tid_ = static_cast<pid_t>(
+#ifdef __APPLE__
+    pthread_mach_thread_np(pthread_self())
+#else
+    syscall(SYS_gettid)
+#endif
+  );
   HexStackTraceToString(last_writer_backtrace_, kBacktraceBufSize);
 #endif // NDEBUG
   write_locked_ = true;
