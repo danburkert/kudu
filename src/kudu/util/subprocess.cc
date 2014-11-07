@@ -43,10 +43,6 @@ using strings::Substitute;
 
 namespace kudu {
 
-namespace {
-
-static const char* kProcSelfFd = "/proc/self/fd";
-
 void DisableSigPipe() {
   struct sigaction act;
 
@@ -55,6 +51,10 @@ void DisableSigPipe() {
   act.sa_flags = 0;
   PCHECK(sigaction(SIGPIPE, &act, NULL) == 0);
 }
+
+namespace {
+
+static const char* kProcSelfFd = "/proc/self/fd";
 
 void EnsureSigPipeDisabled() {
   static GoogleOnceType once = GOOGLE_ONCE_INIT;

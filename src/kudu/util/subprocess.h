@@ -130,5 +130,8 @@ class Subprocess {
   DISALLOW_COPY_AND_ASSIGN(Subprocess);
 };
 
+// Configures this process to ignore SIGPIPE.
+void DisableSigPipe();
+
 } // namespace kudu
 #endif /* KUDU_UTIL_SUBPROCESS_H */
