@@ -216,8 +216,12 @@ target_link_libraries(kudu_test_main
   gmock
   kudu_util
   kudu_test_util
-  dl
-  rt)
+  dl)
+
+if(NOT APPLE)
+  target_link_libraries(kudu_test_main
+    rt)
+endif()
 
 #######################################
 # protoc-gen-insertions
