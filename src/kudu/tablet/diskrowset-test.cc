@@ -37,13 +37,12 @@ DECLARE_int32(cfile_default_block_size);
 DECLARE_double(tablet_delta_store_major_compact_min_ratio);
 DECLARE_int32(tablet_delta_store_minor_compact_max);
 
+using std::is_sorted;
 using std::tr1::shared_ptr;
+using std::tr1::unordered_set;
 
 namespace kudu {
 namespace tablet {
-
-using std::tr1::unordered_set;
-using util::gtl::is_sorted;
 
 // TODO: add test which calls CopyNextRows on an iterator with no more
 // rows - i think it segfaults!

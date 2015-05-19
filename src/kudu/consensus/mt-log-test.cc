@@ -166,7 +166,7 @@ TEST_F(MultiThreadedLogTest, TestAppends) {
   EntriesToIdList(&ids);
   DVLOG(1) << "Wrote total of " << current_index_ - start_current_id << " ops";
   ASSERT_EQ(current_index_ - start_current_id, ids.size());
-  ASSERT_TRUE(util::gtl::is_sorted(ids.begin(), ids.end()));
+  ASSERT_TRUE(std::is_sorted(ids.begin(), ids.end()));
 }
 
 } // namespace log
