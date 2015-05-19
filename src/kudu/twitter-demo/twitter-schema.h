@@ -5,8 +5,6 @@
 #ifndef KUDU_TWITTER_DEMO_TWITTER_SCHEMA_H
 #define KUDU_TWITTER_DEMO_TWITTER_SCHEMA_H
 
-#include <boost/assign/list_of.hpp>
-
 #include "kudu/client/schema.h"
 
 namespace kudu {
@@ -16,19 +14,18 @@ using client::KuduColumnSchema;
 using client::KuduSchema;
 
 inline KuduSchema CreateTwitterSchema() {
-  return KuduSchema(boost::assign::list_of
-                (KuduColumnSchema("tweet_id", KuduColumnSchema::INT64))
-                (KuduColumnSchema("text", KuduColumnSchema::STRING))
-                (KuduColumnSchema("source", KuduColumnSchema::STRING))
-                (KuduColumnSchema("created_at", KuduColumnSchema::STRING))
-                (KuduColumnSchema("user_id", KuduColumnSchema::INT64))
-                (KuduColumnSchema("user_name", KuduColumnSchema::STRING))
-                (KuduColumnSchema("user_description", KuduColumnSchema::STRING))
-                (KuduColumnSchema("user_location", KuduColumnSchema::STRING))
-                (KuduColumnSchema("user_followers_count", KuduColumnSchema::INT32))
-                (KuduColumnSchema("user_friends_count", KuduColumnSchema::INT32))
-                (KuduColumnSchema("user_image_url", KuduColumnSchema::STRING)),
-                1);
+  return KuduSchema({ KuduColumnSchema("tweet_id", KuduColumnSchema::INT64),
+                      KuduColumnSchema("text", KuduColumnSchema::STRING),
+                      KuduColumnSchema("source", KuduColumnSchema::STRING),
+                      KuduColumnSchema("created_at", KuduColumnSchema::STRING),
+                      KuduColumnSchema("user_id", KuduColumnSchema::INT64),
+                      KuduColumnSchema("user_name", KuduColumnSchema::STRING),
+                      KuduColumnSchema("user_description", KuduColumnSchema::STRING),
+                      KuduColumnSchema("user_location", KuduColumnSchema::STRING),
+                      KuduColumnSchema("user_followers_count", KuduColumnSchema::INT32),
+                      KuduColumnSchema("user_friends_count", KuduColumnSchema::INT32),
+                      KuduColumnSchema("user_image_url", KuduColumnSchema::STRING) },
+                      1);
 }
 
 } // namespace twitter_demo

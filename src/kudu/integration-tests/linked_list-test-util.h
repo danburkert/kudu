@@ -2,7 +2,6 @@
 // Confidential Cloudera Information: Covered by NDA.
 
 #include <algorithm>
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <glog/logging.h>
 #include <iostream>
@@ -60,21 +59,19 @@ class LinkedListTester {
                    int num_tablets,
                    int num_replicas,
                    bool enable_mutation)
-    : schema_(boost::assign::list_of
-                (client::KuduColumnSchema(kKeyColumnName, client::KuduColumnSchema::INT64))
-                (client::KuduColumnSchema(kLinkColumnName, client::KuduColumnSchema::INT64))
-                (client::KuduColumnSchema(kInsertTsColumnName, client::KuduColumnSchema::INT64))
-                (client::KuduColumnSchema(kUpdatedColumnName, client::KuduColumnSchema::BOOL,
-                                          false, &kUpdatedColumnDefault)),
+    : schema_({ client::KuduColumnSchema(kKeyColumnName, client::KuduColumnSchema::INT64),
+                client::KuduColumnSchema(kLinkColumnName, client::KuduColumnSchema::INT64),
+                client::KuduColumnSchema(kInsertTsColumnName, client::KuduColumnSchema::INT64),
+                client::KuduColumnSchema(kUpdatedColumnName, client::KuduColumnSchema::BOOL,
+                                         false, &kUpdatedColumnDefault) },
               1),
-      verify_projection_(boost::assign::list_of
-                           (client::KuduColumnSchema(kKeyColumnName,
-                                                     client::KuduColumnSchema::INT64))
-                           (client::KuduColumnSchema(kLinkColumnName,
-                                                     client::KuduColumnSchema::INT64))
-                           (client::KuduColumnSchema(kUpdatedColumnName,
-                                                     client::KuduColumnSchema::BOOL,
-                                                     false, &kUpdatedColumnDefault)),
+    verify_projection_({ client::KuduColumnSchema(kKeyColumnName,
+                                                  client::KuduColumnSchema::INT64),
+                          client::KuduColumnSchema(kLinkColumnName,
+                                                   client::KuduColumnSchema::INT64),
+                          client::KuduColumnSchema(kUpdatedColumnName,
+                                                   client::KuduColumnSchema::BOOL,
+                                                   false, &kUpdatedColumnDefault) },
                          1),
       table_name_(table_name),
       num_chains_(num_chains),

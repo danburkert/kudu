@@ -1,7 +1,6 @@
 // Copyright (c) 2013, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
 #include <tr1/memory>

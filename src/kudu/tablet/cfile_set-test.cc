@@ -21,11 +21,11 @@ using std::tr1::shared_ptr;
 class TestCFileSet : public KuduRowSetTest {
  public:
   TestCFileSet() :
-    KuduRowSetTest(Schema(boost::assign::list_of
-            (ColumnSchema("c0", UINT32))
-            (ColumnSchema("c1", UINT32, false, NULL, NULL, ColumnStorageAttributes(RLE)))
-            (ColumnSchema("c2", UINT32)), 1))
-  {}
+    KuduRowSetTest(Schema({
+          ColumnSchema("c0", UINT32),
+          ColumnSchema("c1", UINT32, false, NULL, NULL, ColumnStorageAttributes(RLE)),
+          ColumnSchema("c2", UINT32) }, 1)) {
+    }
 
   virtual void SetUp() OVERRIDE {
     KuduRowSetTest::SetUp();

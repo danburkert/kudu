@@ -4,7 +4,6 @@
 #include "kudu/consensus/log-test-base.h"
 
 #include <boost/thread/locks.hpp>
-#include <boost/assign/list_of.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
 

@@ -2,7 +2,6 @@
 // Confidential Cloudera Information: Covered by NDA.
 
 #include <boost/foreach.hpp>
-#include <boost/assign/list_of.hpp>
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
 #include <glog/stl_logging.h>
@@ -39,7 +38,6 @@ DECLARE_int32(consensus_rpc_timeout_ms);
 namespace kudu {
 namespace tserver {
 
-using boost::assign::list_of;
 using consensus::ConsensusResponsePB;
 using consensus::ConsensusRequestPB;
 using consensus::ConsensusServiceProxy;
@@ -857,8 +855,8 @@ TEST_F(RaftConsensusITest, TestAutomaticLeaderElection) {
 TEST_F(RaftConsensusITest, TestAutomaticLeaderElectionOneReplica) {
   FLAGS_num_tablet_servers = 1;
   FLAGS_num_replicas = 1;
-  vector<string> ts_flags = list_of("--enable_leader_failure_detection=true");
-  vector<string> master_flags = list_of("--catalog_manager_allow_local_consensus=false");
+  vector<string> ts_flags = { "--enable_leader_failure_detection=true" };
+  vector<string> master_flags = { "--catalog_manager_allow_local_consensus=false" };
   BuildAndStart(ts_flags, master_flags);
 
   TServerDetails* leader;

@@ -1,7 +1,6 @@
 // Copyright (c) 2012, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 #include <stdlib.h>
@@ -71,7 +70,7 @@ class TestDeltaMemStore : public KuduTest {
                     size_t col_idx,
                     ColumnBlock *cb) {
     ColumnSchema col_schema(dms_->schema().column(col_idx));
-    Schema single_col_projection(boost::assign::list_of(col_schema), 0);
+    Schema single_col_projection({ col_schema }, 0);
 
     DeltaIterator* raw_iter;
     Status s = dms_->NewDeltaIterator(&single_col_projection, snapshot, &raw_iter);

@@ -3,7 +3,6 @@
 
 #include "kudu/util/atomic.h"
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 #include <vector>
@@ -11,15 +10,15 @@
 namespace kudu {
 
 using std::vector;
-using boost::assign::list_of;
 
 // TODO Add some multi-threaded tests; currently AtomicInt is just a
 // wrapper around 'atomicops.h', but should the underlying
 // implemention change, it would help to have tests that make sure
 // invariants are preserved in a multi-threaded environment.
 TEST(Atomic, BasicOps) {
-  vector<MemoryOrder> memory_orders =
-      list_of(kMemOrderNoBarrier)(kMemOrderRelease)(kMemOrderAcquire);
+  vector<MemoryOrder> memory_orders = { kMemOrderNoBarrier,
+                                        kMemOrderRelease,
+                                        kMemOrderAcquire };
 
   BOOST_FOREACH(const MemoryOrder mem_order, memory_orders) {
     AtomicInt<int64_t> i(0);
@@ -41,7 +40,7 @@ TEST(Atomic, BasicOps) {
     EXPECT_EQ(11, i.Load(mem_order));
   }
 
-  memory_orders = list_of(kMemOrderBarrier)(kMemOrderNoBarrier);
+  memory_orders = { kMemOrderBarrier, kMemOrderNoBarrier };
   BOOST_FOREACH(const MemoryOrder mem_order, memory_orders) {
     AtomicInt<int64_t> i(0);
     EXPECT_EQ(1, i.Increment(mem_order));
@@ -50,8 +49,9 @@ TEST(Atomic, BasicOps) {
 }
 
 TEST(Atomic, AtomicBool) {
-  vector<MemoryOrder> memory_orders =
-      list_of(kMemOrderNoBarrier)(kMemOrderRelease)(kMemOrderAcquire);
+  vector<MemoryOrder> memory_orders = { kMemOrderNoBarrier,
+                                        kMemOrderRelease,
+                                        kMemOrderAcquire };
 
   BOOST_FOREACH(const MemoryOrder mem_order, memory_orders) {
     AtomicBool b(false);

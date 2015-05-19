@@ -1,7 +1,6 @@
 // Copyright (c) 2013, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <glog/logging.h>
 #include <glog/stl_logging.h>
 #include <gtest/gtest.h>
@@ -13,7 +12,6 @@
 #include "kudu/util/test_macros.h"
 #include "kudu/util/test_util.h"
 
-using boost::assign::list_of;
 using std::tr1::shared_ptr;
 
 namespace kudu {
@@ -30,8 +28,7 @@ class FsManagerTestBase : public KuduTest {
   }
 
   void ReinitFsManager() {
-    ReinitFsManager(GetTestPath("fs_root"),
-                    list_of(GetTestPath("fs_root")));
+    ReinitFsManager(GetTestPath("fs_root"), { GetTestPath("fs_root")} );
   }
 
   void ReinitFsManager(const string& wal_path, const vector<string>& data_paths) {
@@ -79,17 +76,16 @@ TEST_F(FsManagerTestBase, TestBaseOperations) {
 }
 
 TEST_F(FsManagerTestBase, TestIllegalPaths) {
-  vector<string> illegal = list_of("")("asdf")("/foo\n\t");
+  vector<string> illegal = { "", "asdf", "/foo\n\t" };
   BOOST_FOREACH(const string& path, illegal) {
-    ReinitFsManager(path, list_of(path));
+    ReinitFsManager(path, { path });
     ASSERT_TRUE(fs_manager()->CreateInitialFileSystemLayout().IsIOError());
   }
 }
 
 TEST_F(FsManagerTestBase, TestMultiplePaths) {
   string wal_path = GetTestPath("a");
-  vector<string> data_paths = list_of(
-      GetTestPath("a"))(GetTestPath("b"))(GetTestPath("c"));
+  vector<string> data_paths = { GetTestPath("a"), GetTestPath("b"), GetTestPath("c") };
   ReinitFsManager(wal_path, data_paths);
   ASSERT_OK(fs_manager()->CreateInitialFileSystemLayout());
   ASSERT_OK(fs_manager()->Open());
@@ -97,16 +93,16 @@ TEST_F(FsManagerTestBase, TestMultiplePaths) {
 
 TEST_F(FsManagerTestBase, TestMatchingPathsWithMismatchedSlashes) {
   string wal_path = GetTestPath("foo");
-  vector<string> data_paths = list_of(wal_path + "/");
+  vector<string> data_paths = { wal_path + "/" };
   ReinitFsManager(wal_path, data_paths);
   ASSERT_OK(fs_manager()->CreateInitialFileSystemLayout());
 }
 
 TEST_F(FsManagerTestBase, TestDuplicatePaths) {
   string path = GetTestPath("foo");
-  ReinitFsManager(path, list_of(path)(path)(path));
+  ReinitFsManager(path, { path, path, path });
   ASSERT_OK(fs_manager()->CreateInitialFileSystemLayout());
-  ASSERT_EQ(list_of(JoinPathSegments(path, fs_manager()->kDataDirName)),
+  ASSERT_EQ({ JoinPathSegments(path, fs_manager()->kDataDirName) },
             fs_manager()->GetDataRootDirs());
 }
 
@@ -140,7 +136,7 @@ TEST_F(FsManagerTestBase, TestCannotUseNonEmptyFsRoot) {
   }
 
   // Try to create the FS layout. It should fail.
-  ReinitFsManager(path, list_of(path));
+  ReinitFsManager(path, { path });
   ASSERT_TRUE(fs_manager()->CreateInitialFileSystemLayout().IsAlreadyPresent());
 }
 

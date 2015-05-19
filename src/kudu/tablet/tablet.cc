@@ -1,7 +1,6 @@
 // Copyright (c) 2012, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 #include <algorithm>
-#include <boost/assign/list_of.hpp>
 #include <boost/bind.hpp>
 #include <boost/foreach.hpp>
 #include <boost/thread/locks.hpp>
@@ -562,7 +561,7 @@ Status Tablet::ReplaceMemRowSetUnlocked(const Schema& schema,
   shared_ptr<RowSetTree> new_rst(new RowSetTree());
   ModifyRowSetTree(*components_->rowsets,
                    RowSetVector(), // remove nothing
-                   boost::assign::list_of(*old_ms), // add the old MRS
+                   { *old_ms }, // add the old MRS
                    new_rst.get());
 
   // Swap it in
@@ -1085,7 +1084,7 @@ Status Tablet::DoCompactionOrFlush(const Schema& schema,
     // Taking component_lock_ in write mode ensures that no new transactions
     // can start (or snapshot components_) during this block.
     boost::lock_guard<rw_spinlock> lock(component_lock_);
-    AtomicSwapRowSetsUnlocked(input.rowsets(), boost::assign::list_of(inprogress_rowset));
+    AtomicSwapRowSetsUnlocked(input.rowsets(), { inprogress_rowset });
     schema2 = schema_;
 
     // NOTE: transactions may *commit* in between these two lines.
@@ -1164,7 +1163,7 @@ Status Tablet::DoCompactionOrFlush(const Schema& schema,
 
   // Replace the compacted rowsets with the new on-disk rowsets, making them visible now that
   // their metadata was written to disk.
-  AtomicSwapRowSets(boost::assign::list_of(inprogress_rowset), new_disk_rowsets);
+  AtomicSwapRowSets({ inprogress_rowset }, new_disk_rowsets);
 
   LOG(INFO) << op_name << " successful on " << drsw.written_count()
             << " rows " << "(" << drsw.written_size() << " bytes)";

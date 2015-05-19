@@ -1,7 +1,6 @@
 // Copyright (c) 2012, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <vector>
@@ -45,8 +44,7 @@ TEST(TestSchema, TestSchema) {
   ColumnSchema col2("uint32val", UINT32, true);
   ColumnSchema col3("int32val", INT32);
 
-  vector<ColumnSchema> cols = boost::assign::list_of
-    (col1)(col2)(col3);
+  vector<ColumnSchema> cols = { col1, col2, col3 };
   Schema schema(cols, 1);
 
   ASSERT_EQ(sizeof(Slice) + sizeof(uint32_t) + sizeof(int32_t),
@@ -66,14 +64,12 @@ TEST(TestSchema, TestSchema) {
 }
 
 TEST(TestSchema, TestSwap) {
-  Schema schema1(boost::assign::list_of
-                 (ColumnSchema("col1", STRING))
-                 (ColumnSchema("col2", STRING))
-                 (ColumnSchema("col3", UINT32)),
+  Schema schema1({ ColumnSchema("col1", STRING),
+                   ColumnSchema("col2", STRING),
+                   ColumnSchema("col3", UINT32) },
                  2);
-  Schema schema2(boost::assign::list_of
-                 (ColumnSchema("col3", UINT32))
-                 (ColumnSchema("col2", STRING)),
+  Schema schema2({ ColumnSchema("col3", UINT32),
+                   ColumnSchema("col2", STRING) },
                  1);
   schema1.swap(schema2);
   ASSERT_EQ(2, schema1.num_columns());
@@ -86,10 +82,9 @@ TEST(TestSchema, TestReset) {
   Schema schema;
   ASSERT_FALSE(schema.initialized());
 
-  ASSERT_OK(schema.Reset(boost::assign::list_of
-                                (ColumnSchema("col3", UINT32))
-                                (ColumnSchema("col2", STRING)),
-                                1));
+  ASSERT_OK(schema.Reset({ ColumnSchema("col3", UINT32),
+                           ColumnSchema("col2", STRING) },
+                         1));
   ASSERT_TRUE(schema.initialized());
 
   // Swap the initialized schema with an uninitialized one.
@@ -100,15 +95,13 @@ TEST(TestSchema, TestReset) {
 }
 
 TEST(TestSchema, TestProjectSubset) {
-  Schema schema1(boost::assign::list_of
-                 (ColumnSchema("col1", STRING))
-                 (ColumnSchema("col2", STRING))
-                 (ColumnSchema("col3", UINT32)),
+  Schema schema1({ ColumnSchema("col1", STRING),
+                   ColumnSchema("col2", STRING),
+                   ColumnSchema("col3", UINT32) },
                  1);
 
-  Schema schema2(boost::assign::list_of
-                 (ColumnSchema("col3", UINT32))
-                 (ColumnSchema("col2", STRING)),
+  Schema schema2({ ColumnSchema("col3", UINT32),
+                   ColumnSchema("col2", STRING) },
                  0);
 
   RowProjector row_projector(&schema1, &schema2);
@@ -129,13 +122,10 @@ TEST(TestSchema, TestProjectSubset) {
 // Test projection when the type of the projected column
 // doesn't match the original type.
 TEST(TestSchema, TestProjectTypeMismatch) {
-  Schema schema1(boost::assign::list_of
-                 (ColumnSchema("key", STRING))
-                 (ColumnSchema("val", UINT32)),
+  Schema schema1({ ColumnSchema("key", STRING),
+                   ColumnSchema("val", UINT32) },
                  1);
-  Schema schema2(boost::assign::list_of
-                 (ColumnSchema("val", STRING)),
-                 0);
+  Schema schema2({ ColumnSchema("val", STRING) }, 0);
 
   RowProjector row_projector(&schema1, &schema2);
   Status s = row_projector.Init();
@@ -146,22 +136,18 @@ TEST(TestSchema, TestProjectTypeMismatch) {
 // Test projection when the some columns in the projection
 // are not present in the base schema
 TEST(TestSchema, TestProjectMissingColumn) {
-  Schema schema1(boost::assign::list_of
-                 (ColumnSchema("key", STRING))
-                 (ColumnSchema("val", UINT32)),
+  Schema schema1({ ColumnSchema("key", STRING),
+                   ColumnSchema("val", UINT32) },
                  1);
-  Schema schema2(boost::assign::list_of
-                 (ColumnSchema("val", UINT32))
-                 (ColumnSchema("non_present", STRING)),
+  Schema schema2({ ColumnSchema("val", UINT32),
+                   ColumnSchema("non_present", STRING) },
                  0);
-  Schema schema3(boost::assign::list_of
-                 (ColumnSchema("val", UINT32))
-                 (ColumnSchema("non_present", UINT32, true)),
+  Schema schema3({ ColumnSchema("val", UINT32),
+                   ColumnSchema("non_present", UINT32, true) },
                  0);
   uint32_t default_value = 15;
-  Schema schema4(boost::assign::list_of
-                 (ColumnSchema("val", UINT32))
-                 (ColumnSchema("non_present", UINT32, false, &default_value)),
+  Schema schema4({ ColumnSchema("val", UINT32),
+                   ColumnSchema("non_present", UINT32, false, &default_value) },
                  0);
 
   RowProjector row_projector(&schema1, &schema2);
@@ -226,12 +212,11 @@ TEST(TestSchema, TestProjectRename) {
 
 // Test that the schema can be used to compare and stringify rows.
 TEST(TestSchema, TestRowOperations) {
-  Schema schema(boost::assign::list_of
-                 (ColumnSchema("col1", STRING))
-                 (ColumnSchema("col2", STRING))
-                 (ColumnSchema("col3", UINT32))
-                 (ColumnSchema("col4", INT32)),
-                 1);
+  Schema schema({ ColumnSchema("col1", STRING),
+                  ColumnSchema("col2", STRING),
+                  ColumnSchema("col3", UINT32),
+                  ColumnSchema("col4", INT32) },
+                1);
 
   Arena arena(1024, 256*1024);
 
@@ -263,20 +248,18 @@ TEST(TestKeyEncoder, TestKeyEncoder) {
   const KeyEncoder& encoder = GetKeyEncoder(STRING);
 
   typedef boost::tuple<vector<Slice>, Slice> test_pair;
-  using boost::assign::list_of;
 
   vector<test_pair> pairs;
 
   // Simple key
-  pairs.push_back(test_pair(list_of(Slice("foo", 3)),
-                            Slice("foo", 3)));
+  pairs.push_back(test_pair({ Slice("foo", 3) }, Slice("foo", 3)));
 
   // Simple compound key
-  pairs.push_back(test_pair(list_of(Slice("foo", 3))(Slice("bar", 3)),
+  pairs.push_back(test_pair({ Slice("foo", 3), Slice("bar", 3) },
                             Slice("foo" "\x00\x00" "bar", 8)));
 
   // Compound key with a \x00 in it
-  pairs.push_back(test_pair(list_of(Slice("xxx\x00yyy", 7))(Slice("bar", 3)),
+  pairs.push_back(test_pair({ Slice("xxx\x00yyy", 7), Slice("bar", 3) },
                             Slice("xxx" "\x00\x01" "yyy" "\x00\x00" "bar", 13)));
 
   int i = 0;
@@ -298,10 +281,9 @@ TEST(TestKeyEncoder, TestKeyEncoder) {
 }
 
 TEST(TestSchema, TestDecodeKeys_CompoundStringKey) {
-  Schema schema(boost::assign::list_of
-                (ColumnSchema("col1", STRING))
-                (ColumnSchema("col2", STRING))
-                (ColumnSchema("col3", STRING)),
+  Schema schema({ ColumnSchema("col1", STRING),
+                  ColumnSchema("col2", STRING),
+                  ColumnSchema("col3", STRING) },
                 2);
 
   EXPECT_EQ("(string col1=foo, string col2=bar)",
@@ -320,10 +302,9 @@ TEST(TestSchema, TestDecodeKeys_CompoundStringKey) {
 // Test that appropriate statuses are returned when trying to decode an invalid
 // encoded key.
 TEST(TestSchema, TestDecodeKeys_InvalidKeys) {
-  Schema schema(boost::assign::list_of
-                (ColumnSchema("col1", STRING))
-                (ColumnSchema("col2", UINT32))
-                (ColumnSchema("col3", STRING)),
+  Schema schema({ ColumnSchema("col1", STRING),
+                  ColumnSchema("col2", UINT32),
+                  ColumnSchema("col3", STRING) },
                 2);
 
   EXPECT_EQ("<invalid key: Invalid argument: Error decoding composite key component"
@@ -338,12 +319,11 @@ TEST(TestSchema, TestDecodeKeys_InvalidKeys) {
 }
 
 TEST(TestSchema, TestCreatePartialSchema) {
-  Schema schema(boost::assign::list_of
-                (ColumnSchema("col1", STRING))
-                (ColumnSchema("col2", STRING))
-                (ColumnSchema("col3", STRING))
-                (ColumnSchema("col4", STRING))
-                (ColumnSchema("col5", STRING)),
+  Schema schema({ ColumnSchema("col1", STRING),
+                  ColumnSchema("col2", STRING),
+                  ColumnSchema("col3", STRING),
+                  ColumnSchema("col4", STRING),
+                  ColumnSchema("col5", STRING) },
                 2);
 
   vector<size_t> partial_cols;
@@ -408,8 +388,7 @@ TEST(TestSchema, TestCreatePartialSchema) {
 #ifdef NDEBUG
 TEST(TestKeyEncoder, BenchmarkSimpleKey) {
   faststring fs;
-  Schema schema(boost::assign::list_of
-                (ColumnSchema("col1", STRING)), 1);
+  Schema schema({ ColumnSchema("col1", STRING) }, 1);
 
   RowBuilder rb(schema);
   rb.AddString(Slice("hello world"));

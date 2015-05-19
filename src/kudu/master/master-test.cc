@@ -1,7 +1,6 @@
 // Copyright (c) 2013, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 
@@ -25,7 +24,6 @@
 DECLARE_bool(use_hybrid_clock);
 DECLARE_int32(max_clock_sync_error_usec);
 
-using boost::assign::list_of;
 using std::string;
 using std::tr1::shared_ptr;
 using kudu::rpc::Messenger;
@@ -231,10 +229,9 @@ void MasterTest::DoListAllTables(ListTablesResponsePB* resp) {
 TEST_F(MasterTest, TestCatalog) {
   const char *kTableName = "testtb";
   const char *kOtherTableName = "tbtest";
-  const Schema kTableSchema(boost::assign::list_of
-                            (ColumnSchema("key", UINT32))
-                            (ColumnSchema("v1", UINT64))
-                            (ColumnSchema("v2", STRING)),
+  const Schema kTableSchema({ ColumnSchema("key", UINT32),
+                              ColumnSchema("v1", UINT64),
+                              ColumnSchema("v2", STRING) },
                             1);
 
   ASSERT_OK(CreateTable(kTableName, kTableSchema));
@@ -315,22 +312,18 @@ TEST_F(MasterTest, TestCatalog) {
 
 TEST_F(MasterTest, TestCreateTableCheckSplitKeys) {
   const char *kTableName = "testtb";
-  const Schema kTableSchema(boost::assign::list_of
-                            (ColumnSchema("key", UINT32)),
-                            1);
+  const Schema kTableSchema({ ColumnSchema("key", UINT32) }, 1);
 
   // No duplicate split keys.
   {
-    Status s = CreateTable(kTableName, kTableSchema,
-                           list_of("k1")("k1")("k2"));
+    Status s = CreateTable(kTableName, kTableSchema, { "k1", "k1", "k2" });
     ASSERT_TRUE(s.IsInvalidArgument()) << s.ToString();
     ASSERT_STR_CONTAINS(s.ToString(), "Duplicate split key");
   }
 
   // No empty split keys.
   {
-    Status s = CreateTable(kTableName, kTableSchema,
-                           list_of("k1")(""));
+    Status s = CreateTable(kTableName, kTableSchema, { "k1", "" });
     ASSERT_TRUE(s.IsInvalidArgument());
     ASSERT_STR_CONTAINS(s.ToString(), "Empty split key");
   }
@@ -340,8 +333,7 @@ TEST_F(MasterTest, TestCreateTableInvalidKeyType) {
   const char *kTableName = "testtb";
 
   {
-    const Schema kTableSchema(boost::assign::list_of(ColumnSchema("key", BOOL)),
-                              1);
+    const Schema kTableSchema({ ColumnSchema("key", BOOL) }, 1);
     Status s = CreateTable(kTableName, kTableSchema);
     ASSERT_TRUE(s.IsInvalidArgument()) << s.ToString();
     ASSERT_STR_CONTAINS(s.ToString(),
@@ -349,8 +341,7 @@ TEST_F(MasterTest, TestCreateTableInvalidKeyType) {
   }
 
   {
-    const Schema kTableSchema(boost::assign::list_of(ColumnSchema("key", FLOAT)),
-                              1);
+    const Schema kTableSchema({ ColumnSchema("key", FLOAT) }, 1);
     Status s = CreateTable(kTableName, kTableSchema);
     ASSERT_TRUE(s.IsInvalidArgument()) << s.ToString();
     ASSERT_STR_CONTAINS(s.ToString(),
@@ -358,8 +349,7 @@ TEST_F(MasterTest, TestCreateTableInvalidKeyType) {
   }
 
   {
-    const Schema kTableSchema(boost::assign::list_of(ColumnSchema("key", DOUBLE)),
-                              1);
+    const Schema kTableSchema({ ColumnSchema("key", DOUBLE) }, 1);
     Status s = CreateTable(kTableName, kTableSchema);
     ASSERT_TRUE(s.IsInvalidArgument()) << s.ToString();
     ASSERT_STR_CONTAINS(s.ToString(),

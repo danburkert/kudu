@@ -3,7 +3,6 @@
 #ifndef KUDU_TABLET_TABLET_TEST_BASE_H
 #define KUDU_TABLET_TABLET_TEST_BASE_H
 
-#include <boost/assign/list_of.hpp>
 #include <boost/thread/thread.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
@@ -42,10 +41,9 @@ namespace tablet {
 // get coverage on various schemas without duplicating test code.
 struct StringKeyTestSetup {
   static Schema CreateSchema() {
-    return Schema(boost::assign::list_of
-                  (ColumnSchema("key", STRING))
-                  (ColumnSchema("key_idx", INT32))
-                  (ColumnSchema("val", INT32)),
+    return Schema({ ColumnSchema("key", STRING),
+                    ColumnSchema("key_idx", INT32),
+                    ColumnSchema("val", INT32) },
                   1);
   }
 
@@ -92,11 +90,10 @@ struct StringKeyTestSetup {
 // Setup for testing composite keys
 struct CompositeKeyTestSetup {
   static Schema CreateSchema() {
-    return Schema(boost::assign::list_of
-                  (ColumnSchema("key1", STRING))
-                  (ColumnSchema("key2", INT32))
-                  (ColumnSchema("key_idx", INT32))
-                  (ColumnSchema("val", INT32)),
+    return Schema({ ColumnSchema("key1", STRING),
+                    ColumnSchema("key2", INT32),
+                    ColumnSchema("key_idx", INT32),
+                    ColumnSchema("val", INT32) },
                   2);
   }
 
@@ -129,10 +126,9 @@ struct CompositeKeyTestSetup {
 template<DataType Type>
 struct IntKeyTestSetup {
   static Schema CreateSchema() {
-    return Schema(boost::assign::list_of
-                  (ColumnSchema("key", Type))
-                  (ColumnSchema("key_idx", INT32))
-                  (ColumnSchema("val", INT32)), 1);
+    return Schema({ ColumnSchema("key", Type),
+                    ColumnSchema("key_idx", INT32),
+                    ColumnSchema("val", INT32) }, 1);
   }
 
   void BuildRowKey(KuduPartialRow *row, int64_t i) {
@@ -236,10 +232,9 @@ string IntKeyTestSetup<INT64>::FormatDebugRow(int64_t key_idx, int32_t val, bool
 // Setup for testing nullable columns
 struct NullableValueTestSetup {
   static Schema CreateSchema() {
-    return Schema(boost::assign::list_of
-                  (ColumnSchema("key", INT32))
-                  (ColumnSchema("key_idx", INT32))
-                  (ColumnSchema("val", INT32, true)), 1);
+    return Schema({ ColumnSchema("key", INT32),
+                    ColumnSchema("key_idx", INT32),
+                    ColumnSchema("val", INT32, true) }, 1);
   }
 
   void BuildRowKey(KuduPartialRow *row, int64_t i) {

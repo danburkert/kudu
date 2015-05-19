@@ -1,8 +1,6 @@
 // Copyright (c) 2015, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
-
 #include "kudu/client/client.h"
 #include "kudu/client/row_result.h"
 #include "kudu/gutil/strings/strcat.h"
@@ -23,7 +21,6 @@ DEFINE_int32(row_count, 2000, "How many rows will be used in this test for the b
 DEFINE_int32(seconds_to_run, 4,
              "How long this test runs for, after inserting the base data, in seconds");
 
-using boost::assign::list_of;
 using std::tr1::shared_ptr;
 
 namespace kudu {
@@ -49,10 +46,9 @@ class UpdateScanDeltaCompactionTest : public KuduTest {
  protected:
   UpdateScanDeltaCompactionTest()
       :
-      schema_(list_of
-             (KuduColumnSchema("key", KuduColumnSchema::INT64))
-             (KuduColumnSchema("string_val", KuduColumnSchema::STRING))
-             (KuduColumnSchema("int64", KuduColumnSchema::INT64)), 1) {
+      schema_({ KuduColumnSchema("key", KuduColumnSchema::INT64),
+                KuduColumnSchema("string_val", KuduColumnSchema::STRING),
+                KuduColumnSchema("int64", KuduColumnSchema::INT64) }, 1) {
   }
 
   virtual void SetUp() OVERRIDE {

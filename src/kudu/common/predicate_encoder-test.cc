@@ -1,7 +1,6 @@
 // Copyright (c) 2013, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <vector>
@@ -15,10 +14,9 @@ namespace kudu {
 // Tests an edge condition in
 // RangePredicateEncoder::EncodeRangePredicates
 TEST(TestRangePredicateEncoder, TestEncodeRangePredicates) {
-  Schema schema(boost::assign::list_of
-                (ColumnSchema("a", UINT8))
-                (ColumnSchema("b", UINT8))
-                (ColumnSchema("c", UINT8)),
+  Schema schema({ ColumnSchema("a", UINT8),
+                  ColumnSchema("b", UINT8),
+                  ColumnSchema("c", UINT8) },
                 3);
   RangePredicateEncoder enc(&schema);
   uint8_t l = 3;

@@ -4,7 +4,6 @@
 
 #include <vector>
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 
@@ -24,7 +23,6 @@
 namespace kudu {
 namespace consensus {
 
-using boost::assign::list_of;
 using std::string;
 using std::vector;
 
@@ -135,7 +133,7 @@ QuorumPB BuildQuorum(const vector<string>& uuids) {
 
 // Test ConsensusMetadata active role calculation.
 TEST_F(ConsensusMetadataTest, TestActiveRole) {
-  vector<string> uuids = list_of("a")("b")("c")("d");
+  vector<string> uuids = { "a", "b", "c", "d" };
   string peer_uuid = "e";
   QuorumPB quorum1 = BuildQuorum(uuids); // We aren't a member of this quorum...
   quorum1.set_opid_index(1);
@@ -180,7 +178,7 @@ TEST_F(ConsensusMetadataTest, TestActiveRole) {
 // Ensure that invocations of ToConsensusStatePB() return the expected state
 // in the returned object.
 TEST_F(ConsensusMetadataTest, TestToConsensusStatePB) {
-  vector<string> uuids = list_of("a")("b")("c")("d");
+  vector<string> uuids = { "a", "b", "c", "d" };
   string peer_uuid = "e";
 
   QuorumPB committed_quorum = BuildQuorum(uuids); // We aren't a member of this quorum...

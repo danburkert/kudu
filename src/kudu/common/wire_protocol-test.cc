@@ -1,7 +1,6 @@
 // Copyright (c) 2013, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <gtest/gtest.h>
 #include "kudu/common/row.h"
 #include "kudu/common/rowblock.h"
@@ -17,10 +16,9 @@ namespace kudu {
 class WireProtocolTest : public KuduTest {
  public:
   WireProtocolTest()
-    : schema_(boost::assign::list_of
-              (ColumnSchema("col1", STRING))
-              (ColumnSchema("col2", STRING))
-              (ColumnSchema("col3", UINT32, true /* nullable */)),
+    : schema_({ ColumnSchema("col1", STRING),
+                ColumnSchema("col2", STRING),
+                ColumnSchema("col3", UINT32, true /* nullable */) },
               1) {
   }
 
@@ -219,8 +217,7 @@ TEST_F(WireProtocolTest, TestColumnarRowBlockToPBBenchmark) {
 // Test that trying to extract rows from an invalid block correctly returns
 // Corruption statuses.
 TEST_F(WireProtocolTest, TestInvalidRowBlock) {
-  Schema schema(boost::assign::list_of(ColumnSchema("col1", STRING)),
-                1);
+  Schema schema({ ColumnSchema("col1", STRING) }, 1);
   RowwiseRowBlockPB pb;
   vector<const uint8_t*> row_ptrs;
 

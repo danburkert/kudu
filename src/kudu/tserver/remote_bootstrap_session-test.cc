@@ -2,7 +2,6 @@
 // Confidential Cloudera Information: Covered by NDA.
 #include "kudu/tablet/tablet-test-util.h"
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
@@ -53,10 +52,8 @@ using tablet::WriteTransactionState;
 class RemoteBootstrapTest : public KuduTabletTest {
  public:
   RemoteBootstrapTest()
-    : KuduTabletTest(Schema(boost::assign::list_of
-                              (ColumnSchema("key", STRING))
-                              (ColumnSchema("val", INT32)),
-                              1)) {
+    : KuduTabletTest(Schema({ ColumnSchema("key", STRING)
+                              ColumnSchema("val", INT32) }, 1)) {
     CHECK_OK(ThreadPoolBuilder("test-exec").Build(&apply_pool_));
   }
 

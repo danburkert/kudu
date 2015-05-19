@@ -1,7 +1,6 @@
 // Copyright (c) 2013, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 
@@ -104,7 +103,7 @@ class RaftConsensusQuorumTest : public KuduTest {
                                             scoped_refptr<MetricEntity>(),
                                             parent_mem_tracker,
                                             test_path,
-                                            boost::assign::list_of(test_path));
+                                            { test_path });
       RETURN_NOT_OK(fs_manager->CreateInitialFileSystemLayout());
       RETURN_NOT_OK(fs_manager->Open());
       fs_managers_.push_back(fs_manager);

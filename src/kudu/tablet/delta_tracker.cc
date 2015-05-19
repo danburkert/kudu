@@ -2,7 +2,6 @@
 // Confidential Cloudera Information: Covered by NDA.
 // All rights reserved.
 
-#include <boost/assign/list_of.hpp>
 #include <boost/thread/locks.hpp>
 #include <boost/thread/shared_mutex.hpp>
 #include <tr1/memory>
@@ -23,7 +22,6 @@
 namespace kudu {
 namespace tablet {
 
-using boost::assign::list_of;
 using fs::ReadableBlock;
 using fs::WritableBlock;
 using std::string;
@@ -215,12 +213,12 @@ Status DeltaTracker::CompactStores(int start_idx, int end_idx) {
                 &compacted_stores, &compacted_blocks));
 
   // Update delta_stores_, removing the compacted delta files and inserted the new
-  RETURN_NOT_OK(AtomicUpdateStores(compacted_stores, list_of(new_block_id), REDO));
+  RETURN_NOT_OK(AtomicUpdateStores(compacted_stores, { new_block_id }, REDO));
   LOG(INFO) << "Opened delta block for read: " << new_block_id.ToString();
 
   // Update the metadata accordingly
   RowSetMetadataUpdate update;
-  update.ReplaceRedoDeltaBlocks(compacted_blocks, list_of(new_block_id));
+  update.ReplaceRedoDeltaBlocks(compacted_blocks, { new_block_id });
   // TODO: need to have some error handling here -- if we somehow can't persist the
   // metadata, do we end up losing data on recovery?
   CHECK_OK(rowset_metadata_->CommitUpdate(update));

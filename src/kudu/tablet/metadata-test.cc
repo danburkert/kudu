@@ -1,7 +1,6 @@
 // Copyright (c) 2014, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 #include <string>
@@ -14,7 +13,6 @@
 #include "kudu/util/status.h"
 #include "kudu/util/test_util.h"
 
-using boost::assign::list_of;
 using std::vector;
 using std::string;
 
@@ -50,7 +48,7 @@ TEST_F(MetadataTest, RSMD_TestReplaceDeltas_1) {
 
   ASSERT_OK(meta_->CommitUpdate(
               RowSetMetadataUpdate()
-              .ReplaceRedoDeltaBlocks(to_replace, list_of(BlockId("new_block")))));
+              .ReplaceRedoDeltaBlocks(to_replace, { BlockId("new_block") })));
   EXPECT_EQ("delta_001,new_block,delta_004",
             BlockId::JoinStrings(meta_->redo_delta_blocks()));
 }
@@ -63,7 +61,7 @@ TEST_F(MetadataTest, RSMD_TestReplaceDeltas_2) {
 
   ASSERT_OK(meta_->CommitUpdate(
               RowSetMetadataUpdate()
-              .ReplaceRedoDeltaBlocks(to_replace, list_of(BlockId("new_block")))));
+              .ReplaceRedoDeltaBlocks(to_replace, { BlockId("new_block") })));
   EXPECT_EQ("new_block,delta_003,delta_004",
             BlockId::JoinStrings(meta_->redo_delta_blocks()));
 }
@@ -76,7 +74,7 @@ TEST_F(MetadataTest, RSMD_TestReplaceDeltas_3) {
 
   ASSERT_OK(meta_->CommitUpdate(
               RowSetMetadataUpdate()
-              .ReplaceRedoDeltaBlocks(to_replace, list_of(BlockId("new_block")))));
+              .ReplaceRedoDeltaBlocks(to_replace, { BlockId("new_block") })));
   ASSERT_EQ("delta_001,delta_002,new_block",
             BlockId::JoinStrings(meta_->redo_delta_blocks()));
 }
@@ -89,7 +87,7 @@ TEST_F(MetadataTest, RSMD_TestReplaceDeltas_Bad_NonContiguous) {
 
   Status s = meta_->CommitUpdate(
     RowSetMetadataUpdate()
-    .ReplaceRedoDeltaBlocks(to_replace, list_of(BlockId("new_block"))));
+    .ReplaceRedoDeltaBlocks(to_replace, { BlockId("new_block") }));
   EXPECT_EQ("Invalid argument: Cannot find subsequence <delta_002,delta_004> "
             "in <delta_001,delta_002,delta_003,delta_004>",
             s.ToString());
@@ -106,7 +104,7 @@ TEST_F(MetadataTest, RSMD_TestReplaceDeltas_Bad_DoesntExist) {
 
   Status s = meta_->CommitUpdate(
     RowSetMetadataUpdate()
-    .ReplaceRedoDeltaBlocks(to_replace, list_of(BlockId("new_block"))));
+    .ReplaceRedoDeltaBlocks(to_replace, { BlockId("new_block") }));
   EXPECT_EQ("Invalid argument: Cannot find subsequence <delta_noexist> "
             "in <delta_001,delta_002,delta_003,delta_004>",
             s.ToString());

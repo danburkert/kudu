@@ -1,7 +1,6 @@
 // Copyright (c) 2012, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
@@ -50,9 +49,7 @@ TEST_F(TestRowSet, TestRowSetRoundTrip) {
   }
 
   // Now iterate only over the key column
-  Schema proj_key(boost::assign::list_of
-                  (ColumnSchema("key", STRING)),
-                  1);
+  Schema proj_key({ ColumnSchema("key", STRING) }, 1);
 
   LOG_TIMING(INFO, "Iterating over only key column") {
     IterateProjection(*rs, proj_key, n_rows_);
@@ -60,9 +57,7 @@ TEST_F(TestRowSet, TestRowSetRoundTrip) {
 
 
   // Now iterate only over the non-key column
-  Schema proj_val(boost::assign::list_of
-                  (ColumnSchema("val", UINT32)),
-                  1);
+  Schema proj_val({ ColumnSchema("val", UINT32) }, 1);
   LOG_TIMING(INFO, "Iterating over only val column") {
     IterateProjection(*rs, proj_val, n_rows_);
   }

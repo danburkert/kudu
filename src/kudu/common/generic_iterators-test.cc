@@ -1,7 +1,6 @@
 // Copyright (c) 2013, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <tr1/memory>
@@ -26,8 +25,7 @@ namespace kudu {
 
 using std::tr1::shared_ptr;
 
-static const Schema kIntSchema(
-  boost::assign::list_of(ColumnSchema("val", UINT32)), 1);
+static const Schema kIntSchema({ ColumnSchema("val", UINT32) }, 1);
 
 
 // Test iterator which just yields integer rows from a provided

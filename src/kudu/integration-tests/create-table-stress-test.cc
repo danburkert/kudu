@@ -1,7 +1,6 @@
 // Copyright (c) 2013, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <boost/bind.hpp>
 #include <boost/thread/thread.hpp>
 #include <gtest/gtest.h>
@@ -39,10 +38,9 @@ const char* kTableName = "test_table";
 class CreateTableStressTest : public KuduTest {
  public:
   CreateTableStressTest()
-    : schema_(boost::assign::list_of
-              (KuduColumnSchema("key", KuduColumnSchema::INT32))
-              (KuduColumnSchema("v1", KuduColumnSchema::INT64))
-              (KuduColumnSchema("v2", KuduColumnSchema::STRING)),
+    : schema_({ KuduColumnSchema("key", KuduColumnSchema::INT32),
+                KuduColumnSchema("v1", KuduColumnSchema::INT64),
+                KuduColumnSchema("v2", KuduColumnSchema::STRING) },
               1) {
   }
 

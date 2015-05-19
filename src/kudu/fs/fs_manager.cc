@@ -9,7 +9,6 @@
 #include <tr1/unordered_set>
 
 #include <boost/foreach.hpp>
-#include <boost/assign/list_of.hpp>
 #include <glog/logging.h>
 #include <glog/stl_logging.h>
 #include <google/protobuf/message.h>
@@ -71,7 +70,7 @@ static const char* const kTmpInfix = ".tmp";
 FsManager::FsManager(Env* env, const string& root_path)
   : env_(env),
     wal_fs_root_(root_path),
-    data_fs_roots_(boost::assign::list_of(root_path).convert_to_container<vector<string> >()),
+    data_fs_roots_({ root_path }),
     metric_entity_(NULL),
     initted_(false) {
 }

@@ -1,7 +1,6 @@
 // Copyright (c) 2013, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
 #include <string>
@@ -59,9 +58,8 @@ using tserver::MiniTabletServer;
 class AlterTableTest : public KuduTest {
  public:
   AlterTableTest()
-    : schema_(boost::assign::list_of
-              (KuduColumnSchema("c0", KuduColumnSchema::INT32))
-              (KuduColumnSchema("c1", KuduColumnSchema::INT32)),
+    : schema_({ KuduColumnSchema("c0", KuduColumnSchema::INT32),
+                KuduColumnSchema("c1", KuduColumnSchema::INT32) },
               1),
       stop_threads_(false),
       inserted_idx_(0) {

@@ -5,7 +5,6 @@
 #include <glog/logging.h>
 #include <stdlib.h>
 
-#include <boost/assign/list_of.hpp>
 #include "kudu/cfile/cfile-test-base.h"
 #include "kudu/cfile/cfile_reader.h"
 #include "kudu/cfile/cfile_writer.h"
@@ -322,9 +321,7 @@ void EncodeStringKey(const Schema &schema, const Slice& key,
 }
 
 TEST_F(TestCFile, TestReadWriteStrings) {
-  Schema schema(boost::assign::list_of
-                (ColumnSchema("key", STRING)),
-                1);
+  Schema schema({ ColumnSchema("key", STRING) }, 1);
 
   const int nrows = 10000;
   BlockId block_id;

@@ -4,7 +4,6 @@
 #ifndef KUDU_TSERVER_TABLET_SERVER_TEST_BASE_H_
 #define KUDU_TSERVER_TABLET_SERVER_TEST_BASE_H_
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 

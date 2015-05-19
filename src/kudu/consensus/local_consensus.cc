@@ -4,7 +4,6 @@
 #include "kudu/consensus/local_consensus.h"
 
 #include <boost/thread/locks.hpp>
-#include <boost/assign/list_of.hpp>
 #include <iostream>
 
 #include "kudu/consensus/log.h"
@@ -124,7 +123,7 @@ Status LocalConsensus::Replicate(const scoped_refptr<ConsensusRound>& round) {
     // the op id, so that we log things in-order.
     gscoped_ptr<log::LogEntryBatchPB> entry_batch;
     log::CreateBatchFromAllocatedOperations(
-        boost::assign::list_of(round->replicate_scoped_refptr()), &entry_batch);
+        { round->replicate_scoped_refptr() }, &entry_batch);
 
     RETURN_NOT_OK(log_->Reserve(log::REPLICATE, entry_batch.Pass(),
                                 &reserved_entry_batch));

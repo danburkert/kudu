@@ -1,7 +1,6 @@
 // Copyright (c) 2014, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -58,7 +57,6 @@ DEFINE_bool(perf_fp_flag, false, "Only applicable with --perf_record_scan,"
             " provides argument \"fp\" to the --call-graph flag");
 DECLARE_bool(enable_maintenance_manager);
 
-using boost::assign::list_of;
 using std::string;
 using std::tr1::shared_ptr;
 using std::vector;
@@ -88,17 +86,16 @@ class FullStackInsertScanTest : public KuduTest {
     kFlushEveryN(DefaultFlag(FLAGS_rows_per_batch, 125, 5000)),
     random_(SeedRandom()),
     // schema has kNumIntCols contiguous columns of Int32 and Int64, in order.
-    schema_(list_of
-            (KuduColumnSchema("key", KuduColumnSchema::INT64))
-            (KuduColumnSchema("string_val", KuduColumnSchema::STRING))
-            (KuduColumnSchema("int32_val1", KuduColumnSchema::INT32))
-            (KuduColumnSchema("int32_val2", KuduColumnSchema::INT32))
-            (KuduColumnSchema("int32_val3", KuduColumnSchema::INT32))
-            (KuduColumnSchema("int32_val4", KuduColumnSchema::INT32))
-            (KuduColumnSchema("int64_val1", KuduColumnSchema::INT64))
-            (KuduColumnSchema("int64_val2", KuduColumnSchema::INT64))
-            (KuduColumnSchema("int64_val3", KuduColumnSchema::INT64))
-            (KuduColumnSchema("int64_val4", KuduColumnSchema::INT64)), 1),
+    schema_({ KuduColumnSchema("key", KuduColumnSchema::INT64),
+              KuduColumnSchema("string_val", KuduColumnSchema::STRING),
+              KuduColumnSchema("int32_val1", KuduColumnSchema::INT32),
+              KuduColumnSchema("int32_val2", KuduColumnSchema::INT32),
+              KuduColumnSchema("int32_val3", KuduColumnSchema::INT32),
+              KuduColumnSchema("int32_val4", KuduColumnSchema::INT32),
+              KuduColumnSchema("int64_val1", KuduColumnSchema::INT64),
+              KuduColumnSchema("int64_val2", KuduColumnSchema::INT64),
+              KuduColumnSchema("int64_val3", KuduColumnSchema::INT64),
+              KuduColumnSchema("int64_val4", KuduColumnSchema::INT64) }, 1),
     sessions_(kNumInsertClients),
     tables_(kNumInsertClients) {
   }
@@ -411,7 +408,7 @@ void FullStackInsertScanTest::RandomRow(Random* rng, KuduPartialRow* row, char* 
 }
 
 KuduSchema FullStackInsertScanTest::StringSchema() const {
-  return KuduSchema(list_of(schema_.Column(kKeyCol)), 0);
+  return KuduSchema({ schema_.Column(kKeyCol) }, 0);
 }
 
 KuduSchema FullStackInsertScanTest::Int32Schema() const {

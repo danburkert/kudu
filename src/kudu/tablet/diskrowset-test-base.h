@@ -3,7 +3,6 @@
 #ifndef KUDU_TABLET_LAYER_TEST_BASE_H
 #define KUDU_TABLET_LAYER_TEST_BASE_H
 
-#include <boost/assign/list_of.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <tr1/unordered_set>
@@ -180,9 +179,7 @@ class TestRowSet : public KuduRowSetTest {
 
   void VerifyUpdatesWithRowIter(const DiskRowSet &rs,
                                 const unordered_set<uint32_t> &updated) {
-    Schema proj_val(boost::assign::list_of
-                    (ColumnSchema("val", UINT32)),
-                    1);
+    Schema proj_val({ ColumnSchema("val", UINT32) }, 1);
     MvccSnapshot snap = MvccSnapshot::CreateSnapshotIncludingAllTransactions();
     gscoped_ptr<RowwiseIterator> row_iter;
     CHECK_OK(rs.NewRowIterator(&proj_val, snap, &row_iter));
@@ -270,18 +267,14 @@ class TestRowSet : public KuduRowSetTest {
 
   void BenchmarkIterationPerformance(const DiskRowSet &rs,
                                      const string &log_message) {
-    Schema proj_val(boost::assign::list_of
-                    (ColumnSchema("val", UINT32)),
-                    1);
+    Schema proj_val({ ColumnSchema("val", UINT32) }, 1);
     LOG_TIMING(INFO, log_message + " (val column only)") {
       for (int i = 0; i < FLAGS_n_read_passes; i++) {
         IterateProjection(rs, proj_val, n_rows_, false);
       }
     }
 
-    Schema proj_key(boost::assign::list_of
-                    (ColumnSchema("key", STRING)),
-                    1);
+    Schema proj_key({ ColumnSchema("key", STRING) }, 1);
     LOG_TIMING(INFO, log_message + " (key string column only)") {
       for (int i = 0; i < FLAGS_n_read_passes; i++) {
         IterateProjection(rs, proj_key, n_rows_, false);

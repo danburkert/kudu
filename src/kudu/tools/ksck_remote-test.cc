@@ -2,7 +2,6 @@
 // Confidential Cloudera Information: Covered by NDA.
 
 #include <gtest/gtest.h>
-#include <boost/assign/list_of.hpp>
 
 #include "kudu/client/client.h"
 #include "kudu/client/encoded_key.h"
@@ -33,10 +32,9 @@ static const char *kTableName = "ksck-test-table";
 class RemoteKsckTest : public KuduTest {
  public:
   RemoteKsckTest()
-      : schema_(boost::assign::list_of
-              (KuduColumnSchema("key", KuduColumnSchema::INT32))
-              (KuduColumnSchema("int_val", KuduColumnSchema::INT32)),
-              1),
+      : schema_({ KuduColumnSchema("key", KuduColumnSchema::INT32),
+                  KuduColumnSchema("int_val", KuduColumnSchema::INT32) },
+                1),
         random_(SeedRandom()) {
   }
 
@@ -85,7 +83,7 @@ class RemoteKsckTest : public KuduTest {
   // Generate a set of split keys for tablets used in this test.
   vector<string> GenerateSplitKeys() {
     vector<string> keys;
-    vector<int> split_nums = boost::assign::list_of(33)(66);
+    vector<int> split_nums = { 33, 66 };
     BOOST_FOREACH(int i, split_nums) {
       client::KuduEncodedKeyBuilder builder(schema_);
       builder.AddColumnKey(&i);

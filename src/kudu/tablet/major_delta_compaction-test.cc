@@ -2,7 +2,6 @@
 // Confidential Cloudera Information: Covered by NDA.
 // All rights reserved
 
-#include <boost/assign/list_of.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
@@ -31,12 +30,11 @@ using util::gtl::is_sorted;
 class TestMajorDeltaCompaction : public KuduRowSetTest {
  public:
   TestMajorDeltaCompaction() :
-      KuduRowSetTest(Schema(boost::assign::list_of
-                            (ColumnSchema("key", STRING))
-                            (ColumnSchema("val1", INT32))
-                            (ColumnSchema("val2", STRING))
-                            (ColumnSchema("val3", INT32))
-                            (ColumnSchema("val4", STRING)), 1)),
+      KuduRowSetTest(Schema({ ColumnSchema("key", STRING),
+                              ColumnSchema("val1", INT32),
+                              ColumnSchema("val2", STRING),
+                              ColumnSchema("val3", INT32),
+                              ColumnSchema("val4", STRING) }, 1)),
       mvcc_(scoped_refptr<server::Clock>(
           server::LogicalClock::CreateStartingAt(Timestamp::kInitialTimestamp))) {
   }
@@ -166,7 +164,7 @@ TEST_F(TestMajorDeltaCompaction, TestCompact) {
 
   shared_ptr<RowSet> rs = all_rowsets.front();
 
-  vector<size_t> cols_to_compact = boost::assign::list_of(1) (3) (4);
+  vector<size_t> cols_to_compact = { 1, 3, 4 };
 
   // We'll run a few rounds of update/compact to make sure
   // that we don't get into some funny state (regression test for
@@ -223,7 +221,7 @@ TEST_F(TestMajorDeltaCompaction, TestUndos) {
   ASSERT_NO_FATAL_FAILURE(VerifyDataWithMvccAndExpectedState(snap, old_state));
 
   // Major compact, check we still have the old data.
-  vector<size_t> cols_to_compact = boost::assign::list_of(1) (3) (4);
+  vector<size_t> cols_to_compact = { 1, 3, 4 };
   ASSERT_OK(tablet()->DoMajorDeltaCompaction(cols_to_compact, rs));
   ASSERT_NO_FATAL_FAILURE(VerifyDataWithMvccAndExpectedState(snap, old_state));
 
@@ -264,7 +262,7 @@ TEST_F(TestMajorDeltaCompaction, TestCarryDeletesOver) {
   ASSERT_NO_FATAL_FAILURE(DeleteRows(kNumRows));
   ASSERT_OK(tablet()->FlushBiggestDMS());
 
-  vector<size_t> cols_to_compact = boost::assign::list_of(4);
+  vector<size_t> cols_to_compact = { 4 };
   ASSERT_OK(tablet()->DoMajorDeltaCompaction(cols_to_compact, rs));
 
   ASSERT_NO_FATAL_FAILURE(VerifyData());
@@ -310,7 +308,7 @@ TEST_F(TestMajorDeltaCompaction, TestReinserts) {
 
   // Now we'll push some of the updates down.
   shared_ptr<RowSet> rs = all_rowsets.front();
-  vector<size_t> cols_to_compact = boost::assign::list_of(4);
+  vector<size_t> cols_to_compact = { 4 };
   ASSERT_OK(tablet()->DoMajorDeltaCompaction(cols_to_compact, rs));
 
   // The data we'll see here is the 3rd batch of inserts, doesn't have updates.

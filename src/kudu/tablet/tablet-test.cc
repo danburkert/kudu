@@ -1,7 +1,6 @@
 // Copyright (c) 2012, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <glog/logging.h>
 #include <time.h>
 
@@ -900,14 +899,10 @@ TYPED_TEST(TestTablet, TestMetricsInit) {
   MetricRegistry* registry = this->harness()->metrics_registry();
   std::stringstream out;
   JsonWriter writer(&out, JsonWriter::PRETTY);
-  ASSERT_OK(registry->WriteAsJson(&writer,
-                                  boost::assign::list_of("*"),
-                                  MetricJsonOptions()));
+  ASSERT_OK(registry->WriteAsJson(&writer, { "*" }, MetricJsonOptions()));
   // Open tablet, should still work
   this->harness()->Open();
-  ASSERT_OK(registry->WriteAsJson(&writer,
-                                  boost::assign::list_of("*"),
-                                  MetricJsonOptions()));
+  ASSERT_OK(registry->WriteAsJson(&writer, { "*" }, MetricJsonOptions()));
 }
 
 // Test that we find the correct log segment size for different indexes.

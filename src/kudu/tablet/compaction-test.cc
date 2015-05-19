@@ -3,7 +3,6 @@
 // All rights reserved
 
 #include <algorithm>
-#include <boost/assign/list_of.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
@@ -577,11 +576,7 @@ TEST_F(TestCompaction, TestOneToOne) {
 
   string dummy_name = "";
 
-  ASSERT_OK(ReupdateMissedDeltas(dummy_name,
-                                        input.get(),
-                                        snap,
-                                        snap2,
-                                        boost::assign::list_of(rs)));
+  ASSERT_OK(ReupdateMissedDeltas(dummy_name, input.get(), snap, snap2, { rs }));
 
   // If we look at the contents of the DiskRowSet now, we should see the "re-updated" data.
   vector<string> out;
@@ -634,11 +629,7 @@ TEST_F(TestCompaction, TestKUDU102) {
   string dummy_name = "";
 
   // This would fail without KUDU-102
-  ASSERT_OK(ReupdateMissedDeltas(dummy_name,
-                                        input.get(),
-                                        snap,
-                                        snap2,
-                                        boost::assign::list_of(rs) (rs_b)));
+  ASSERT_OK(ReupdateMissedDeltas(dummy_name, input.get(), snap, snap2, { rs, rs_b }));
 }
 
 

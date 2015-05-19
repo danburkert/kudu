@@ -5,7 +5,6 @@
 #ifndef KUDU_BENCHMARKS_TPCH_SCHEMAS_H
 #define KUDU_BENCHMARKS_TPCH_SCHEMAS_H
 
-#include <boost/assign/list_of.hpp>
 #include "kudu/client/schema.h"
 
 namespace kudu {
@@ -60,54 +59,54 @@ enum {
 };
 
 inline client::KuduSchema CreateLineItemSchema() {
-  return client::KuduSchema(boost::assign::list_of
-                (client::KuduColumnSchema(kOrderKeyColName, kInt64))
-                (client::KuduColumnSchema(kLineNumberColName, kInt32))
-                (client::KuduColumnSchema(kPartKeyColName, kInt32))
-                (client::KuduColumnSchema(kSuppKeyColName, kInt32))
-                (client::KuduColumnSchema(kQuantityColName, kInt32)) // decimal??
-                (client::KuduColumnSchema(kExtendedPriceColName, kDouble))
-                (client::KuduColumnSchema(kDiscountColName, kDouble))
-                (client::KuduColumnSchema(kTaxColName, kDouble))
-                (client::KuduColumnSchema(kReturnFlagColName, kString,
-                                          false, NULL, kPlainEncoding))
-                (client::KuduColumnSchema(kLineStatusColName, kString,
-                                          false, NULL, kPlainEncoding))
-                (client::KuduColumnSchema(kShipDateColName, kString,
-                                          false, NULL, kPlainEncoding))
-                (client::KuduColumnSchema(kCommitDateColName, kString,
-                                          false, NULL, kPlainEncoding))
-                (client::KuduColumnSchema(kReceiptDateColName, kString,
-                                          false, NULL, kPlainEncoding))
-                (client::KuduColumnSchema(kShipInstructColName, kString,
-                                          false, NULL, kPlainEncoding))
-                (client::KuduColumnSchema(kShipModeColName, kString,
-                                          false, NULL, kPlainEncoding))
-                (client::KuduColumnSchema(kCommentColName, kString,
-                                          false, NULL, kPlainEncoding))
+  return client::KuduSchema({
+                client::KuduColumnSchema(kOrderKeyColName, kInt64),
+                client::KuduColumnSchema(kLineNumberColName, kInt32),
+                client::KuduColumnSchema(kPartKeyColName, kInt32),
+                client::KuduColumnSchema(kSuppKeyColName, kInt32),
+                client::KuduColumnSchema(kQuantityColName, kInt32), // decimal??
+                client::KuduColumnSchema(kExtendedPriceColName, kDouble),
+                client::KuduColumnSchema(kDiscountColName, kDouble),
+                client::KuduColumnSchema(kTaxColName, kDouble),
+                client::KuduColumnSchema(kReturnFlagColName, kString,
+                                         false, NULL, kPlainEncoding),
+                client::KuduColumnSchema(kLineStatusColName, kString,
+                                         false, NULL, kPlainEncoding),
+                client::KuduColumnSchema(kShipDateColName, kString,
+                                         false, NULL, kPlainEncoding),
+                client::KuduColumnSchema(kCommitDateColName, kString,
+                                         false, NULL, kPlainEncoding),
+                client::KuduColumnSchema(kReceiptDateColName, kString,
+                                         false, NULL, kPlainEncoding),
+                client::KuduColumnSchema(kShipInstructColName, kString,
+                                         false, NULL, kPlainEncoding),
+                client::KuduColumnSchema(kShipModeColName, kString,
+                                         false, NULL, kPlainEncoding),
+                client::KuduColumnSchema(kCommentColName, kString,
+                                         false, NULL, kPlainEncoding) }
                 , 2);
 }
 
 inline client::KuduSchema CreateTpch1QuerySchema() {
-  return client::KuduSchema(boost::assign::list_of
-                (client::KuduColumnSchema(kShipDateColName, kString,
-                                          false, NULL, kPlainEncoding))
-                (client::KuduColumnSchema(kReturnFlagColName, kString,
-                                          false, NULL, kPlainEncoding))
-                (client::KuduColumnSchema(kLineStatusColName, kString,
-                                          false, NULL, kPlainEncoding))
-                (client::KuduColumnSchema(kQuantityColName, kInt32))
-                (client::KuduColumnSchema(kExtendedPriceColName, kDouble))
-                (client::KuduColumnSchema(kDiscountColName, kDouble))
-                (client::KuduColumnSchema(kTaxColName, kDouble))
+  return client::KuduSchema({
+                client::KuduColumnSchema(kShipDateColName, kString,
+                                          false, NULL, kPlainEncoding),
+                client::KuduColumnSchema(kReturnFlagColName, kString,
+                                         false, NULL, kPlainEncoding),
+                client::KuduColumnSchema(kLineStatusColName, kString,
+                                         false, NULL, kPlainEncoding),
+                client::KuduColumnSchema(kQuantityColName, kInt32),
+                client::KuduColumnSchema(kExtendedPriceColName, kDouble),
+                client::KuduColumnSchema(kDiscountColName, kDouble),
+                client::KuduColumnSchema(kTaxColName, kDouble) }
                 , 0);
 }
 
 inline client::KuduSchema CreateMS3DemoQuerySchema() {
-  return client::KuduSchema(boost::assign::list_of
-                (client::KuduColumnSchema(kOrderKeyColName, kInt64))
-                (client::KuduColumnSchema(kLineNumberColName, kInt32))
-                (client::KuduColumnSchema(kQuantityColName, kInt32))
+  return client::KuduSchema({
+                client::KuduColumnSchema(kOrderKeyColName, kInt64),
+                client::KuduColumnSchema(kLineNumberColName, kInt32),
+                client::KuduColumnSchema(kQuantityColName, kInt32) }
                 , 0);
 }
 

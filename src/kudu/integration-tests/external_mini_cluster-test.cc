@@ -1,7 +1,6 @@
 // Copyright (c) 2014, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <sys/types.h>
@@ -22,7 +21,7 @@ class EMCTest : public KuduTest {
     // Hard-coded RPC ports for the masters. This is safe, as this unit test
     // runs under a resource lock (see CMakeLists.txt in this directory).
     // TODO we should have a generic method to obtain n free ports.
-    master_quorum_ports_ = boost::assign::list_of(11010)(11011)(11012);
+    master_quorum_ports_ = { 11010, 11011, 11012 };
   }
 
  protected:

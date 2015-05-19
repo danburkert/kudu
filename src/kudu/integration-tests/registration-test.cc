@@ -1,7 +1,6 @@
 // Copyright (c) 2013, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
 #include <string>
@@ -40,9 +39,7 @@ using tserver::MiniTabletServer;
 class RegistrationTest : public KuduTest {
  public:
   RegistrationTest()
-    : schema_(boost::assign::list_of
-              (ColumnSchema("c1", UINT32)),
-              1) {
+    : schema_({ ColumnSchema("c1", UINT32) }, 1) {
   }
 
   virtual void SetUp() OVERRIDE {

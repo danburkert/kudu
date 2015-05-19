@@ -1,7 +1,6 @@
 // Copyright (c) 2014, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <vector>
@@ -40,7 +39,7 @@ class MasterFailoverTest : public KuduTest {
   };
 
   MasterFailoverTest() {
-    opts_.master_rpc_ports = boost::assign::list_of(11010)(11011)(11012);
+    opts_.master_rpc_ports = { 11010, 11011, 11012 };
     opts_.num_masters = num_masters_ = opts_.master_rpc_ports.size();
     opts_.num_tablet_servers = kNumTabletServerReplicas;
 
@@ -84,11 +83,10 @@ class MasterFailoverTest : public KuduTest {
   }
 
   Status CreateTable(const std::string& table_name, CreateTableMode mode) {
-    KuduSchema client_schema(boost::assign::list_of
-                             (KuduColumnSchema("key", KuduColumnSchema::INT32))
-                             (KuduColumnSchema("int_val", KuduColumnSchema::INT32))
-                             (KuduColumnSchema("string_val", KuduColumnSchema::STRING))
-                             , 1);
+    KuduSchema client_schema({ KuduColumnSchema("key", KuduColumnSchema::INT32),
+                               KuduColumnSchema("int_val", KuduColumnSchema::INT32),
+                               KuduColumnSchema("string_val", KuduColumnSchema::STRING) },
+                             1);
     return client_->NewTableCreator()->table_name(table_name)
         .schema(&client_schema)
         .timeout(MonoDelta::FromSeconds(90))

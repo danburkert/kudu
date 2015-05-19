@@ -1,7 +1,6 @@
 // Copyright (c) 2013, Cloudera, inc.
 // Confidential Cloudera Information: Covered by NDA.
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 #include <gflags/gflags.h>
@@ -48,7 +47,6 @@ DECLARE_int32(max_clock_sync_error_usec);
 DECLARE_int32(max_create_tablets_per_ts);
 DEFINE_int32(test_scan_num_rows, 1000, "Number of rows to insert and scan");
 
-using boost::assign::list_of;
 using std::string;
 using std::set;
 using std::tr1::shared_ptr;
@@ -74,12 +72,11 @@ const int32_t kNonNullDefault = 12345;
 class ClientTest : public KuduTest {
  public:
   ClientTest()
-    : schema_(list_of
-              (KuduColumnSchema("key", KuduColumnSchema::INT32))
-              (KuduColumnSchema("int_val", KuduColumnSchema::INT32))
-              (KuduColumnSchema("string_val", KuduColumnSchema::STRING, true))
-              (KuduColumnSchema("non_null_with_default", KuduColumnSchema::INT32, false,
-                                &kNonNullDefault)),
+    : schema_({ KuduColumnSchema("key", KuduColumnSchema::INT32),
+                KuduColumnSchema("int_val", KuduColumnSchema::INT32),
+                KuduColumnSchema("string_val", KuduColumnSchema::STRING, true),
+                KuduColumnSchema("non_null_with_default", KuduColumnSchema::INT32, false,
+                                 &kNonNullDefault) },
               1) {
     FLAGS_enable_data_block_fsync = false; // Keep unit tests fast.
   }
@@ -756,8 +753,7 @@ TEST_F(ClientTest, TestScanPredicateKeyColNotProjected) {
   ASSERT_NO_FATAL_FAILURE(InsertTestRows(client_table_.get(),
                                          FLAGS_test_scan_num_rows));
   KuduScanner scanner(client_table_.get());
-  KuduSchema no_key_projection(list_of
-                               (schema_.Column(1)), 0);
+  KuduSchema no_key_projection({ schema_.Column(1) }, 0);
   ASSERT_OK(scanner.SetProjection(&no_key_projection));
   int32_t lower = 5;
   int32_t upper = 10;
@@ -1037,7 +1033,7 @@ TEST_F(ClientTest, TestScanWithEncodedRangePredicate) {
 
   // Build all encoded keys needed for this test.
   KuduEncodedKeyBuilder builder(schema_);
-  vector<int32_t> raw_keys = list_of(0x5)(0x8)(0x15)(0x20);
+  vector<int32_t> raw_keys = { 0x5, 0x8, 0x15, 0x20 };
   unordered_map<int32_t, KuduEncodedKey*> encoded_keys;
   ValueDeleter encoded_keys_deleter(&encoded_keys);
   BOOST_FOREACH(int32_t raw_key, raw_keys) {
