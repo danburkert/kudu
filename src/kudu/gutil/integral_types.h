@@ -86,7 +86,7 @@ typedef unsigned long      uword_t;
 // Use the following macros for printf formatters in preference to
 // "%lld" or "%q". The "_W" variant is for wide strings.
 #define GG_LL_FORMAT __PRI64_PREFIX
-#define GG_LL_FORMAT_W L""__PRI64_PREFIX
+#define GG_LL_FORMAT_W L"" __PRI64_PREFIX
 
 #endif  // _MSC_VER
 
