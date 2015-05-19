@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <boost/optional.hpp>
 #include <glog/stl_logging.h>
@@ -37,7 +36,6 @@
 #include "kudu/util/pstack_watcher.h"
 #include "kudu/util/test_util.h"
 
-using boost::assign::list_of;
 using kudu::client::KuduClient;
 using kudu::client::KuduClientBuilder;
 using kudu::client::KuduSchema;

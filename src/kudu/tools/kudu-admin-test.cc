@@ -14,7 +14,6 @@
 //
 // Tests for the kudu-admin command-line tool.
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 

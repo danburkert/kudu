@@ -21,7 +21,6 @@
 #include <tr1/unordered_set>
 
 #include <boost/foreach.hpp>
-#include <boost/assign/list_of.hpp>
 #include <glog/logging.h>
 #include <glog/stl_logging.h>
 #include <google/protobuf/message.h>
@@ -71,7 +70,6 @@ DEFINE_string(fs_data_dirs, "",
               "block directory.");
 TAG_FLAG(fs_data_dirs, stable);
 
-using boost::assign::list_of;
 using google::protobuf::Message;
 using strings::Substitute;
 using std::map;
@@ -114,7 +112,7 @@ FsManager::FsManager(Env* env, const string& root_path)
   : env_(DCHECK_NOTNULL(env)),
     read_only_(false),
     wal_fs_root_(root_path),
-    data_fs_roots_(list_of(root_path).convert_to_container<vector<string> >()),
+    data_fs_roots_({ root_path }),
     metric_entity_(NULL),
     initted_(false) {
 }
@@ -290,10 +288,9 @@ Status FsManager::CreateInitialFileSystemLayout() {
   }
 
   // Initialize ancillary directories.
-  vector<string> ancillary_dirs = list_of
-      (GetWalsRootDir())
-      (GetTabletMetadataDir())
-      (GetConsensusMetadataDir());
+  vector<string> ancillary_dirs = { GetWalsRootDir(),
+                                    GetTabletMetadataDir(),
+                                    GetConsensusMetadataDir() };
   BOOST_FOREACH(const string& dir, ancillary_dirs) {
     bool created;
     RETURN_NOT_OK_PREPEND(CreateDirIfMissing(dir, &created),

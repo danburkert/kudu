@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 
 #include <tr1/memory>
@@ -51,7 +50,7 @@ class ClientStressTest : public KuduTest {
     ExternalMiniClusterOptions opts = default_opts();
     if (multi_master()) {
       opts.num_masters = 3;
-      opts.master_rpc_ports = boost::assign::list_of(11010)(11011)(11012);
+      opts.master_rpc_ports = { 11010, 11011, 11012 };
     }
     opts.num_tablet_servers = 3;
     cluster_.reset(new ExternalMiniCluster(opts));

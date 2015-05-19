@@ -14,7 +14,6 @@
 
 #include "kudu/master/sys_catalog.h"
 
-#include <boost/assign/list_of.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 

@@ -14,7 +14,6 @@
 #include "kudu/consensus/consensus_queue.h"
 
 #include <algorithm>
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <boost/thread/locks.hpp>
 #include <gflags/gflags.h>
@@ -241,7 +240,7 @@ void PeerMessageQueue::LocalPeerAppendFinished(const OpId& id,
 }
 
 Status PeerMessageQueue::AppendOperation(const ReplicateRefPtr& msg) {
-  return AppendOperations(boost::assign::list_of(msg), Bind(DoNothingStatusCB));
+  return AppendOperations({ msg }, Bind(DoNothingStatusCB));
 }
 
 Status PeerMessageQueue::AppendOperations(const vector<ReplicateRefPtr>& msgs,
