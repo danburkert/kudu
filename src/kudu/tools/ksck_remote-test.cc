@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <gtest/gtest.h>
-#include <boost/assign/list_of.hpp>
 
 #include "kudu/client/client.h"
 #include "kudu/gutil/strings/substitute.h"
@@ -134,7 +133,7 @@ class RemoteKsckTest : public KuduTest {
   // Generate a set of split rows for tablets used in this test.
   vector<const KuduPartialRow*> GenerateSplitRows() {
     vector<const KuduPartialRow*> split_rows;
-    vector<int> split_nums = boost::assign::list_of(33)(66);
+    vector<int> split_nums = { 33, 66 };
     BOOST_FOREACH(int i, split_nums) {
       KuduPartialRow* row = schema_.NewRow();
       CHECK_OK(row->SetInt32(0, i));

@@ -625,8 +625,8 @@ TEST_F(ConsensusQueueTest, TestQueueMovesWatermarksBackward) {
   // Now rewrite some of the operations and wait for the log to append.
   Synchronizer synch;
   CHECK_OK(queue_->AppendOperations(
-      boost::assign::list_of(make_scoped_refptr(new RefCountedReplicate(
-          CreateDummyReplicate(2, 5, clock_->Now(), 0).release()))),
+        { make_scoped_refptr(new RefCountedReplicate(
+              CreateDummyReplicate(2, 5, clock_->Now(), 0).release())) },
       synch.AsStatusCallback()));
 
   // Wait for the operation to be in the log.
@@ -636,8 +636,8 @@ TEST_F(ConsensusQueueTest, TestQueueMovesWatermarksBackward) {
   // in log cache.
   synch.Reset();
   CHECK_OK(queue_->AppendOperations(
-      boost::assign::list_of(make_scoped_refptr(new RefCountedReplicate(
-          CreateDummyReplicate(2, 6, clock_->Now(), 0).release()))),
+        { make_scoped_refptr(new RefCountedReplicate(
+              CreateDummyReplicate(2, 6, clock_->Now(), 0).release())) },
       synch.AsStatusCallback()));
 
   // Wait for the operation to be in the log.

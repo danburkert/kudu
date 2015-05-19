@@ -33,7 +33,6 @@
 
 #include "kudu/master/catalog_manager.h"
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <boost/optional.hpp>
 #include <boost/thread/condition_variable.hpp>
@@ -1581,7 +1580,7 @@ Status CatalogManager::HandleReportedTablet(TSDescriptor* ts_desc,
   table_lock.Unlock();
   // We update the tablets each time that someone reports it.
   // This shouldn't be very frequent and should only happen when something in fact changed.
-  Status s = sys_catalog_->UpdateTablets(boost::assign::list_of(tablet.get()));
+  Status s = sys_catalog_->UpdateTablets({ tablet.get() });
   if (!s.ok()) {
     LOG(WARNING) << "Error updating tablets: " << s.ToString() << ". Tablet report was: "
                  << report.ShortDebugString();
@@ -2427,7 +2426,7 @@ void CatalogManager::DeleteTabletsAndSendRequests(const scoped_refptr<TableInfo>
 
     TabletMetadataLock tablet_lock(tablet.get(), TabletMetadataLock::WRITE);
     tablet_lock.mutable_data()->set_state(SysTabletsEntryPB::DELETED, deletion_msg);
-    CHECK_OK(sys_catalog_->UpdateTablets(boost::assign::list_of(tablet.get())));
+    CHECK_OK(sys_catalog_->UpdateTablets({ tablet.get() }));
     tablet_lock.Commit();
   }
 }

@@ -554,8 +554,8 @@ TEST_F(AlterTableTest, TestBootstrapAfterAlters) {
   ASSERT_OK(tablet_peer_->tablet()->Flush());
   InsertRows(1, 1);
 
-  UpdateRow(0, boost::assign::map_list_of("c1", 10001));
-  UpdateRow(1, boost::assign::map_list_of("c1", 10002));
+  UpdateRow(0, { {"c1", 10001} });
+  UpdateRow(1, { {"c1", 10002} });
 
   NO_FATALS(ScanToStrings(&rows));
   ASSERT_EQ(2, rows.size());
@@ -614,7 +614,7 @@ TEST_F(AlterTableTest, TestCompactAfterUpdatingRemovedColumn) {
   ASSERT_EQ("(int32 c0=16777216, int32 c1=1, int32 c2=12345)", rows[1]);
 
   // Add a delta for c1.
-  UpdateRow(0, boost::assign::map_list_of("c1", 54321));
+  UpdateRow(0, { {"c1", 54321} });
 
   // Drop c1.
   LOG(INFO) << "Dropping c1";
@@ -647,7 +647,7 @@ TEST_F(AlterTableTest, TestMajorCompactDeltasAfterUpdatingRemovedColumn) {
   ASSERT_EQ("(int32 c0=0, int32 c1=0, int32 c2=12345)", rows[0]);
 
   // Add a delta for c1.
-  UpdateRow(0, boost::assign::map_list_of("c1", 54321));
+  UpdateRow(0, { {"c1", 54321} });
 
   // Make sure the delta is in a delta-file.
   ASSERT_OK(tablet_peer_->tablet()->FlushBiggestDMS());
@@ -696,7 +696,7 @@ TEST_F(AlterTableTest, TestMajorCompactDeltasIntoMissingBaseData) {
   ASSERT_OK(AddNewI32Column(kTableName, "c2", 12345));
 
   // Add a delta for c2.
-  UpdateRow(0, boost::assign::map_list_of("c2", 54321));
+  UpdateRow(0, { {"c2", 54321} });
 
   // Make sure the delta is in a delta-file.
   ASSERT_OK(tablet_peer_->tablet()->FlushBiggestDMS());
@@ -745,7 +745,7 @@ TEST_F(AlterTableTest, TestMajorCompactDeltasAfterAddUpdateRemoveColumn) {
   ASSERT_OK(AddNewI32Column(kTableName, "c2", 12345));
 
   // Add a delta for c2.
-  UpdateRow(0, boost::assign::map_list_of("c2", 54321));
+  UpdateRow(0, { {"c2", 54321} });
 
   // Make sure the delta is in a delta-file.
   ASSERT_OK(tablet_peer_->tablet()->FlushBiggestDMS());

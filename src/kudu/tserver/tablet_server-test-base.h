@@ -17,10 +17,7 @@
 
 #include <algorithm>
 #include <assert.h>
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
-#include <boost/foreach.hpp>
-#include <gtest/gtest.h>
 #include <gtest/gtest.h>
 #include <iostream>
 #include <memory>

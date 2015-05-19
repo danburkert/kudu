@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <boost/foreach.hpp>
-#include <boost/assign/list_of.hpp>
 
 #include <algorithm>
 #include <map>

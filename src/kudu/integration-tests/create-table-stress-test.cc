@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/assign/list_of.hpp>
 #include <boost/bind.hpp>
 #include <boost/thread/thread.hpp>
 #include <glog/stl_logging.h>

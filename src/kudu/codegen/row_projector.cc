@@ -20,7 +20,6 @@
 #include <utility>
 #include <vector>
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/IR/Argument.h>
@@ -44,7 +43,6 @@ namespace llvm {
 class LLVMContext;
 } // namespace llvm
 
-using boost::assign::list_of;
 using llvm::Argument;
 using llvm::BasicBlock;
 using llvm::ConstantInt;
@@ -89,10 +87,9 @@ llvm::Function* MakeProjection(const string& name,
   const Schema& projection = *proj.projection();
 
   // Create the function after providing a declaration
-  vector<Type*> argtypes = list_of<Type*>
-    (Type::getInt8PtrTy(context))
-    (PointerType::getUnqual(mbuilder->GetType("class.kudu::RowBlockRow")))
-    (PointerType::getUnqual(mbuilder->GetType("class.kudu::Arena")));
+  vector<Type*> argtypes = { Type::getInt8PtrTy(context),
+                             PointerType::getUnqual(mbuilder->GetType("class.kudu::RowBlockRow")),
+                             PointerType::getUnqual(mbuilder->GetType("class.kudu::Arena")) };
   FunctionType* fty =
     FunctionType::get(Type::getInt1Ty(context), argtypes, false);
   Function* f = mbuilder->Create(fty, name);
@@ -188,8 +185,7 @@ llvm::Function* MakeProjection(const string& name,
     src_cell->setName(StrCat("src_cell_base_", base_idx));
     Value* col_idx = builder->getInt64(proj_idx);
     ConstantInt* is_binary = builder->getInt1(col.type_info()->physical_type() == BINARY);
-    vector<Value*> args = list_of<Value*>
-      (size)(src_cell)(rbrow)(col_idx)(is_binary)(arena);
+    vector<Value*> args = { size, src_cell, rbrow, col_idx, is_binary, arena };
 
     // Add additional arguments if nullable
     Function* to_call = copy_cell_not_null;
@@ -226,15 +222,14 @@ llvm::Function* MakeProjection(const string& name,
     // Handle default columns that are nullable
     if (col.is_nullable()) {
       Value* is_null = builder->getInt1(dfl == NULL);
-      vector<Value*> args = list_of<Value*>(rbrow)(col_idx)(is_null);
+      vector<Value*> args = { rbrow, col_idx, is_null };
       builder->CreateCall(row_block_set_null, args);
       // If dfl was NULL, we're done
       if (dfl == NULL) continue;
     }
 
     // Make the copy cell call and check the return value
-    vector<Value*> args = list_of
-      (size)(src_cell)(rbrow)(col_idx)(is_binary)(arena);
+    vector<Value*> args = { size, src_cell, rbrow, col_idx, is_binary, arena };
     Value* result = builder->CreateCall(copy_cell_not_null, args);
     result->setName(StrCat("result_dfl", dfl_idx));
     success = builder->CreateAnd(success, result);

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/assign/list_of.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
@@ -44,7 +43,6 @@ using std::unordered_set;
 namespace kudu {
 namespace tablet {
 
-using boost::assign::list_of;
 using util::gtl::is_sorted;
 
 // TODO: add test which calls CopyNextRows on an iterator with no more
@@ -66,7 +64,7 @@ TEST_F(TestRowSet, TestRowSetRoundTrip) {
 
   // Now iterate only over the key column
   Schema proj_key;
-  ASSERT_OK(schema_.CreateProjectionByNames(list_of("key"), &proj_key));
+  ASSERT_OK(schema_.CreateProjectionByNames({ "key" }, &proj_key));
 
   LOG_TIMING(INFO, "Iterating over only key column") {
     IterateProjection(*rs, proj_key, n_rows_);
@@ -75,7 +73,7 @@ TEST_F(TestRowSet, TestRowSetRoundTrip) {
 
   // Now iterate only over the non-key column
   Schema proj_val;
-  ASSERT_OK(schema_.CreateProjectionByNames(list_of("val"), &proj_val));
+  ASSERT_OK(schema_.CreateProjectionByNames({ "val" }, &proj_val));
   LOG_TIMING(INFO, "Iterating over only val column") {
     IterateProjection(*rs, proj_val, n_rows_);
   }

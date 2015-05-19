@@ -157,7 +157,7 @@ TEST_F(TestPBUtil, TestWritableFileOutputStream) {
 TEST_F(TestPBUtil, TestPBContainerSimple) {
   // Exercise both the SYNC and NO_SYNC codepaths, despite the fact that we
   // aren't able to observe a difference in the test.
-  vector<SyncMode> modes = boost::assign::list_of(SYNC)(NO_SYNC);
+  vector<SyncMode> modes = { SYNC, NO_SYNC };
   BOOST_FOREACH(SyncMode mode, modes) {
 
     // Write the file.

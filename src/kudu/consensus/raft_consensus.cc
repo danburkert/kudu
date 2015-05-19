@@ -15,7 +15,6 @@
 #include "kudu/consensus/raft_consensus.h"
 
 #include <algorithm>
-#include <boost/assign/list_of.hpp>
 #include <boost/optional.hpp>
 #include <gflags/gflags.h>
 #include <iostream>
