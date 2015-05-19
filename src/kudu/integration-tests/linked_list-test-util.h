@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <algorithm>
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <glog/logging.h>
 #include <iostream>
@@ -65,9 +64,7 @@ class LinkedListTester {
                    int num_tablets,
                    int num_replicas,
                    bool enable_mutation)
-    : verify_projection_(boost::assign::list_of
-                         (kKeyColumnName)(kLinkColumnName)(kUpdatedColumnName)
-                         .convert_to_container<vector<string> >()),
+    : verify_projection_({ kKeyColumnName, kLinkColumnName, kUpdatedColumnName }),
       table_name_(table_name),
       num_chains_(num_chains),
       num_tablets_(num_tablets),

@@ -14,7 +14,6 @@
 
 #include "kudu/consensus/leader_election.h"
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <string>
 #include <vector>
@@ -262,7 +261,7 @@ scoped_refptr<LeaderElection> LeaderElectionTest::SetUpElectionWithGrantDenyErro
 // All peers respond "yes", no failures.
 TEST_F(LeaderElectionTest, TestPerfectElection) {
   // Try configuration sizes of 1, 3, 5.
-  vector<int> config_sizes = boost::assign::list_of(1)(3)(5);
+  vector<int> config_sizes = { 1, 3, 5 };
   BOOST_FOREACH(int num_voters, config_sizes) {
     LOG(INFO) << "Testing election with config size of " << num_voters;
     int majority_size = (num_voters / 2) + 1;

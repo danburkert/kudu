@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/assign/list_of.hpp>
-
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
@@ -74,7 +72,7 @@ using tserver::WriteRequestPB;
 using tserver::WriteResponsePB;
 
 static Schema GetTestSchema() {
-  return Schema(boost::assign::list_of(ColumnSchema("key", INT32)), 1);
+  return Schema({ ColumnSchema("key", INT32) }, 1);
 }
 
 class TabletPeerTest : public KuduTabletTest {

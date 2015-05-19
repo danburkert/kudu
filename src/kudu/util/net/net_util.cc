@@ -18,7 +18,6 @@
 #include <netdb.h>
 
 #include <algorithm>
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <tr1/unordered_set>
 #include <utility>
@@ -265,8 +264,7 @@ void TryRunLsof(const Sockaddr& addr, vector<string>* log) {
                            << "Trying to use lsof to find any processes listening "
                            << "on the same port:";
   LOG_STRING(INFO, log) << "$ " << cmd;
-  Subprocess p("/bin/bash",
-               boost::assign::list_of<string>("bash")("-c")(cmd));
+  Subprocess p("/bin/bash", { "bash", "-c", cmd });
   p.ShareParentStdout(false);
   Status s = p.Start();
   if (!s.ok()) {
