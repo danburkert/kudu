@@ -36,7 +36,6 @@ namespace kudu {
 namespace tablet {
 
 using strings::Substitute;
-using util::gtl::is_sorted;
 
 class TestMajorDeltaCompaction : public KuduRowSetTest {
  public:

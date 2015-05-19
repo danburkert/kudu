@@ -160,8 +160,8 @@ void CheckCollectOrderedCorrectness(const vector<RowSetInfo>& min_key,
     CHECK_EQ(min_key.front().cdf_min_key(), 0.0f);
     CHECK_EQ(max_key.back().cdf_max_key(), total_width);
   }
-  DCHECK(util::gtl::is_sorted(min_key.begin(), min_key.end(), LessCDFAndRSMin));
-  DCHECK(util::gtl::is_sorted(max_key.begin(), max_key.end(), LessCDFAndRSMax));
+  DCHECK(std::is_sorted(min_key.begin(), min_key.end(), LessCDFAndRSMin));
+  DCHECK(std::is_sorted(max_key.begin(), max_key.end(), LessCDFAndRSMax));
 }
 
 } // anonymous namespace
