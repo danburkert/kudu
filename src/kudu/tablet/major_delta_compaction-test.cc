@@ -35,7 +35,6 @@ namespace tablet {
 using std::tr1::unordered_set;
 
 using strings::Substitute;
-using util::gtl::is_sorted;
 
 class TestMajorDeltaCompaction : public KuduRowSetTest {
  public:

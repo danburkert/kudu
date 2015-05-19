@@ -40,7 +40,6 @@ namespace kudu {
 namespace tablet {
 
 using std::tr1::unordered_set;
-using util::gtl::is_sorted;
 
 // TODO: add test which calls CopyNextRows on an iterator with no more
 // rows - i think it segfaults!
@@ -455,7 +454,7 @@ TEST_F(TestRowSet, TestMakeDeltaIteratorMergerUnlocked) {
   }
   ASSERT_EQ(compacted_stores.size(), num_stores);
   ASSERT_EQ(compacted_blocks.size(), num_stores);
-  ASSERT_TRUE(is_sorted(results.begin(), results.end()));
+  ASSERT_TRUE(std::is_sorted(results.begin(), results.end()));
 }
 
 void BetweenZeroAndOne(double to_check) {
@@ -528,7 +527,7 @@ TEST_F(TestRowSet, TestCompactStores) {
   BOOST_FOREACH(const string &str, results) {
     VLOG(1) << str;
   }
-  ASSERT_TRUE(is_sorted(results.begin(), results.end()));
+  ASSERT_TRUE(std::is_sorted(results.begin(), results.end()));
 }
 
 } // namespace tablet
