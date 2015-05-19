@@ -14,7 +14,6 @@
 
 #include "kudu/twitter-demo/insert_consumer.h"
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <boost/thread/locks.hpp>
 #include <glog/logging.h>

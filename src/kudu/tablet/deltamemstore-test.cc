@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 #include <stdlib.h>
@@ -90,8 +89,8 @@ class TestDeltaMemStore : public KuduTest {
                     size_t col_idx,
                     ColumnBlock *cb) {
     ColumnSchema col_schema(schema_.column(col_idx));
-    Schema single_col_projection(boost::assign::list_of(col_schema),
-                                 boost::assign::list_of(schema_.column_id(col_idx)),
+    Schema single_col_projection({ col_schema },
+                                 { schema_.column_id(col_idx) },
                                  0);
 
     DeltaIterator* raw_iter;

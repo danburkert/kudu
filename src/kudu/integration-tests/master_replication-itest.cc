@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/assign/list_of.hpp>
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
 
@@ -54,7 +53,7 @@ class MasterReplicationTest : public KuduTest {
     // Hard-coded ports for the masters. This is safe, as this unit test
     // runs under a resource lock (see CMakeLists.txt in this directory).
     // TODO we should have a generic method to obtain n free ports.
-    opts_.master_rpc_ports = boost::assign::list_of(11010)(11011)(11012);
+    opts_.master_rpc_ports = { 11010, 11011, 11012 };
 
     opts_.num_masters = num_masters_ = opts_.master_rpc_ports.size();
     opts_.num_tablet_servers = kNumTabletServerReplicas;
