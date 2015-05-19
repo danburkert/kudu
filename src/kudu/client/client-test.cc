@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 #include <gflags/gflags.h>
@@ -75,7 +74,6 @@ DEFINE_int32(test_scan_num_rows, 1000, "Number of rows to insert and scan");
 METRIC_DECLARE_counter(scans_started);
 METRIC_DECLARE_counter(rpcs_queue_overflow);
 
-using boost::assign::list_of;
 using std::string;
 using std::set;
 using std::tr1::shared_ptr;
@@ -252,7 +250,7 @@ class ClientTest : public KuduTest {
 
   void DoTestScanWithoutPredicates() {
     KuduScanner scanner(client_table_.get());
-    ASSERT_OK(scanner.SetProjectedColumns(list_of<string>("key")));
+    ASSERT_OK(scanner.SetProjectedColumns({ "key" }));
     LOG_TIMING(INFO, "Scanning with no predicates") {
       ASSERT_OK(scanner.Open());
 
@@ -748,14 +746,14 @@ TEST_F(ClientTest, TestScanEmptyProjection) {
 
 TEST_F(ClientTest, TestProjectInvalidColumn) {
   KuduScanner scanner(client_table_.get());
-  Status s = scanner.SetProjectedColumns(list_of<string>("column-doesnt-exist"));
+  Status s = scanner.SetProjectedColumns({ "column-doesnt-exist" });
   ASSERT_EQ("Not found: Column: \"column-doesnt-exist\" was not found in the table schema.",
             s.ToString());
 
   // Test trying to use a projection where a column is used multiple times.
   // TODO: consider fixing this to support returning the column multiple
   // times, even though it's not very useful.
-  s = scanner.SetProjectedColumns(list_of<string>("key")("key"));
+  s = scanner.SetProjectedColumns({ "key", "key" });
   ASSERT_EQ("Invalid argument: Duplicate column name: key", s.ToString());
 }
 
@@ -765,7 +763,7 @@ TEST_F(ClientTest, TestScanPredicateKeyColNotProjected) {
   ASSERT_NO_FATAL_FAILURE(InsertTestRows(client_table_.get(),
                                          FLAGS_test_scan_num_rows));
   KuduScanner scanner(client_table_.get());
-  ASSERT_OK(scanner.SetProjectedColumns(list_of<string>("int_val")));
+  ASSERT_OK(scanner.SetProjectedColumns({ "int_val" }));
   ASSERT_OK(scanner.AddConjunctPredicate(
                 client_table_->NewComparisonPredicate("key", KuduPredicate::GREATER_EQUAL,
                                                       KuduValue::FromInt(5))));
@@ -811,7 +809,7 @@ TEST_F(ClientTest, TestScanPredicateNonKeyColNotProjected) {
   size_t nrows = 0;
   int32_t curr_key = 10;
 
-  ASSERT_OK(scanner.SetProjectedColumns(list_of<string>("key")));
+  ASSERT_OK(scanner.SetProjectedColumns({ "key" }));
 
   LOG_TIMING(INFO, "Scanning with predicate columns not projected") {
     ASSERT_OK(scanner.Open());
@@ -2567,7 +2565,7 @@ TEST_F(ClientTest, TestCreateTableWithTooManyTablets) {
   gscoped_ptr<KuduTableCreator> table_creator(client_->NewTableCreator());
   Status s = table_creator->table_name("foobar")
       .schema(&schema_)
-      .split_rows(list_of(split1)(split2))
+      .split_rows({ split1, split2 })
       .num_replicas(3)
       .Create();
   ASSERT_TRUE(s.IsInvalidArgument());
@@ -2585,7 +2583,7 @@ TEST_F(ClientTest, TestCreateTableWithTooManyReplicas) {
   gscoped_ptr<KuduTableCreator> table_creator(client_->NewTableCreator());
   Status s = table_creator->table_name("foobar")
       .schema(&schema_)
-      .split_rows(list_of(split1)(split2))
+      .split_rows({ split1, split2 })
       .num_replicas(3)
       .Create();
   ASSERT_TRUE(s.IsInvalidArgument());

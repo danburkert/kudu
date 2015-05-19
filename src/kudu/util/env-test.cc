@@ -19,7 +19,6 @@
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
-#include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
 
 #include "kudu/gutil/bind.h"
@@ -700,10 +699,7 @@ TEST_F(TestEnv, TestRWFile) {
 }
 
 TEST_F(TestEnv, TestCanonicalize) {
-  vector<string> synonyms = boost::assign::list_of
-      (GetTestPath("."))
-      (GetTestPath("./."))
-      (GetTestPath(".//./"));
+  vector<string> synonyms = { GetTestPath("."), GetTestPath("./."), GetTestPath(".//./") };
   BOOST_FOREACH(const string& synonym, synonyms) {
     string result;
     ASSERT_OK(env_->Canonicalize(synonym, &result));
