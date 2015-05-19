@@ -46,7 +46,6 @@ namespace tablet {
 
 using fs::ReadableBlock;
 using fs::WritableBlock;
-using util::gtl::is_sorted;
 
 class TestDeltaCompaction : public KuduTest {
  public:
@@ -202,7 +201,7 @@ TEST_F(TestDeltaCompaction, TestMergeMultipleSchemas) {
   BOOST_FOREACH(const string &str, results) {
     VLOG(1) << str;
   }
-  ASSERT_TRUE(is_sorted(results.begin(), results.end()));
+  ASSERT_TRUE(std::is_sorted(results.begin(), results.end()));
 }
 
 } // namespace tablet

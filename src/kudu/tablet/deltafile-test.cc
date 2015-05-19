@@ -41,7 +41,6 @@ namespace tablet {
 using fs::CountingReadableBlock;
 using fs::ReadableBlock;
 using fs::WritableBlock;
-using util::gtl::is_sorted;
 
 // Test path to write delta file to (in in-memory environment)
 const char kTestPath[] = "/tmp/test";
@@ -209,7 +208,7 @@ TEST_F(TestDeltaFile, TestDumpDeltaFileIterator) {
   BOOST_FOREACH(const string& str, it_contents) {
     VLOG(1) << str;
   }
-  ASSERT_TRUE(is_sorted(it_contents.begin(), it_contents.end()));
+  ASSERT_TRUE(std::is_sorted(it_contents.begin(), it_contents.end()));
   ASSERT_EQ(it_contents.size(), (FLAGS_last_row_to_update - FLAGS_first_row_to_update) / 2 + 1);
 }
 
@@ -246,7 +245,7 @@ TEST_F(TestDeltaFile, TestWriteDeltaFileIteratorToFile) {
   BOOST_FOREACH(const string& str, it_contents) {
     VLOG(1) << str;
   }
-  ASSERT_TRUE(is_sorted(it_contents.begin(), it_contents.end()));
+  ASSERT_TRUE(std::is_sorted(it_contents.begin(), it_contents.end()));
   ASSERT_EQ(it_contents.size(), (FLAGS_last_row_to_update - FLAGS_first_row_to_update) / 2 + 1);
 }
 

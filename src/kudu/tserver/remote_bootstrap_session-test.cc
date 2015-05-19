@@ -68,7 +68,7 @@ using tablet::WriteTransactionState;
 class RemoteBootstrapTest : public KuduTabletTest {
  public:
   RemoteBootstrapTest()
-    : KuduTabletTest(Schema({ ColumnSchema("key", STRING)
+    : KuduTabletTest(Schema({ ColumnSchema("key", STRING),
                               ColumnSchema("val", INT32) }, 1)) {
     CHECK_OK(ThreadPoolBuilder("test-exec").Build(&apply_pool_));
   }
