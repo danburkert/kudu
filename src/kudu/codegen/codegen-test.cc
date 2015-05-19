@@ -41,7 +41,7 @@ class CodegenTest : public KuduTest {
                                   ColumnSchema("int32-null    ",  INT32,  true),
                                   ColumnSchema("str32         ", STRING, false),
                                   ColumnSchema("str32-null-val", STRING,  true),
-                                  ColumnSchema("str32-null    ", STRING,  true) }
+                                  ColumnSchema("str32-null    ", STRING,  true) };
     base_.Reset(cols, 1);
 
     // Create an extended default schema
