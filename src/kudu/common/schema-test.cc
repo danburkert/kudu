@@ -247,7 +247,7 @@ TEST(TestKeyEncoder, TestKeyEncoder) {
   faststring fs;
   const KeyEncoder& encoder = GetKeyEncoder(STRING);
 
-  typedef boost::tuple<vector<Slice>, Slice> test_pair;
+  typedef std::tuple<vector<Slice>, Slice> test_pair;
 
   vector<test_pair> pairs;
 
@@ -263,9 +263,9 @@ TEST(TestKeyEncoder, TestKeyEncoder) {
                             Slice("xxx" "\x00\x01" "yyy" "\x00\x00" "bar", 13)));
 
   int i = 0;
-  BOOST_FOREACH(const test_pair &t, pairs) {
-    const vector<Slice> &in = boost::get<0>(t);
-    Slice expected = boost::get<1>(t);
+  for (const test_pair &t: pairs) {
+    const vector<Slice> &in = std::get<0>(t);
+    Slice expected = std::get<1>(t);
 
     fs.clear();
     for (int col = 0; col < in.size(); col++) {

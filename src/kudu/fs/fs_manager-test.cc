@@ -77,7 +77,7 @@ TEST_F(FsManagerTestBase, TestBaseOperations) {
 
 TEST_F(FsManagerTestBase, TestIllegalPaths) {
   vector<string> illegal = { "", "asdf", "/foo\n\t" };
-  BOOST_FOREACH(const string& path, illegal) {
+  for (const string& path: illegal) {
     ReinitFsManager(path, { path });
     ASSERT_TRUE(fs_manager()->CreateInitialFileSystemLayout().IsIOError());
   }
@@ -102,7 +102,7 @@ TEST_F(FsManagerTestBase, TestDuplicatePaths) {
   string path = GetTestPath("foo");
   ReinitFsManager(path, { path, path, path });
   ASSERT_OK(fs_manager()->CreateInitialFileSystemLayout());
-  ASSERT_EQ({ JoinPathSegments(path, fs_manager()->kDataDirName) },
+  ASSERT_EQ(vector<string>({ JoinPathSegments(path, fs_manager()->kDataDirName) }),
             fs_manager()->GetDataRootDirs());
 }
 

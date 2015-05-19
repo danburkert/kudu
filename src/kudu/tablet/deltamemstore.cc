@@ -400,7 +400,7 @@ Status DMSIterator::DecodeMutation(Slice *src, DeltaKey *key, RowChangeList *cha
 Status DMSIterator::CorruptionStatus(const string &message, rowid_t row,
                                      const RowChangeList *changelist) const {
   string ret = message;
-  StringAppendF(&ret, "[row=%"ROWID_PRINT_FORMAT"", row);
+  StringAppendF(&ret, "[row=%" ROWID_PRINT_FORMAT "", row);
   if (changelist != NULL) {
     ret.append(" CL=");
     ret.append(changelist->ToString(dms_->schema()));

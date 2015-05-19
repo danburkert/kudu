@@ -230,15 +230,15 @@ void HandleRequest(Handler handler,
 void TracingPathHandlers::RegisterHandlers(Webserver* server) {
   // All of the tracing-related hand
   std::map<string, Handler> handlers = {
-    ("/tracing/json/begin_monitoring", kBeginMonitoring),
-    ("/tracing/json/end_monitoring", kEndMonitoring),
-    ("/tracing/json/capture_monitoring", kCaptureMonitoring),
-    ("/tracing/json/get_monitoring_status", kGetMonitoringStatus),
-    ("/tracing/json/categories", kCategories),
-    ("/tracing/json/begin_recording", kBeginRecording),
-    ("/tracing/json/get_buffer_percent_full", kGetBufferPercentFull),
-    ("/tracing/json/end_recording", kEndRecording),
-    ("/tracing/json/simple_dump", kSimpleDump) };
+    std::make_pair("/tracing/json/begin_monitoring", kBeginMonitoring),
+    std::make_pair("/tracing/json/end_monitoring", kEndMonitoring),
+    std::make_pair("/tracing/json/capture_monitoring", kCaptureMonitoring),
+    std::make_pair("/tracing/json/get_monitoring_status", kGetMonitoringStatus),
+    std::make_pair("/tracing/json/categories", kCategories),
+    std::make_pair("/tracing/json/begin_recording", kBeginRecording),
+    std::make_pair("/tracing/json/get_buffer_percent_full", kGetBufferPercentFull),
+    std::make_pair("/tracing/json/end_recording", kEndRecording),
+    std::make_pair("/tracing/json/simple_dump", kSimpleDump) };
 
   typedef pair<string, Handler> HandlerPair;
   BOOST_FOREACH(const HandlerPair& e, handlers) {
