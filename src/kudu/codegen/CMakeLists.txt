@@ -75,6 +75,7 @@ set(IR_OUTPUT ${BUILD_OUTPUT_ROOT_DIRECTORY}/precompiled.ll)
 set(IR_OUTPUT_ELF ${IR_OUTPUT}.o)
 # Retrieve all includes directories needed for precompilation
 set(IR_INCLUDES
+  -I ${Boost_INCLUDE_DIR}
   -I ${CMAKE_SOURCE_DIR}/src
   -I ${GLOG_INCLUDE_DIR}
   -I ${GTEST_INCLUDE_DIR})
@@ -90,9 +91,9 @@ endforeach()
 set(IR_FLAGS
   -S -emit-llvm
   -DIR_BUILD
+  --gcc-toolchain=/opt/rh/devtoolset-3/root/usr
   ${CMAKE_CXX_FLAGS}
   ${PREFIXED_IR_PP_DEFS}
-  -Wno-c++11-extensions # OVERRIDE macro conflicts with c++11 override
   ${IR_INCLUDES})
 separate_arguments(IR_FLAGS)
 
