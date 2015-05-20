@@ -735,7 +735,7 @@ TEST_F(RaftConsensusITest, TestFollowerFallsBehindLeaderGC) {
     SleepFor(MonoDelta::FromSeconds(5));
     vector<OpId> op_ids;
     ASSERT_OK(GetLastOpIdForEachReplica(tablet_id_,
-                                        boost::assign::list_of(leader),
+                                        vector<TServerDetails*> { leader },
                                         &op_ids));
     ASSERT_EQ(1, op_ids.size());
     ASSERT_EQ(1, op_ids[0].term())
