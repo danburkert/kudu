@@ -19,11 +19,17 @@
     zError;
     zlib*;
 
+    # devtoolset
+    __cxa_throw_bad_array*;
+
     extern "C++" {
       # glog, gflags, and protobuf
       *google::*;
       fL*::FLAGS_*;
       gflags_mutex_namespace::*;
-      glog_internal_namespace_::*
+      glog_internal_namespace_::*;
+
+      # devtoolset
+      std*;
     };
 };
