@@ -347,7 +347,7 @@ class DiskRowSet : public RowSet {
   // Major compacts all the delta files for all the columns.
   Status MajorCompactDeltaStores();
 
-  boost::mutex *compact_flush_lock() OVERRIDE {
+  std::mutex *compact_flush_lock() OVERRIDE {
     return &compact_flush_lock_;
   }
 
@@ -401,7 +401,7 @@ class DiskRowSet : public RowSet {
 
   // Lock governing this rowset's inclusion in a compact/flush. If locked,
   // no other compactor will attempt to include this rowset.
-  boost::mutex compact_flush_lock_;
+  std::mutex compact_flush_lock_;
 
   DISALLOW_COPY_AND_ASSIGN(DiskRowSet);
 };

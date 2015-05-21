@@ -63,7 +63,7 @@ ScannerManager::ScannerManager(const scoped_refptr<MetricEntity>& metric_entity)
 
 ScannerManager::~ScannerManager() {
   {
-    boost::lock_guard<boost::mutex> l(shutdown_lock_);
+    std::lock_guard<std::mutex> l(shutdown_lock_);
     shutdown_ = true;
     shutdown_cv_.notify_all();
   }
@@ -84,13 +84,12 @@ void ScannerManager::RunRemovalThread() {
   while (true) {
     // Loop until we are shutdown.
     {
-      boost::unique_lock<boost::mutex> l(shutdown_lock_);
+      std::unique_lock<std::mutex> l(shutdown_lock_);
       if (shutdown_) {
         return;
       }
-      boost::system_time wtime = boost::get_system_time() +
-          boost::posix_time::microseconds(FLAGS_scanner_gc_check_interval_us);
-      shutdown_cv_.timed_wait(l, wtime);
+      auto timeout = std::chrono::system_clock::now() + FLAGS_scanner_gc_check_interval_us * 1us;
+      shutdown_cv_.wait_until(l, timeout);
     }
     RemoveExpiredScanners();
   }
@@ -114,27 +113,27 @@ void ScannerManager::NewScanner(const scoped_refptr<TabletPeer>& tablet_peer,
     scanner->reset(new Scanner(id, tablet_peer, requestor_string, metrics_.get()));
 
     ScannerMapStripe& stripe = GetStripeByScannerId(id);
-    boost::lock_guard<boost::shared_mutex> l(stripe.lock_);
+    std::lock_guard<boost::shared_mutex> l(stripe.lock_);
     success = InsertIfNotPresent(&stripe.scanners_by_id_, id, *scanner);
   }
 }
 
 bool ScannerManager::LookupScanner(const string& scanner_id, SharedScanner* scanner) {
   ScannerMapStripe& stripe = GetStripeByScannerId(scanner_id);
-  boost::shared_lock<boost::shared_mutex> l(stripe.lock_);
+  std::shared_lock<boost::shared_mutex> l(stripe.lock_);
   return FindCopy(stripe.scanners_by_id_, scanner_id, scanner);
 }
 
 bool ScannerManager::UnregisterScanner(const string& scanner_id) {
   ScannerMapStripe& stripe = GetStripeByScannerId(scanner_id);
-  boost::lock_guard<boost::shared_mutex> l(stripe.lock_);
+  std::lock_guard<boost::shared_mutex> l(stripe.lock_);
   return stripe.scanners_by_id_.erase(scanner_id) > 0;
 }
 
 size_t ScannerManager::CountActiveScanners() const {
   size_t total = 0;
   BOOST_FOREACH(const ScannerMapStripe* e, scanner_maps_) {
-    boost::shared_lock<boost::shared_mutex> l(e->lock_);
+    std::shared_lock<boost::shared_mutex> l(e->lock_);
     total += e->scanners_by_id_.size();
   }
   return total;
@@ -142,7 +141,7 @@ size_t ScannerManager::CountActiveScanners() const {
 
 void ScannerManager::ListScanners(std::vector<SharedScanner>* scanners) {
   BOOST_FOREACH(const ScannerMapStripe* stripe, scanner_maps_) {
-    boost::shared_lock<boost::shared_mutex> l(stripe->lock_);
+    std::shared_lock<boost::shared_mutex> l(stripe->lock_);
     BOOST_FOREACH(const ScannerMapEntry& se, stripe->scanners_by_id_) {
       scanners->push_back(se.second);
     }
@@ -153,7 +152,7 @@ void ScannerManager::RemoveExpiredScanners() {
   MonoDelta scanner_ttl = MonoDelta::FromMilliseconds(FLAGS_scanner_ttl_ms);
 
   BOOST_FOREACH(ScannerMapStripe* stripe, scanner_maps_) {
-    boost::lock_guard<boost::shared_mutex> l(stripe->lock_);
+    std::lock_guard<boost::shared_mutex> l(stripe->lock_);
     for (ScannerMap::iterator it = stripe->scanners_by_id_.begin();
          it != stripe->scanners_by_id_.end(); ) {
       SharedScanner& scanner = it->second;
@@ -197,13 +196,13 @@ Scanner::~Scanner() {
 }
 
 void Scanner::UpdateAccessTime() {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   last_access_time_ = MonoTime::Now(MonoTime::COARSE);
 }
 
 void Scanner::Init(gscoped_ptr<RowwiseIterator> iter,
                    gscoped_ptr<ScanSpec> spec) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   CHECK(!iter_) << "Already initialized";
   iter_.reset(iter.release());
   spec_.reset(spec.release());

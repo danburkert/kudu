@@ -39,12 +39,12 @@ class MvccTest : public KuduTest {
     MvccSnapshot s;
     CHECK_OK(mgr->WaitForCleanSnapshotAtTimestamp(ts, &s, MonoTime::Max()));
     CHECK(s.is_clean()) << "verifying postcondition";
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     result_snapshot_.reset(new MvccSnapshot(s));
   }
 
   bool HasResultSnapshot() {
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     return result_snapshot_ != NULL;
   }
 

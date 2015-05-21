@@ -18,6 +18,7 @@
 #include <boost/thread/shared_mutex.hpp>
 #include <map>
 #include <memory>
+#include <shared_mutex>
 #include <string>
 #include <vector>
 
@@ -311,7 +312,7 @@ class Log : public RefCountedThreadSafe<Log> {
   }
 
   const SegmentAllocationState allocation_state() {
-    boost::shared_lock<boost::shared_mutex> shared_lock(allocation_lock_);
+    std::shared_lock<boost::shared_mutex> shared_lock(allocation_lock_);
     return allocation_state_;
   }
 

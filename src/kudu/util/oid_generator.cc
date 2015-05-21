@@ -21,7 +21,7 @@
 namespace kudu {
 
 string ObjectIdGenerator::Next() {
-  boost::lock_guard<LockType> l(oid_lock_);
+  std::lock_guard<LockType> l(oid_lock_);
   boost::uuids::uuid oid = oid_generator_();
   const uint8_t *uuid = oid.data;
   return StringPrintf("%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",

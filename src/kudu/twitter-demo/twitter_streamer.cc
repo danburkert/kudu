@@ -129,7 +129,7 @@ void TwitterStreamer::StreamThread() {
   Status s = DoStreaming();
   if (!s.ok()) {
     LOG(ERROR) << "Streaming thread failed: " << s.ToString();
-    boost::lock_guard<boost::mutex> l(lock_);
+    std::lock_guard<std::mutex> l(lock_);
     stream_status_ = s;
   }
 }

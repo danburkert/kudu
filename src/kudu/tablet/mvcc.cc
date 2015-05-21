@@ -43,7 +43,7 @@ MvccManager::MvccManager(const scoped_refptr<server::Clock>& clock)
 Timestamp MvccManager::StartTransaction() {
   while (true) {
     Timestamp now = clock_->Now();
-    boost::lock_guard<LockType> l(lock_);
+    std::lock_guard<LockType> l(lock_);
     if (PREDICT_TRUE(InitTransactionUnlocked(now))) {
       return now;
     }
@@ -54,7 +54,7 @@ Timestamp MvccManager::StartTransaction() {
 }
 
 Timestamp MvccManager::StartTransactionAtLatest() {
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<LockType> l(lock_);
   Timestamp now_latest = clock_->NowLatest();
   while (PREDICT_FALSE(!InitTransactionUnlocked(now_latest))) {
     now_latest = clock_->NowLatest();
@@ -74,7 +74,7 @@ Timestamp MvccManager::StartTransactionAtLatest() {
 }
 
 Status MvccManager::StartTransactionAtTimestamp(Timestamp timestamp) {
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<LockType> l(lock_);
   if (PREDICT_FALSE(cur_snap_.IsCommitted(timestamp))) {
     return Status::IllegalState(
         strings::Substitute("Timestamp: $0 is already committed. Current Snapshot: $1",
@@ -89,7 +89,7 @@ Status MvccManager::StartTransactionAtTimestamp(Timestamp timestamp) {
 }
 
 void MvccManager::StartApplyingTransaction(Timestamp timestamp) {
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<LockType> l(lock_);
   InFlightMap::iterator it = timestamps_in_flight_.find(timestamp.value());
   if (PREDICT_FALSE(it == timestamps_in_flight_.end())) {
     LOG(FATAL) << "Cannot mark timestamp " << timestamp.ToString() << " as APPLYING: "
@@ -129,7 +129,7 @@ bool MvccManager::InitTransactionUnlocked(const Timestamp& timestamp) {
 }
 
 void MvccManager::CommitTransaction(Timestamp timestamp) {
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<LockType> l(lock_);
   bool was_earliest = false;
   CommitTransactionUnlocked(timestamp, &was_earliest);
 
@@ -147,7 +147,7 @@ void MvccManager::CommitTransaction(Timestamp timestamp) {
 }
 
 void MvccManager::AbortTransaction(Timestamp timestamp) {
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<LockType> l(lock_);
 
   // Remove from our in-flight list.
   TxnState old_state = RemoveInFlightAndGetStateUnlocked(timestamp);
@@ -162,7 +162,7 @@ void MvccManager::AbortTransaction(Timestamp timestamp) {
 }
 
 void MvccManager::OfflineCommitTransaction(Timestamp timestamp) {
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<LockType> l(lock_);
 
   // Commit the transaction, but do not adjust 'all_committed_before_', that will
   // be done with a separate OfflineAdjustCurSnap() call.
@@ -224,7 +224,7 @@ void MvccManager::AdvanceEarliestInFlightTimestamp() {
 }
 
 void MvccManager::OfflineAdjustSafeTime(Timestamp safe_time) {
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<LockType> l(lock_);
 
   // No more transactions will start with a ts that is lower than or equal
   // to 'safe_time', so we adjust the snapshot accordingly.
@@ -300,7 +300,7 @@ Status MvccManager::WaitUntil(WaitFor wait_for, Timestamp ts,
     waiting_state.latch = &latch;
     waiting_state.wait_for = wait_for;
 
-    boost::lock_guard<LockType> l(lock_);
+    std::lock_guard<LockType> l(lock_);
     if (IsDoneWaitingUnlocked(waiting_state)) return Status::OK();
     waiters_.push_back(&waiting_state);
   }
@@ -309,7 +309,7 @@ Status MvccManager::WaitUntil(WaitFor wait_for, Timestamp ts,
   }
   // We timed out. We need to clean up our entry in the waiters_ array.
 
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<LockType> l(lock_);
   // It's possible that while we were re-acquiring the lock, we did get
   // notified. In that case, we have no cleanup to do.
   if (waiting_state.latch->count() == 0) {
@@ -352,7 +352,7 @@ bool MvccManager::AnyApplyingAtOrBeforeUnlocked(Timestamp ts) const {
 }
 
 void MvccManager::TakeSnapshot(MvccSnapshot *snap) const {
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<LockType> l(lock_);
   *snap = cur_snap_;
 }
 
@@ -376,7 +376,7 @@ void MvccManager::WaitForApplyingTransactionsToCommit() const {
   // Find the highest timestamp of an APPLYING transaction.
   Timestamp wait_for = Timestamp::kMin;
   {
-    boost::lock_guard<LockType> l(lock_);
+    std::lock_guard<LockType> l(lock_);
     BOOST_FOREACH(const InFlightMap::value_type entry, timestamps_in_flight_) {
       if (entry.second == APPLYING) {
         wait_for = Timestamp(std::max(entry.first, wait_for.value()));
@@ -396,22 +396,22 @@ void MvccManager::WaitForApplyingTransactionsToCommit() const {
 }
 
 bool MvccManager::AreAllTransactionsCommitted(Timestamp ts) const {
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<LockType> l(lock_);
   return AreAllTransactionsCommittedUnlocked(ts);
 }
 
 int MvccManager::CountTransactionsInFlight() const {
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<LockType> l(lock_);
   return timestamps_in_flight_.size();
 }
 
 Timestamp MvccManager::GetCleanTimestamp() const {
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<LockType> l(lock_);
   return cur_snap_.all_committed_before_;
 }
 
 void MvccManager::GetApplyingTransactionsTimestamps(std::vector<Timestamp>* timestamps) const {
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<LockType> l(lock_);
   timestamps->reserve(timestamps_in_flight_.size());
   BOOST_FOREACH(const InFlightMap::value_type entry, timestamps_in_flight_) {
     if (entry.second == APPLYING) {

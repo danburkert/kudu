@@ -15,7 +15,6 @@
 #define KUDU_MASTER_CATALOG_MANAGER_H
 
 #include <boost/optional/optional_fwd.hpp>
-#include <boost/thread/mutex.hpp>
 #include <map>
 #include <string>
 #include <unordered_map>

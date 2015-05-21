@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <gtest/gtest.h>
 #include <boost/foreach.hpp>
 #include <boost/thread/thread.hpp>
-#include <boost/thread/locks.hpp>
+#include <gtest/gtest.h>
+#include <mutex>
+#include <shared_mutex>
 #include <vector>
 
 #include "kudu/util/monotime.h"
@@ -37,7 +38,7 @@ struct SharedState {
 void Writer(SharedState* state) {
   int i = 0;
   while (true) {
-    boost::lock_guard<rw_semaphore> l(state->sem);
+    std::lock_guard<rw_semaphore> l(state->sem);
     state->int_var += (i++);
     if (state->done) {
       break;
@@ -49,7 +50,7 @@ void Writer(SharedState* state) {
 void Reader(SharedState* state) {
   int prev_val = 0;
   while (true) {
-    boost::shared_lock<rw_semaphore> l(state->sem);
+    std::shared_lock<rw_semaphore> l(state->sem);
     // The int var should only be seen to increase.
     CHECK_GE(state->int_var, prev_val);
     prev_val = state->int_var;
@@ -75,7 +76,7 @@ TEST(RWSemaphoreTest, TestBasicOperation) {
 
   // Signal them to stop.
   {
-    boost::lock_guard<rw_semaphore> l(s.sem);
+    std::lock_guard<rw_semaphore> l(s.sem);
     s.done = true;
   }
 

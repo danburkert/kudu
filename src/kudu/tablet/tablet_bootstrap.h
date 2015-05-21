@@ -16,6 +16,7 @@
 
 #include <boost/thread/shared_mutex.hpp>
 #include <memory>
+#include <shared_mutex>
 #include <string>
 #include <vector>
 
@@ -67,7 +68,7 @@ class TabletStatusListener {
   const Schema& schema() const;
 
   std::string last_status() const {
-    boost::shared_lock<boost::shared_mutex> l(lock_);
+    std::shared_lock<boost::shared_mutex> l(lock_);
     return last_status_;
   }
 

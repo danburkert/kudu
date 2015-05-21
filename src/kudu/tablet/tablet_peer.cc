@@ -110,7 +110,7 @@ TabletPeer::TabletPeer(const scoped_refptr<TabletMetadata>& meta,
 }
 
 TabletPeer::~TabletPeer() {
-  boost::lock_guard<simple_spinlock> lock(lock_);
+  std::lock_guard<simple_spinlock> lock(lock_);
   // We should either have called Shutdown(), or we should have never called
   // Init().
   CHECK(!tablet_)
@@ -136,7 +136,7 @@ Status TabletPeer::Init(const shared_ptr<Tablet>& tablet,
       METRIC_op_prepare_run_time.Instantiate(metric_entity));
 
   {
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     CHECK_EQ(BOOTSTRAPPING, state_);
     tablet_ = tablet;
     clock_ = clock;
@@ -194,7 +194,7 @@ Status TabletPeer::Start(const ConsensusBootstrapInfo& bootstrap_info) {
 
   RETURN_NOT_OK(consensus_->Start(bootstrap_info));
   {
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     CHECK_EQ(state_, BOOTSTRAPPING);
     state_ = RUNNING;
   }
@@ -258,7 +258,7 @@ void TabletPeer::Shutdown() {
 
   // Only mark the peer as SHUTDOWN when all other components have shut down.
   {
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     // Release mem tracker resources.
     consensus_.reset();
     tablet_.reset();
@@ -269,7 +269,7 @@ void TabletPeer::Shutdown() {
 void TabletPeer::WaitUntilShutdown() {
   while (true) {
     {
-      boost::lock_guard<simple_spinlock> lock(lock_);
+      std::lock_guard<simple_spinlock> lock(lock_);
       if (state_ == SHUTDOWN) {
         return;
       }
@@ -280,7 +280,7 @@ void TabletPeer::WaitUntilShutdown() {
 
 Status TabletPeer::CheckRunning() const {
   {
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     if (state_ != RUNNING) {
       return Status::IllegalState(Substitute("The tablet is not in a running state: $0",
                                              TabletStatePB_Name(state_)));
@@ -298,7 +298,7 @@ Status TabletPeer::WaitUntilConsensusRunning(const MonoDelta& timeout) {
     bool has_consensus = false;
     TabletStatePB cached_state;
     {
-      boost::lock_guard<simple_spinlock> lock(lock_);
+      std::lock_guard<simple_spinlock> lock(lock_);
       cached_state = state_;
       if (consensus_) {
         has_consensus = true; // consensus_ is a set-once object.
@@ -344,7 +344,7 @@ Status TabletPeer::SubmitAlterSchema(gscoped_ptr<AlterSchemaTransactionState> st
 }
 
 void TabletPeer::GetTabletStatusPB(TabletStatusPB* status_pb_out) const {
-  boost::lock_guard<simple_spinlock> lock(lock_);
+  std::lock_guard<simple_spinlock> lock(lock_);
   DCHECK(status_pb_out != NULL);
   DCHECK(status_listener_.get() != NULL);
   status_pb_out->set_tablet_id(status_listener_->tablet_id());
@@ -457,7 +457,7 @@ Status TabletPeer::GetGCableDataSize(int64_t* retention_size) const {
 
 Status TabletPeer::StartReplicaTransaction(const scoped_refptr<ConsensusRound>& round) {
   {
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     if (state_ != RUNNING && state_ != BOOTSTRAPPING) {
       return Status::IllegalState(TabletStatePB_Name(state_));
     }

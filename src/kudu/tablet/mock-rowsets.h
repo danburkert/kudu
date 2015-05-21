@@ -74,7 +74,7 @@ class MockRowSet : public RowSet {
     LOG(FATAL) << "Unimplemented";
     return 0;
   }
-  virtual boost::mutex *compact_flush_lock() OVERRIDE {
+  virtual std::mutex *compact_flush_lock() OVERRIDE {
     LOG(FATAL) << "Unimplemented";
     return NULL;
   }

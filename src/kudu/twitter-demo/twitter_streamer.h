@@ -47,7 +47,7 @@ class TwitterStreamer {
   size_t DataReceived(const Slice& data);
 
   boost::thread thread_;
-  boost::mutex lock_;
+  std::mutex lock_;
   Status stream_status_;
 
   faststring recv_buf_;

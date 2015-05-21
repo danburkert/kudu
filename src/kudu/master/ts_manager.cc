@@ -45,7 +45,7 @@ TSManager::~TSManager() {
 
 Status TSManager::LookupTS(const NodeInstancePB& instance,
                            shared_ptr<TSDescriptor>* ts_desc) {
-  boost::shared_lock<rw_spinlock> l(lock_);
+  std::shared_lock<rw_spinlock> l(lock_);
   const shared_ptr<TSDescriptor>* found_ptr =
     FindOrNull(servers_by_id_, instance.permanent_uuid());
   if (!found_ptr) {
@@ -63,14 +63,14 @@ Status TSManager::LookupTS(const NodeInstancePB& instance,
 
 bool TSManager::LookupTSByUUID(const string& uuid,
                                std::shared_ptr<TSDescriptor>* ts_desc) {
-  boost::shared_lock<rw_spinlock> l(lock_);
+  std::shared_lock<rw_spinlock> l(lock_);
   return FindCopy(servers_by_id_, uuid, ts_desc);
 }
 
 Status TSManager::RegisterTS(const NodeInstancePB& instance,
                              const TSRegistrationPB& registration,
                              std::shared_ptr<TSDescriptor>* desc) {
-  boost::lock_guard<rw_spinlock> l(lock_);
+  std::lock_guard<rw_spinlock> l(lock_);
   const string& uuid = instance.permanent_uuid();
 
   if (!ContainsKey(servers_by_id_, uuid)) {
@@ -91,14 +91,14 @@ Status TSManager::RegisterTS(const NodeInstancePB& instance,
 
 void TSManager::GetAllDescriptors(vector<shared_ptr<TSDescriptor> > *descs) const {
   descs->clear();
-  boost::shared_lock<rw_spinlock> l(lock_);
+  std::shared_lock<rw_spinlock> l(lock_);
   AppendValuesFromMap(servers_by_id_, descs);
 }
 
 void TSManager::GetAllLiveDescriptors(vector<shared_ptr<TSDescriptor> > *descs) const {
   descs->clear();
 
-  boost::shared_lock<rw_spinlock> l(lock_);
+  std::shared_lock<rw_spinlock> l(lock_);
   descs->reserve(servers_by_id_.size());
   BOOST_FOREACH(const TSDescriptorMap::value_type& entry, servers_by_id_) {
     const shared_ptr<TSDescriptor>& ts = entry.second;
@@ -109,7 +109,7 @@ void TSManager::GetAllLiveDescriptors(vector<shared_ptr<TSDescriptor> > *descs) 
 }
 
 int TSManager::GetCount() const {
-  boost::shared_lock<rw_spinlock> l(lock_);
+  std::shared_lock<rw_spinlock> l(lock_);
   return servers_by_id_.size();
 }
 

@@ -142,14 +142,14 @@ class rw_spinlock {
 //
 //   // Lock shared:
 //   {
-//     boost::shared_lock<rw_spinlock> lock(mylock.get_lock());
+//     std::shared_lock<rw_spinlock> lock(mylock.get_lock());
 //     ...
 //   }
 //
 //   // Lock exclusive:
 //
 //   {
-//     boost::lock_guard<percpu_rwlock> lock(mylock);
+//     std::lock_guard<percpu_rwlock> lock(mylock);
 //     ...
 //   }
 class percpu_rwlock {
@@ -228,7 +228,7 @@ class percpu_rwlock {
   padded_lock *locks_;
 };
 
-// Simpler version of boost::lock_guard. Only supports the basic object
+// Simpler version of std::lock_guard. Only supports the basic object
 // lifecycle and defers any error checking to the underlying mutex.
 template <typename Mutex>
 class lock_guard {
@@ -294,7 +294,7 @@ class unique_lock {
   DISALLOW_COPY_AND_ASSIGN(unique_lock<Mutex>);
 };
 
-// Simpler version of boost::shared_lock. Only supports the basic object
+// Simpler version of std::shared_lock. Only supports the basic object
 // lifecycle and defers any error checking to the underlying mutex.
 template <typename Mutex>
 class shared_lock {

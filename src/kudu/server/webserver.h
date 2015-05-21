@@ -26,11 +26,12 @@
 #ifndef KUDU_UTIL_WEBSERVER_H
 #define KUDU_UTIL_WEBSERVER_H
 
-#include <map>
-#include <string>
-#include <vector>
 #include <boost/function.hpp>
 #include <boost/thread/shared_mutex.hpp>
+#include <map>
+#include <shared_mutex>
+#include <string>
+#include <vector>
 
 #include "kudu/server/webserver_options.h"
 #include "kudu/util/net/sockaddr.h"

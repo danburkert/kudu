@@ -15,7 +15,7 @@
 #ifndef KUDU_TABLET_WRITE_TRANSACTION_H_
 #define KUDU_TABLET_WRITE_TRANSACTION_H_
 
-#include <boost/thread/shared_mutex.hpp>
+#include <shared_mutex>
 #include <string>
 #include <vector>
 
@@ -198,7 +198,7 @@ class WriteTransactionState : public TransactionState {
 
   // A lock held on the tablet's schema. Prevents concurrent schema change
   // from racing with a write.
-  boost::shared_lock<rw_semaphore> schema_lock_;
+  std::shared_lock<rw_semaphore> schema_lock_;
 
   // The Schema of the tablet when the transaction was first decoded.
   // This is verified at APPLY time to ensure we don't have races against

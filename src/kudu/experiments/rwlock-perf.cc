@@ -16,11 +16,11 @@
 #include <boost/ptr_container/ptr_vector.hpp>
 #include <boost/smart_ptr/detail/spinlock.hpp>
 #include <boost/smart_ptr/detail/yield_k.hpp>
-#include <boost/thread/mutex.hpp>
 #include <boost/thread/shared_mutex.hpp>
 #include <boost/thread/thread.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+#include <mutex>
 #include <stdio.h>
 #include <unistd.h>
 
@@ -79,7 +79,7 @@ struct shared_data {
 
   kudu::rw_spinlock rw_spinlock;
   boost::shared_mutex rwlock;
-  boost::mutex lock;
+  std::mutex lock;
   kudu::percpu_rwlock per_cpu;
 };
 
@@ -193,7 +193,7 @@ void test_shared_lock(int num_threads,
         break;
       case OWN_MUTEX:
         threads.push_back(new boost::thread(
-                            own_mutex_entry<boost::mutex>));
+                            own_mutex_entry<std::mutex>));
         break;
       case OWN_SPINLOCK:
         threads.push_back(new boost::thread(

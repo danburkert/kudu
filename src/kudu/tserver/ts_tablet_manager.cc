@@ -18,9 +18,9 @@
 #include <boost/optional.hpp>
 #include <boost/thread/locks.hpp>
 #include <boost/thread/mutex.hpp>
-#include <boost/thread/shared_mutex.hpp>
 #include <glog/logging.h>
 #include <memory>
+#include <shared_mutex>
 #include <string>
 #include <vector>
 
@@ -202,7 +202,7 @@ Status TSTabletManager::Init() {
   BOOST_FOREACH(const scoped_refptr<TabletMetadata>& meta, metas) {
     scoped_refptr<TransitionInProgressDeleter> deleter;
     {
-      boost::lock_guard<rw_spinlock> lock(lock_);
+      std::lock_guard<rw_spinlock> lock(lock_);
       CHECK_OK(StartTabletStateTransitionUnlocked(meta->tablet_id(), "opening tablet", &deleter));
     }
 
@@ -212,7 +212,7 @@ Status TSTabletManager::Init() {
   }
 
   {
-    boost::lock_guard<rw_spinlock> lock(lock_);
+    std::lock_guard<rw_spinlock> lock(lock_);
     state_ = MANAGER_RUNNING;
   }
 
@@ -226,7 +226,7 @@ Status TSTabletManager::WaitForAllBootstrapsToFinish() {
 
   Status s = Status::OK();
 
-  boost::shared_lock<rw_spinlock> shared_lock(lock_);
+  std::shared_lock<rw_spinlock> shared_lock(lock_);
   BOOST_FOREACH(const TabletMap::value_type& entry, tablet_map_) {
     if (entry.second->state() == tablet::FAILED) {
       if (s.ok()) {
@@ -262,7 +262,7 @@ Status TSTabletManager::CreateNewTablet(const string& table_id,
   {
     // acquire the lock in exclusive mode as we'll add a entry to the
     // transition_in_progress_ set if the lookup fails.
-    boost::lock_guard<rw_spinlock> lock(lock_);
+    std::lock_guard<rw_spinlock> lock(lock_);
     TRACE("Acquired tablet manager lock");
 
     // Sanity check that the tablet isn't already registered.
@@ -348,7 +348,7 @@ Status TSTabletManager::StartRemoteBootstrap(const StartRemoteBootstrapRequestPB
   bool replacing_tablet = false;
   scoped_refptr<TransitionInProgressDeleter> deleter;
   {
-    boost::lock_guard<rw_spinlock> lock(lock_);
+    std::lock_guard<rw_spinlock> lock(lock_);
     if (LookupTabletUnlocked(tablet_id, &old_tablet_peer)) {
       meta = old_tablet_peer->tablet_metadata();
       replacing_tablet = true;
@@ -478,7 +478,7 @@ Status TSTabletManager::DeleteTablet(
   {
     // Acquire the lock in exclusive mode as we'll add a entry to the
     // transition_in_progress_ map.
-    boost::lock_guard<rw_spinlock> lock(lock_);
+    std::lock_guard<rw_spinlock> lock(lock_);
     TRACE("Acquired tablet manager lock");
     RETURN_NOT_OK(CheckRunningUnlocked(error_code));
 
@@ -534,7 +534,7 @@ Status TSTabletManager::DeleteTablet(
 
   // We only remove DELETED tablets from the tablet map.
   if (delete_type == TABLET_DATA_DELETED) {
-    boost::lock_guard<rw_spinlock> lock(lock_);
+    std::lock_guard<rw_spinlock> lock(lock_);
     RETURN_NOT_OK(CheckRunningUnlocked(error_code));
     CHECK_EQ(1, tablet_map_.erase(tablet_id)) << tablet_id;
   }
@@ -661,7 +661,7 @@ void TSTabletManager::OpenTablet(const scoped_refptr<TabletMetadata>& meta,
 
 void TSTabletManager::Shutdown() {
   {
-    boost::lock_guard<rw_spinlock> lock(lock_);
+    std::lock_guard<rw_spinlock> lock(lock_);
     switch (state_) {
       case MANAGER_QUIESCING: {
         VLOG(1) << "Tablet manager shut down already in progress..";
@@ -700,7 +700,7 @@ void TSTabletManager::Shutdown() {
   apply_pool_->Shutdown();
 
   {
-    boost::lock_guard<rw_spinlock> l(lock_);
+    std::lock_guard<rw_spinlock> l(lock_);
     // We don't expect anyone else to be modifying the map after we start the
     // shut down process.
     CHECK_EQ(tablet_map_.size(), peers_to_shutdown.size())
@@ -714,7 +714,7 @@ void TSTabletManager::Shutdown() {
 void TSTabletManager::RegisterTablet(const std::string& tablet_id,
                                      const scoped_refptr<TabletPeer>& tablet_peer,
                                      RegisterTabletPeerMode mode) {
-  boost::lock_guard<rw_spinlock> lock(lock_);
+  std::lock_guard<rw_spinlock> lock(lock_);
   // If we are replacing a tablet peer, we delete the existing one first.
   if (mode == REPLACEMENT_PEER && tablet_map_.erase(tablet_id) != 1) {
     LOG(FATAL) << "Unable to remove previous tablet peer " << tablet_id << ": not registered!";
@@ -728,7 +728,7 @@ void TSTabletManager::RegisterTablet(const std::string& tablet_id,
 
 bool TSTabletManager::LookupTablet(const string& tablet_id,
                                    scoped_refptr<TabletPeer>* tablet_peer) const {
-  boost::shared_lock<rw_spinlock> shared_lock(lock_);
+  std::shared_lock<rw_spinlock> shared_lock(lock_);
   return LookupTabletUnlocked(tablet_id, tablet_peer);
 }
 
@@ -761,17 +761,17 @@ const NodeInstancePB& TSTabletManager::NodeInstance() const {
 }
 
 void TSTabletManager::GetTabletPeers(vector<scoped_refptr<TabletPeer> >* tablet_peers) const {
-  boost::shared_lock<rw_spinlock> shared_lock(lock_);
+  std::shared_lock<rw_spinlock> shared_lock(lock_);
   AppendValuesFromMap(tablet_map_, tablet_peers);
 }
 
 void TSTabletManager::MarkTabletDirty(const std::string& tablet_id, const std::string& reason) {
-  boost::lock_guard<rw_spinlock> lock(lock_);
+  std::lock_guard<rw_spinlock> lock(lock_);
   MarkDirtyUnlocked(tablet_id, reason);
 }
 
 int TSTabletManager::GetNumDirtyTabletsForTests() const {
-  boost::lock_guard<rw_spinlock> lock(lock_);
+  std::lock_guard<rw_spinlock> lock(lock_);
   return dirty_tablets_.size();
 }
 
@@ -821,7 +821,7 @@ void TSTabletManager::CreateReportedTabletPB(const string& tablet_id,
 }
 
 void TSTabletManager::GenerateIncrementalTabletReport(TabletReportPB* report) {
-  boost::shared_lock<rw_spinlock> shared_lock(lock_);
+  std::shared_lock<rw_spinlock> shared_lock(lock_);
   report->Clear();
   report->set_sequence_number(next_report_seq_++);
   report->set_is_incremental(true);
@@ -839,7 +839,7 @@ void TSTabletManager::GenerateIncrementalTabletReport(TabletReportPB* report) {
 }
 
 void TSTabletManager::GenerateFullTabletReport(TabletReportPB* report) {
-  boost::shared_lock<rw_spinlock> shared_lock(lock_);
+  std::shared_lock<rw_spinlock> shared_lock(lock_);
   report->Clear();
   report->set_is_incremental(false);
   report->set_sequence_number(next_report_seq_++);
@@ -850,7 +850,7 @@ void TSTabletManager::GenerateFullTabletReport(TabletReportPB* report) {
 }
 
 void TSTabletManager::MarkTabletReportAcknowledged(const TabletReportPB& report) {
-  boost::lock_guard<rw_spinlock> l(lock_);
+  std::lock_guard<rw_spinlock> l(lock_);
 
   int32_t acked_seq = report.sequence_number();
   CHECK_LT(acked_seq, next_report_seq_);
@@ -969,7 +969,7 @@ TransitionInProgressDeleter::TransitionInProgressDeleter(TransitionInProgressMap
 }
 
 TransitionInProgressDeleter::~TransitionInProgressDeleter() {
-  boost::lock_guard<rw_spinlock> lock(*lock_);
+  std::lock_guard<rw_spinlock> lock(*lock_);
   CHECK(in_progress_->erase(entry_));
 }
 

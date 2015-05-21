@@ -20,6 +20,7 @@
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <ostream>
 #include <unordered_set>
 #include <utility>
@@ -174,7 +175,7 @@ Tablet::~Tablet() {
 
 Status Tablet::Open() {
   TRACE_EVENT0("tablet", "Tablet::Open");
-  boost::lock_guard<rw_spinlock> lock(component_lock_);
+  std::lock_guard<rw_spinlock> lock(component_lock_);
   CHECK_EQ(state_, kInitialized) << "already open";
   CHECK(schema()->has_column_ids());
 
@@ -215,7 +216,7 @@ void Tablet::MarkFinishedBootstrapping() {
 void Tablet::Shutdown() {
   UnregisterMaintenanceOps();
 
-  boost::lock_guard<rw_spinlock> lock(component_lock_);
+  std::lock_guard<rw_spinlock> lock(component_lock_);
   components_ = NULL;
   state_ = kShutdown;
 
@@ -486,7 +487,7 @@ Status Tablet::MutateRowUnlocked(WriteTransactionState *tx_state,
 }
 
 void Tablet::StartApplying(WriteTransactionState* tx_state) {
-  boost::shared_lock<rw_spinlock> lock(component_lock_);
+  std::shared_lock<rw_spinlock> lock(component_lock_);
   tx_state->StartApplying();
   tx_state->set_tablet_components(components_);
 }
@@ -552,7 +553,7 @@ void Tablet::ModifyRowSetTree(const RowSetTree& old_tree,
 
 void Tablet::AtomicSwapRowSets(const RowSetVector &old_rowsets,
                                const RowSetVector &new_rowsets) {
-  boost::lock_guard<rw_spinlock> lock(component_lock_);
+  std::lock_guard<rw_spinlock> lock(component_lock_);
   AtomicSwapRowSetsUnlocked(old_rowsets, new_rowsets);
 }
 
@@ -577,7 +578,7 @@ Status Tablet::DoMajorDeltaCompaction(const vector<ColumnId>& col_ids,
 
 Status Tablet::Flush() {
   TRACE_EVENT1("tablet", "Tablet::Flush", "id", tablet_id());
-  boost::lock_guard<Semaphore> lock(rowsets_flush_sem_);
+  std::lock_guard<Semaphore> lock(rowsets_flush_sem_);
   return FlushUnlocked();
 }
 
@@ -587,7 +588,7 @@ Status Tablet::FlushUnlocked() {
   shared_ptr<MemRowSet> old_mrs;
   {
     // Create a new MRS with the latest schema.
-    boost::lock_guard<rw_spinlock> lock(component_lock_);
+    std::lock_guard<rw_spinlock> lock(component_lock_);
     RETURN_NOT_OK(ReplaceMemRowSetUnlocked(&input, &old_mrs));
   }
 
@@ -604,8 +605,8 @@ Status Tablet::ReplaceMemRowSetUnlocked(RowSetsInCompaction *compaction,
   *old_ms = components_->memrowset;
   // Mark the memrowset rowset as locked, so compactions won't consider it
   // for inclusion in any concurrent compactions.
-  shared_ptr<boost::mutex::scoped_try_lock> ms_lock(
-    new boost::mutex::scoped_try_lock(*((*old_ms)->compact_flush_lock())));
+  shared_ptr<std::unique_lock<std::mutex>> ms_lock(
+    new std::unique_lock<std::mutex>(*(*old_ms)->compact_flush_lock(), std::try_to_lock));
   CHECK(ms_lock->owns_lock());
 
   // Add to compaction.
@@ -691,7 +692,7 @@ Status Tablet::AlterSchema(AlterSchemaTransactionState *tx_state) {
   // Prevent any concurrent flushes. Otherwise, we run into issues where
   // we have an MRS in the rowset tree, and we can't alter its schema
   // in-place.
-  boost::lock_guard<Semaphore> lock(rowsets_flush_sem_);
+  std::lock_guard<Semaphore> lock(rowsets_flush_sem_);
 
   RowSetsInCompaction input;
   shared_ptr<MemRowSet> old_ms;
@@ -726,7 +727,7 @@ Status Tablet::AlterSchema(AlterSchemaTransactionState *tx_state) {
 
   // Replace the MemRowSet
   {
-    boost::lock_guard<rw_spinlock> lock(component_lock_);
+    std::lock_guard<rw_spinlock> lock(component_lock_);
     RETURN_NOT_OK(ReplaceMemRowSetUnlocked(&input, &old_ms));
   }
 
@@ -753,7 +754,7 @@ Status Tablet::RewindSchemaForBootstrap(const Schema& new_schema,
 
   metadata_->SetSchema(new_schema, schema_version);
   {
-    boost::lock_guard<rw_spinlock> lock(component_lock_);
+    std::lock_guard<rw_spinlock> lock(component_lock_);
 
     shared_ptr<MemRowSet> old_mrs = components_->memrowset;
     shared_ptr<RowSetTree> old_rowsets = components_->rowsets;
@@ -787,7 +788,7 @@ void Tablet::SetFlushCompactCommonHooksForTests(
 }
 
 int32_t Tablet::CurrentMrsIdForTests() const {
-  boost::shared_lock<rw_spinlock> lock(component_lock_);
+  std::shared_lock<rw_spinlock> lock(component_lock_);
   return components_->memrowset->mrs_id();
 }
 
@@ -804,7 +805,7 @@ CompactRowSetsOp::CompactRowSetsOp(Tablet* tablet)
 }
 
 void CompactRowSetsOp::UpdateStats(MaintenanceOpStats* stats) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
 
   // Any operation that changes the on-disk row layout invalidates the
   // cached stats.
@@ -828,7 +829,7 @@ void CompactRowSetsOp::UpdateStats(MaintenanceOpStats* stats) {
 }
 
 bool CompactRowSetsOp::Prepare() {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   // Invalidate the cached stats so that another section of the tablet can
   // be compacted concurrently.
   //
@@ -868,7 +869,7 @@ MinorDeltaCompactionOp::MinorDeltaCompactionOp(Tablet* tablet)
 }
 
 void MinorDeltaCompactionOp::UpdateStats(MaintenanceOpStats* stats) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
 
   // Any operation that changes the number of REDO files invalidates the
   // cached stats.
@@ -902,7 +903,7 @@ void MinorDeltaCompactionOp::UpdateStats(MaintenanceOpStats* stats) {
 }
 
 bool MinorDeltaCompactionOp::Prepare() {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   // Invalidate the cached stats so that another rowset in the tablet can
   // be delta compacted concurrently.
   //
@@ -940,7 +941,7 @@ MajorDeltaCompactionOp::MajorDeltaCompactionOp(Tablet* tablet)
 }
 
 void MajorDeltaCompactionOp::UpdateStats(MaintenanceOpStats* stats) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
 
   // Any operation that changes the size of the on-disk data invalidates the
   // cached stats.
@@ -978,7 +979,7 @@ void MajorDeltaCompactionOp::UpdateStats(MaintenanceOpStats* stats) {
 }
 
 bool MajorDeltaCompactionOp::Prepare() {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   // Invalidate the cached stats so that another rowset in the tablet can
   // be delta compacted concurrently.
   //
@@ -1012,11 +1013,11 @@ Status Tablet::PickRowSetsToCompact(RowSetsInCompaction *picked,
   // in tablet.h for details on why that would be bad.
   shared_ptr<RowSetTree> rowsets_copy;
   {
-    boost::shared_lock<rw_spinlock> lock(component_lock_);
+    std::shared_lock<rw_spinlock> lock(component_lock_);
     rowsets_copy = components_->rowsets;
   }
 
-  boost::lock_guard<boost::mutex> compact_lock(compact_select_lock_);
+  std::lock_guard<std::mutex> compact_lock(compact_select_lock_);
   CHECK_EQ(picked->num_rowsets(), 0);
 
   unordered_set<RowSet*> picked_set;
@@ -1035,7 +1036,7 @@ Status Tablet::PickRowSetsToCompact(RowSetsInCompaction *picked,
     VLOG(2) << "Compaction quality: " << quality;
   }
 
-  boost::shared_lock<rw_spinlock> lock(component_lock_);
+  std::shared_lock<rw_spinlock> lock(component_lock_);
   BOOST_FOREACH(const shared_ptr<RowSet>& rs, components_->rowsets->all_rowsets()) {
     if (picked_set.erase(rs.get()) == 0) {
       // Not picked.
@@ -1046,8 +1047,8 @@ Status Tablet::PickRowSetsToCompact(RowSetsInCompaction *picked,
     // compaction from selecting this same rowset, and also ensures that
     // we don't select a rowset which is currently in the middle of being
     // flushed.
-    shared_ptr<boost::mutex::scoped_try_lock> lock(
-      new boost::mutex::scoped_try_lock(*rs->compact_flush_lock()));
+    shared_ptr<std::unique_lock<std::mutex>> lock(
+        new std::unique_lock<std::mutex>(*rs->compact_flush_lock(), std::try_to_lock));
     CHECK(lock->owns_lock()) << rs->ToString() << " appeared available for "
       "compaction when inputs were selected, but was unable to lock its "
       "compact_flush_lock to prepare for compaction.";
@@ -1073,7 +1074,7 @@ Status Tablet::PickRowSetsToCompact(RowSetsInCompaction *picked,
 void Tablet::GetRowSetsForTests(RowSetVector* out) {
   shared_ptr<RowSetTree> rowsets_copy;
   {
-    boost::shared_lock<rw_spinlock> lock(component_lock_);
+    std::shared_lock<rw_spinlock> lock(component_lock_);
     rowsets_copy = components_->rowsets;
   }
   BOOST_FOREACH(const shared_ptr<RowSet>& rs, rowsets_copy->all_rowsets()) {
@@ -1232,7 +1233,7 @@ Status Tablet::DoCompactionOrFlush(const RowSetsInCompaction &input, int64_t mrs
     TRACE_EVENT0("tablet", "Swapping DuplicatingRowSet");
     // Taking component_lock_ in write mode ensures that no new transactions
     // can StartApplying() (or snapshot components_) during this block.
-    boost::lock_guard<rw_spinlock> lock(component_lock_);
+    std::lock_guard<rw_spinlock> lock(component_lock_);
     AtomicSwapRowSetsUnlocked(input.rowsets(), { inprogress_rowset });
 
     // NOTE: transactions may *commit* in between these two lines.
@@ -1352,12 +1353,12 @@ void Tablet::UpdateCompactionStats(MaintenanceOpStats* stats) {
 
   shared_ptr<RowSetTree> rowsets_copy;
   {
-    boost::shared_lock<rw_spinlock> lock(component_lock_);
+    std::shared_lock<rw_spinlock> lock(component_lock_);
     rowsets_copy = components_->rowsets;
   }
 
   {
-    boost::lock_guard<boost::mutex> compact_lock(compact_select_lock_);
+    std::lock_guard<std::mutex> compact_lock(compact_select_lock_);
     WARN_NOT_OK(compaction_policy_->PickRowSets(*rowsets_copy, &picked_set_ignored, &quality, NULL),
                 Substitute("Couldn't determine compaction quality for $0", tablet_id()));
   }
@@ -1370,7 +1371,7 @@ void Tablet::UpdateCompactionStats(MaintenanceOpStats* stats) {
 
 
 Status Tablet::DebugDump(vector<string> *lines) {
-  boost::shared_lock<rw_spinlock> lock(component_lock_);
+  std::shared_lock<rw_spinlock> lock(component_lock_);
 
   LOG_STRING(INFO, lines) << "Dumping tablet:";
   LOG_STRING(INFO, lines) << "---------------------------";
@@ -1391,7 +1392,7 @@ Status Tablet::CaptureConsistentIterators(
   const MvccSnapshot &snap,
   const ScanSpec *spec,
   vector<shared_ptr<RowwiseIterator> > *iters) const {
-  boost::shared_lock<rw_spinlock> lock(component_lock_);
+  std::shared_lock<rw_spinlock> lock(component_lock_);
 
   // Construct all the iterators locally first, so that if we fail
   // in the middle, we don't modify the output arguments.
@@ -1602,17 +1603,16 @@ Status Tablet::CompactWorstDeltas(RowSet::DeltaCompactionType type) {
   CHECK_EQ(state_, kOpen);
   shared_ptr<RowSet> rs;
   // We're required to grab the rowset's compact_flush_lock under the compact_select_lock_.
-  shared_ptr<boost::mutex::scoped_try_lock> lock;
   double perf_improv;
   {
     // We only want to keep the selection lock during the time we look at rowsets to compact.
     // The returned rowset is guaranteed to be available to lock since locking must be done
     // under this lock.
-    boost::lock_guard<boost::mutex> compact_lock(compact_select_lock_);
+    std::lock_guard<std::mutex> compact_lock(compact_select_lock_);
     perf_improv = GetPerfImprovementForBestDeltaCompactUnlocked(type, &rs);
     if (rs) {
-      lock.reset(new boost::mutex::scoped_try_lock(*rs->compact_flush_lock()));
-      CHECK(lock->owns_lock());
+      std::unique_lock<std::mutex> lock(*rs->compact_flush_lock(), std::try_to_lock);
+      CHECK(lock.owns_lock());
     } else {
       return Status::OK();
     }
@@ -1633,13 +1633,13 @@ Status Tablet::CompactWorstDeltas(RowSet::DeltaCompactionType type) {
 
 double Tablet::GetPerfImprovementForBestDeltaCompact(RowSet::DeltaCompactionType type,
                                                              shared_ptr<RowSet>* rs) const {
-  boost::lock_guard<boost::mutex> compact_lock(compact_select_lock_);
+  std::lock_guard<std::mutex> compact_lock(compact_select_lock_);
   return GetPerfImprovementForBestDeltaCompactUnlocked(type, rs);
 }
 
 double Tablet::GetPerfImprovementForBestDeltaCompactUnlocked(RowSet::DeltaCompactionType type,
                                                              shared_ptr<RowSet>* rs) const {
-  boost::mutex::scoped_try_lock cs_lock(compact_select_lock_);
+  std::unique_lock<std::mutex> cs_lock(compact_select_lock_, std::try_to_lock);
   DCHECK(!cs_lock.owns_lock());
   scoped_refptr<TabletComponents> comps;
   GetComponents(&comps);
@@ -1662,17 +1662,17 @@ double Tablet::GetPerfImprovementForBestDeltaCompactUnlocked(RowSet::DeltaCompac
 }
 
 size_t Tablet::num_rowsets() const {
-  boost::shared_lock<rw_spinlock> lock(component_lock_);
+  std::shared_lock<rw_spinlock> lock(component_lock_);
   return components_->rowsets->all_rowsets().size();
 }
 
 void Tablet::PrintRSLayout(ostream* o) {
   shared_ptr<RowSetTree> rowsets_copy;
   {
-    boost::shared_lock<rw_spinlock> lock(component_lock_);
+    std::shared_lock<rw_spinlock> lock(component_lock_);
     rowsets_copy = components_->rowsets;
   }
-  boost::lock_guard<boost::mutex> compact_lock(compact_select_lock_);
+  std::lock_guard<std::mutex> compact_lock(compact_select_lock_);
   // Run the compaction policy in order to get its log and highlight those
   // rowsets which would be compacted next.
   vector<string> log;

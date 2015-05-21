@@ -120,27 +120,27 @@ class TabletPeer : public RefCountedThreadSafe<TabletPeer>,
       const scoped_refptr<consensus::ConsensusRound>& round) OVERRIDE;
 
   consensus::Consensus* consensus() {
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     return consensus_.get();
   }
 
   scoped_refptr<consensus::Consensus> shared_consensus() const {
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     return consensus_;
   }
 
   Tablet* tablet() const {
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     return tablet_.get();
   }
 
   std::shared_ptr<Tablet> shared_tablet() const {
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     return tablet_;
   }
 
   const TabletStatePB state() const {
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     return state_;
   }
 
@@ -159,14 +159,14 @@ class TabletPeer : public RefCountedThreadSafe<TabletPeer>,
   // sets the tablet state to FAILED additionally setting the error to the provided
   // one.
   void SetFailed(const Status& error) {
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     state_ = FAILED;
     error_ = error;
   }
 
   // Returns the error that occurred, when state is FAILED.
   Status error() const {
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     return error_;
   }
 
