@@ -767,14 +767,6 @@ message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 link_directories(${LLVM_LIBRARY_DIRS})
 
-## librt
-find_library(RT_LIB_PATH rt)
-if(NOT RT_LIB_PATH)
-  message(FATAL_ERROR "Could not find librt on the system path")
-endif()
-ADD_THIRDPARTY_LIB(rt
-  SHARED_LIB "${RT_LIB_PATH}")
-
 ## Boost
 # It's important that Boost come last in the list of packages, because it's the only
 # dependency that we don't currently bundle in thirdparty/. If we put this earlier
