@@ -217,7 +217,8 @@ fi
 # We don't want to put this in the thirdparty install directory, because then
 # clang assumes that it's installed system-wide, and no longer adds 'rpath'
 # entries for the other thirdparty libraries when building.
-ln -sf -T $CLANG_TOOLCHAIN_DIR clang-toolchain
+ln -sf $CLANG_TOOLCHAIN_DIR clang-toolchain
+# ln -sf -T $CLANG_TOOLCHAIN_DIR clang-toolchain
 
 if [ ! -d $TRACE_VIEWER_DIR ]; then
   fetch_and_expand kudu-trace-viewer-${TRACE_VIEWER_VERSION}.tar.gz

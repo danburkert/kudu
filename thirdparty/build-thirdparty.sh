@@ -148,7 +148,7 @@ if [ -n "$F_ALL" -o -n "$F_GMOCK" ]; then
     make -j$PARALLEL
   done
   echo Installing gmock...
-  cp -a libgmock.so libgmock.a $PREFIX/lib/
+  cp -a libgmock.dylib libgmock.a $PREFIX/lib/
   rsync -av include/ $PREFIX/include/
   rsync -av gtest/include/ $PREFIX/include/
 fi
@@ -279,17 +279,6 @@ if [ -n "$F_ALL" -o -n "$F_LLVM" ]; then
   mkdir -p $LLVM_BUILD
   cd $LLVM_BUILD
 
-  # Build LLVM with the toolchain version of clang.
-  #
-  # We always use our own clang to build LLVM because gcc 4.4 and earlier
-  # are unable to build compiler-rt:
-  # - http://llvm.org/bugs/show_bug.cgi?id=16532
-  # - http://code.google.com/p/address-sanitizer/issues/detail?id=146
-  old_cc=$CC
-  old_cxx=$CXX
-  export CC=$TP_DIR/clang-toolchain/bin/clang
-  export CXX=${CC}++
-
   # Rebuild the CMake cache every time.
   rm -Rf CMakeCache.txt CMakeFiles/
 
@@ -299,16 +288,6 @@ if [ -n "$F_ALL" -o -n "$F_LLVM" ]; then
     -DLLVM_TARGETS_TO_BUILD=X86 \
     -DCMAKE_CXX_FLAGS=$EXTRA_CXXFLAGS \
     $LLVM_DIR
-  if [ -n "$old_cc" ]; then
-    export CC=$old_cc
-  else
-    unset CC
-  fi
-  if [ -n "$old_cxx" ]; then
-    export CXX=$old_cxx
-  else
-    unset CXX
-  fi
 
   make -j$PARALLEL install
 fi
