@@ -215,7 +215,8 @@ class Thread : public RefCountedThreadSafe<Thread> {
     // This cast is a little bit ugly, and not likely to be portable, but
     // it is significantly faster than calling syscall(SYS_gettid). In particular,
     // this speeds up some code paths in the tracing implementation.
-    return static_cast<int64_t>(pthread_self());
+    return syscall(SYS_gettid);
+
   }
 
  private:
