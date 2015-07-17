@@ -264,6 +264,13 @@ inline void NoBarrier_Store(volatile Atomic64* ptr, Atomic64 value) {
   *ptr = value;
 }
 
+// Issue the x86 "pause" instruction, which tells the CPU that we
+// are in a spinlock wait loop and should allow other hyperthreads
+// to run, not speculate memory access, etc.
+inline void PauseCPU() {
+  __asm__ __volatile__("pause" : : : "memory");
+}
+
 inline void Acquire_Store(volatile Atomic64 *ptr, Atomic64 value) {
   *ptr = value;
   MemoryBarrier();
