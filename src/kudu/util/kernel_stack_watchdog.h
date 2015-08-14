@@ -54,7 +54,9 @@
 #include <string>
 #include <vector>
 
+#if !defined(__APPLE__)
 #include <syscall.h>
+#endif  // !defined(__APPLE__)
 
 #include "kudu/gutil/gscoped_ptr.h"
 #include "kudu/gutil/macros.h"
