@@ -8,14 +8,12 @@
 #include <fcntl.h>
 #include <fts.h>
 #include <glog/logging.h>
-#include <linux/falloc.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <sys/sysinfo.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/uio.h>
@@ -44,6 +42,13 @@
 #include "kudu/util/stopwatch.h"
 #include "kudu/util/thread_restrictions.h"
 
+#if defined(__APPLE__)
+#include <sys/sysctl.h>
+#else
+#include <linux/falloc.h>
+#include <sys/sysinfo.h>
+#endif  // defined(__APPLE__)
+
 // Copied from falloc.h. Useful for older kernels that lack support for
 // hole punching; fallocate(2) will return EOPNOTSUPP.
 #ifndef FALLOC_FL_KEEP_SIZE
@@ -51,6 +56,16 @@
 #endif
 #ifndef FALLOC_FL_PUNCH_HOLE
 #define FALLOC_FL_PUNCH_HOLE  0x02 /* de-allocates range */
+#endif
+
+// For platforms without fdatasync (like Mac OS)
+#ifndef fdatasync
+#define fdatasync fsync
+#endif
+
+// For platforms without unlocked_stdio (like Mac OS)
+#ifndef fread_unlocked
+#define fread_unlocked fread
 #endif
 
 // See KUDU-588 for details.
@@ -408,6 +423,8 @@ class PosixMmapFile : public WritableFile {
   }
 
   virtual Status PreAllocate(uint64_t size) OVERRIDE {
+    // TODO: Implement preallocation for Mac OS using fcntl().
+#if !defined(__APPLE__)
     ThreadRestrictions::AssertIOAllowed();
     TRACE_EVENT1("io", "PosixMmapFile::PreAllocate", "path", filename_);
 
@@ -418,6 +435,7 @@ class PosixMmapFile : public WritableFile {
     // Make sure that we set pre_allocated_size so that the file
     // doesn't get truncated on MapNewRegion().
     pre_allocated_size_ = offset + size;
+#endif
     return Status::OK();
   }
 
@@ -491,6 +509,7 @@ class PosixMmapFile : public WritableFile {
 
   virtual Status Flush(FlushMode mode) OVERRIDE {
     TRACE_EVENT1("io", "PosixMmapFile::Flush", "path", filename_);
+#ifdef linux
     ThreadRestrictions::AssertIOAllowed();
     int flags = SYNC_FILE_RANGE_WRITE;
     if (mode == FLUSH_SYNC) {
@@ -499,6 +518,11 @@ class PosixMmapFile : public WritableFile {
     if (sync_file_range(fd_, 0, 0, flags) < 0) {
       return IOError(filename_, errno);
     }
+#else
+    if (fsync(fd_) < 0) {
+      return IOError(filename_, errno);
+    }
+#endif
     return Status::OK();
   }
 
@@ -585,6 +609,8 @@ class PosixWritableFile : public WritableFile {
   }
 
   virtual Status PreAllocate(uint64_t size) OVERRIDE {
+    // TODO: Implement preallocation for Mac OS using fcntl().
+#if !defined(__APPLE__)
     TRACE_EVENT1("io", "PosixWritableFile::PreAllocate", "path", filename_);
     ThreadRestrictions::AssertIOAllowed();
     uint64_t offset = std::max(filesize_, pre_allocated_size_);
@@ -599,6 +625,7 @@ class PosixWritableFile : public WritableFile {
     } else {
       pre_allocated_size_ = offset + size;
     }
+#endif
     return Status::OK();
   }
 
@@ -638,6 +665,7 @@ class PosixWritableFile : public WritableFile {
 
   virtual Status Flush(FlushMode mode) OVERRIDE {
     TRACE_EVENT1("io", "PosixWritableFile::Flush", "path", filename_);
+#ifdef linux
     ThreadRestrictions::AssertIOAllowed();
     int flags = SYNC_FILE_RANGE_WRITE;
     if (mode == FLUSH_SYNC) {
@@ -646,6 +674,11 @@ class PosixWritableFile : public WritableFile {
     if (sync_file_range(fd_, 0, 0, flags) < 0) {
       return IOError(filename_, errno);
     }
+#else
+    if (fsync(fd_) < 0) {
+      return IOError(filename_, errno);
+    }
+#endif
     return Status::OK();
   }
 
@@ -672,6 +705,7 @@ class PosixWritableFile : public WritableFile {
   Status DoWritev(const vector<Slice>& data_vector,
                   size_t offset, size_t n) {
     ThreadRestrictions::AssertIOAllowed();
+#ifdef linux
     DCHECK_LE(n, IOV_MAX);
 
     struct iovec iov[n];
@@ -700,6 +734,24 @@ class PosixWritableFile : public WritableFile {
           Substitute("pwritev error: expected to write $0 bytes, wrote $1 bytes instead",
                      nbytes, written));
     }
+#else
+    for (size_t i = offset; i < offset + n; i++) {
+      const Slice& data = data_vector[i];
+      ssize_t written = pwrite(fd_, data.data(), data.size(), filesize_);
+      if (PREDICT_FALSE(written == -1)) {
+        int err = errno;
+        return IOError("pwrite error", err);
+      }
+
+      filesize_ += written;
+
+      if (PREDICT_FALSE(written != data.size())) {
+        return Status::IOError(
+            Substitute("pwrite error: expected to write $0 bytes, wrote $1 bytes instead",
+                       data.size(), written));
+      }
+    }
+#endif
 
     return Status::OK();
   }
@@ -779,6 +831,7 @@ class PosixRWFile : public RWFile {
 
   virtual Status PreAllocate(uint64_t offset, size_t length) OVERRIDE {
     TRACE_EVENT1("io", "PosixRWFile::PreAllocate", "path", filename_);
+#if !defined(__APPLE__)
     ThreadRestrictions::AssertIOAllowed();
     if (fallocate(fd_, 0, offset, length) < 0) {
       if (errno == EOPNOTSUPP) {
@@ -789,21 +842,27 @@ class PosixRWFile : public RWFile {
         return IOError(filename_, errno);
       }
     }
+#endif
     return Status::OK();
   }
 
   virtual Status PunchHole(uint64_t offset, size_t length) OVERRIDE {
+#ifdef linux
     TRACE_EVENT1("io", "PosixRWFile::PunchHole", "path", filename_);
     ThreadRestrictions::AssertIOAllowed();
     if (fallocate(fd_, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, offset, length) < 0) {
       return IOError(filename_, errno);
     }
     return Status::OK();
+#else
+    return Status::NotSupported("Hole punching not supported on this platform");
+#endif
   }
 
   virtual Status Flush(FlushMode mode, uint64_t offset, size_t length) OVERRIDE {
     TRACE_EVENT1("io", "PosixRWFile::Flush", "path", filename_);
     ThreadRestrictions::AssertIOAllowed();
+#ifdef linux
     int flags = SYNC_FILE_RANGE_WRITE;
     if (mode == FLUSH_SYNC) {
       flags |= SYNC_FILE_RANGE_WAIT_AFTER;
@@ -811,6 +870,11 @@ class PosixRWFile : public RWFile {
     if (sync_file_range(fd_, offset, length, flags) < 0) {
       return IOError(filename_, errno);
     }
+#else
+    if (fsync(fd_) < 0) {
+      return IOError(filename_, errno);
+    }
+#endif
     return Status::OK();
   }
 
@@ -1300,11 +1364,21 @@ class PosixEnv : public Env {
   }
 
   virtual Status GetTotalRAMBytes(int64_t* ram) OVERRIDE {
+#if defined(__APPLE__)
+    int mib[2];
+    size_t length = sizeof(*ram);
+
+    // Get the Physical memory size
+    mib[0] = CTL_HW;
+    mib[1] = HW_MEMSIZE;
+    sysctl(mib, 2, ram, &length, NULL, 0);
+#else
     struct sysinfo info;
     if (sysinfo(&info) < 0) {
       return IOError("sysinfo() failed", errno);
     }
     *ram = info.totalram;
+#endif
     return Status::OK();
   }
 
