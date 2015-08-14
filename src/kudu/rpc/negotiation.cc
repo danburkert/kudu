@@ -115,14 +115,14 @@ static Status WaitForClientConnect(Connection* conn, const MonoTime& deadline) {
       return Status::TimedOut("Timeout exceeded waiting to connect");
     }
     remaining.ToTimeSpec(&ts);
-    int ready = ppoll(&poll_fd, 1, &ts, NULL);
+    int ready = poll(&poll_fd, 1, &remaining.ToMilliseconds());
     if (ready == -1) {
       int err = errno;
       if (err == EINTR) {
         // We were interrupted by a signal, let's go again.
         continue;
       } else {
-        return Status::NetworkError("Error from ppoll() while waiting to connect",
+        return Status::NetworkError("Error from poll() while waiting to connect",
             ErrnoToString(err), err);
       }
     } else if (ready == 0) {
