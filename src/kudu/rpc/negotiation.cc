@@ -105,7 +105,6 @@ static Status WaitForClientConnect(Connection* conn, const MonoTime& deadline) {
 
   MonoTime now;
   MonoDelta remaining;
-  struct timespec ts;
   while (true) {
     now = MonoTime::Now(MonoTime::FINE);
     remaining = deadline.GetDeltaSince(now);
@@ -114,8 +113,8 @@ static Status WaitForClientConnect(Connection* conn, const MonoTime& deadline) {
     if (PREDICT_FALSE(remaining.ToNanoseconds() <= 0)) {
       return Status::TimedOut("Timeout exceeded waiting to connect");
     }
-    remaining.ToTimeSpec(&ts);
-    int ready = poll(&poll_fd, 1, &remaining.ToMilliseconds());
+    int remaining_ms = remaining.ToMilliseconds();
+    int ready = poll(&poll_fd, 1, remaining_ms);
     if (ready == -1) {
       int err = errno;
       if (err == EINTR) {

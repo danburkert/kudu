@@ -442,7 +442,7 @@ const BlockId& FileReadableBlock::id() const {
 Status FileReadableBlock::Size(size_t* sz) const {
   DCHECK(!closed_.Load());
 
-  return reader_->Size(sz);
+  return reader_->Size(reinterpret_cast<uint64_t*>(sz));
 }
 
 Status FileReadableBlock::Read(uint64_t offset, size_t length,
