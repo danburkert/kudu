@@ -15,12 +15,10 @@
 #ifndef KUDU_COMMON_KEYENCODER_H
 #define KUDU_COMMON_KEYENCODER_H
 
-
 #include <arpa/inet.h>
-#include <string.h>
 #include <climits>
-#include <bits/endian.h>
 #include <nmmintrin.h>
+#include <string.h>
 
 #include "kudu/common/types.h"
 #include "kudu/gutil/endian.h"
@@ -30,6 +28,18 @@
 #include "kudu/gutil/type_traits.h"
 #include "kudu/util/memory/arena.h"
 #include "kudu/util/status.h"
+
+#if defined(linux)
+#include <bits/endian.h>
+#elif defined(__APPLE__)
+#include <machine/endian.h>
+#define        htobe16(x)     OSSwapBigToHostInt16(x)
+#define        be16toh(x)     OSSwapHostToBigInt16(x)
+#define        htobe32(x)     OSSwapBigToHostInt32(x)
+#define        be32toh(x)     OSSwapHostToBigInt32(x)
+#define        htobe64(x)     OSSwapBigToHostInt64(x)
+#define        be64toh(x)     OSSwapHostToBigInt64(x)
+#endif  // define(linux)
 
 // The SSE-based encoding is not yet working. Don't define this!
 #undef KEY_ENCODER_USE_SSE
