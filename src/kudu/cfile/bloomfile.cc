@@ -241,7 +241,6 @@ Status BloomFileReader::CheckKeyPresent(const BloomKeyProbe &probe,
   // Use just one lock in OSX.
   int cpu = 0;
 #endif  // define(linux)
-  CHECK_LT(cpu, iter_locks_.size());
 
   BlockPointer bblk_ptr;
   {
