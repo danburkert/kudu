@@ -39,4 +39,4 @@ printf "\0" >> $TMP_INPUT
 # generated symbol name is consistent. Otherwise, the symbol name would
 # depend on the build directory.
 cd $TMPDIR
-ld -r -b binary -o $ABS_OUTPUT $(basename $INPUT)
+xxd -i $(basename $INPUT) > $ABS_OUTPUT

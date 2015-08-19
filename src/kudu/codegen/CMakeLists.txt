@@ -74,7 +74,7 @@ target_link_libraries(codegen
 set(CLANG_EXEC ${THIRDPARTY_PREFIX}/bin/clang++)
 set(IR_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/precompiled.cc)
 set(IR_OUTPUT ${BUILD_OUTPUT_ROOT_DIRECTORY}/precompiled.ll)
-set(IR_OUTPUT_ELF ${IR_OUTPUT}.o)
+set(IR_OUTPUT_ELF ${IR_OUTPUT}.cc)
 # Retrieve all includes directories needed for precompilation
 set(IR_INCLUDES
   -I ${CMAKE_SOURCE_DIR}/src
@@ -135,7 +135,7 @@ list(REMOVE_ITEM IR_FLAGS "-O3" "-O2" "-O1" "-Os")
 # having stale IR.
 #
 # See: http://www.cmake.org/Bug/bug_relationship_graph.php?bug_id=13234
-add_library(ir_fake_target ${IR_SOURCE})
+add_library(ir_fake_target ${IR_SOURCE} ${IR_OUTPUT_ELF})
 # The IR uses protobufs from kudu_common, so we have to generate that code first.
 target_link_libraries(ir_fake_target kudu_common_proto kudu_util ${KUDU_BASE_LIBS})
 
