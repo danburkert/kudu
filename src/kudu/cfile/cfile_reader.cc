@@ -96,7 +96,7 @@ Status CFileReader::Open(gscoped_ptr<ReadableBlock> block,
 Status CFileReader::OpenNoInit(gscoped_ptr<ReadableBlock> block,
                                const ReaderOptions& options,
                                gscoped_ptr<CFileReader> *reader) {
-  uint64_t block_size;
+  size_t block_size;
   RETURN_NOT_OK(block->Size(&block_size));
   gscoped_ptr<CFileReader> reader_local(
       new CFileReader(options, block_size, block.Pass()));
