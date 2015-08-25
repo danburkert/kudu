@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "kudu/common/partition.h"
 #include "kudu/common/schema.h"
 #include "kudu/common/wire_protocol.h"
 #include "kudu/gutil/strings/join.h"
@@ -103,6 +104,7 @@ void MasterPathHandlers::HandleTablePage(const Webserver::WebRequest& req,
   }
 
   Schema schema;
+  PartitionSchema partition_schema;
   string table_name;
   vector<scoped_refptr<TabletInfo> > tablets;
   {
@@ -123,27 +125,33 @@ void MasterPathHandlers::HandleTablePage(const Webserver::WebRequest& req,
     *output << "</table>\n";
 
     SchemaFromPB(l.data().pb.schema(), &schema);
+    Status s = PartitionSchema::FromPB(l.data().pb.partition_schema(), schema, &partition_schema);
+    if (!s.ok()) {
+      *output << "Unable to decode partition schema: " << s.ToString();
+      return;
+    }
     table->GetAllTablets(&tablets);
   }
 
   HtmlOutputSchemaTable(schema, output);
 
   *output << "<table class='table table-striped'>\n";
-  *output << "  <tr><th>Tablet ID</th><th>Start-Key</th><th>End-Key</th><th>State</th>"
+  *output << "  <tr><th>Tablet ID</th><th>Partition</th><th>State</th>"
       "<th>RaftConfig</th></tr>\n";
   BOOST_FOREACH(const scoped_refptr<TabletInfo>& tablet, tablets) {
     vector<TabletReplica> locations;
     tablet->GetLocations(&locations);
     TabletMetadataLock l(tablet.get(), TabletMetadataLock::READ);
-    string start_key = schema.DebugEncodedRowKey(l.data().pb.start_key(), Schema::START_KEY);
-    string end_key = schema.DebugEncodedRowKey(l.data().pb.end_key(), Schema::END_KEY);
+
+    Partition partition;
+    Partition::FromPB(l.data().pb.partition(), &partition);
+
     string state = SysTabletsEntryPB_State_Name(l.data().pb.state());
     Capitalize(&state);
     *output << Substitute(
-        "<tr><th>$0</th><td>$1</td><td>$2</td><td>$3 $4</td><td>$5</td></tr>\n",
+        "<tr><th>$0</th><td>$1</td><td>$2</td><td>$3</td><td>$4</td></tr>\n",
         tablet->tablet_id(),
-        EscapeForHtmlToString(start_key),
-        EscapeForHtmlToString(end_key),
+        EscapeForHtmlToString(partition_schema.PartitionDebugString(partition, schema)),
         state,
         EscapeForHtmlToString(l.data().pb.state_msg()),
         RaftConfigToHtml(locations));

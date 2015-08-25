@@ -167,6 +167,11 @@ Status SchemaToPB(const Schema& schema, SchemaPB *pb) {
   return SchemaToColumnPBs(schema, pb->mutable_columns());
 }
 
+Status SchemaToPBWithoutIds(const Schema& schema, SchemaPB *pb) {
+  pb->Clear();
+  return SchemaToColumnPBsWithoutIds(schema, pb->mutable_columns());
+}
+
 Status SchemaFromPB(const SchemaPB& pb, Schema *schema) {
   return ColumnPBsToSchema(pb.columns(), schema);
 }

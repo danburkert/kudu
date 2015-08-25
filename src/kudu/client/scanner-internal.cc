@@ -144,7 +144,7 @@ Status KuduScanner::Data::CanBeRetried(const bool isNewScan,
   return Status::OK();
 }
 
-Status KuduScanner::Data::OpenTablet(const Slice& key,
+Status KuduScanner::Data::OpenTablet(const string& partition_key,
                                      const MonoTime& deadline,
                                      set<string>* blacklist) {
 
@@ -163,10 +163,10 @@ Status KuduScanner::Data::OpenTablet(const Slice& key,
     default: LOG(FATAL) << "Unexpected order mode.";
   }
 
-  if (encoded_last_row_key_.length() > 0) {
-    VLOG(1) << "Setting NewScanRequestPB encoded_last_row_key to hex value "
-        << HexDump(encoded_last_row_key_);
-    scan->set_encoded_last_row_key(encoded_last_row_key_);
+  if (last_primary_key_.length() > 0) {
+    VLOG(1) << "Setting NewScanRequestPB last_primary_key to hex value "
+        << HexDump(last_primary_key_);
+    scan->set_last_primary_key(last_primary_key_);
   }
 
   scan->set_cache_blocks(spec_.cache_blocks());
@@ -198,25 +198,25 @@ Status KuduScanner::Data::OpenTablet(const Slice& key,
   }
 
   if (spec_.lower_bound_key()) {
-    scan->mutable_encoded_start_key()->assign(
+    scan->mutable_start_primary_key()->assign(
       reinterpret_cast<const char*>(spec_.lower_bound_key()->encoded_key().data()),
       spec_.lower_bound_key()->encoded_key().size());
   } else {
-    scan->clear_encoded_start_key();
+    scan->clear_start_primary_key();
   }
   if (spec_.exclusive_upper_bound_key()) {
-    scan->mutable_encoded_stop_key()->assign(
+    scan->mutable_stop_primary_key()->assign(
       reinterpret_cast<const char*>(spec_.exclusive_upper_bound_key()->encoded_key().data()),
       spec_.exclusive_upper_bound_key()->encoded_key().size());
   } else {
-    scan->clear_encoded_stop_key();
+    scan->clear_stop_primary_key();
   }
-  RETURN_NOT_OK(SchemaToColumnPBs(*projection_, scan->mutable_projected_columns()));
+  RETURN_NOT_OK(SchemaToColumnPBsWithoutIds(*projection_, scan->mutable_projected_columns()));
 
   for (int attempt = 1;; attempt++) {
     Synchronizer sync;
     table_->client()->data_->meta_cache_->LookupTabletByKey(table_,
-                                                            key,
+                                                            partition_key,
                                                             deadline,
                                                             &remote_,
                                                             sync.AsStatusCallback());
@@ -279,14 +279,14 @@ Status KuduScanner::Data::OpenTablet(const Slice& key,
     VLOG(1) << "Opened tablet " << remote_->tablet_id() << " (no rows), no scanner ID assigned";
   }
 
-  // If present in the response, set the snapshot timestamp and the encoded last row key.
+  // If present in the response, set the snapshot timestamp and the encoded last primary key.
   // This is used when retrying the scan elsewhere.
-  // The last row key is also updated on each scan response.
+  // The last primary key is also updated on each scan response.
   if (order_mode_ == ORDERED) {
     CHECK(last_response_.has_snap_timestamp());
     snapshot_timestamp_ = last_response_.snap_timestamp();
-    if (last_response_.has_encoded_last_row_key()) {
-      encoded_last_row_key_ = last_response_.encoded_last_row_key();
+    if (last_response_.has_last_primary_key()) {
+      last_primary_key_ = last_response_.last_primary_key();
     }
   }
 
@@ -361,9 +361,12 @@ Status KuduScanner::Data::ExtractRows(const RpcController& controller,
 bool KuduScanner::Data::MoreTablets() const {
   CHECK(open_);
   // TODO(KUDU-565): add a test which has a scan end on a tablet boundary
-  return !remote_->end_key().empty() &&
+  // TODO(KUDU-818): this check needs to be changed to work with non-PK partition schemas.
+  return !remote_->partition().partition_key_end().empty() &&
     (spec_.exclusive_upper_bound_key() == NULL ||
-     spec_.exclusive_upper_bound_key()->encoded_key().compare(remote_->end_key()) > 0);
+     spec_.exclusive_upper_bound_key()
+         ->encoded_key()
+          .compare(remote_->partition().partition_key_end()) > 0);
 }
 
 void KuduScanner::Data::PrepareRequest(RequestType state) {
