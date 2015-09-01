@@ -47,7 +47,8 @@ public class GetTableSchemaRequest extends KuduRpc<GetTableSchemaResponse> {
     GetTableSchemaResponse response = new GetTableSchemaResponse(
         deadlineTracker.getElapsedMillis(),
         tsUUID,
-        ProtobufHelper.pbToSchema(respBuilder.getSchema()));
+        ProtobufHelper.pbToSchema(respBuilder.getSchema()),
+        ProtobufHelper.pbToPartitionSchema(respBuilder.getPartitionSchema()));
     return new Pair<GetTableSchemaResponse, Object>(
         response, respBuilder.hasError() ? respBuilder.getError() : null);
   }

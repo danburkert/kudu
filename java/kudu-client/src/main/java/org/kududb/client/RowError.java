@@ -55,7 +55,7 @@ public class RowError {
 
   @Override
   public String toString() {
-    return "Row error for key=" + Bytes.pretty(operation.key()) +
+    return "Row error for partition key=" + Bytes.pretty(operation.partitionKey()) +
         ", tablet=" + operation.getTablet().getTabletIdAsString() +
         ", server=" + tsUUID +
         ", status=" + status +

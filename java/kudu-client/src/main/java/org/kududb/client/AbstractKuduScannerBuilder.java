@@ -147,7 +147,7 @@ public abstract class AbstractKuduScannerBuilder
    * @return this instance
    */
   public S lowerBound(PartialRow partialRow) {
-    return lowerBoundRaw(partialRow.key());
+    return lowerBoundRaw(partialRow.encodePrimaryKey());
   }
 
   /**
@@ -170,7 +170,7 @@ public abstract class AbstractKuduScannerBuilder
    * @return this instance
    */
   public S exclusiveUpperBound(PartialRow partialRow) {
-    return exclusiveUpperBoundRaw(partialRow.key());
+    return exclusiveUpperBoundRaw(partialRow.encodePrimaryKey());
   }
 
   /**

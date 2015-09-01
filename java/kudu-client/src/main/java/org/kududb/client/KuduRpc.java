@@ -63,11 +63,11 @@ public abstract class KuduRpc<R> {
 
   public interface HasKey {
     /**
-     * Returns the row key this RPC is for.
+     * Returns the partition key this RPC is for.
      * <p>
      * <strong>DO NOT MODIFY THE CONTENTS OF THE ARRAY RETURNED.</strong>
      */
-    public byte[] key();
+    public byte[] partitionKey();
   }
 
   /**

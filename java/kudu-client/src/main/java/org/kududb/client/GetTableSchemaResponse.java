@@ -7,14 +7,19 @@ import org.kududb.Schema;
 public class GetTableSchemaResponse extends KuduRpcResponse {
 
   private final Schema schema;
+  private final PartitionSchema partitionSchema;
 
   /**
    * @param ellapsedMillis Time in milliseconds since RPC creation to now.
    * @param schema Table's schema.
    */
-  GetTableSchemaResponse(long ellapsedMillis, String tsUUID, Schema schema) {
+  GetTableSchemaResponse(long ellapsedMillis,
+                         String tsUUID,
+                         Schema schema,
+                         PartitionSchema partitionSchema) {
     super(ellapsedMillis, tsUUID);
     this.schema = schema;
+    this.partitionSchema = partitionSchema;
   }
 
   /**
@@ -23,5 +28,13 @@ public class GetTableSchemaResponse extends KuduRpcResponse {
    */
   public Schema getSchema() {
     return schema;
+  }
+
+  /**
+   * Get the table's partition schema.
+   * @return the table's partition schema.
+   */
+  public PartitionSchema getPartitionSchema() {
+    return partitionSchema;
   }
 }

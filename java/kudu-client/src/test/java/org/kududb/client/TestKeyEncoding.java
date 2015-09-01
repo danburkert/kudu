@@ -2,53 +2,71 @@
 // Confidential Cloudera Information: Covered by NDA.
 package org.kududb.client;
 
-import static org.junit.Assert.*;
-
+import com.google.common.collect.ImmutableList;
+import org.junit.Test;
 import org.kududb.ColumnSchema;
 import org.kududb.Schema;
 import org.kududb.Type;
-import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 public class TestKeyEncoding {
 
+  /**
+   * Builds the default partition schema for a schema.
+   * @param schema the schema.
+   * @return a default partition schema.
+   */
+  private PartitionSchema defaultPartitionSchema(Schema schema) {
+    List<Integer> columnIds = new ArrayList<>();
+    for (int i = 0; i < schema.getPrimaryKeyColumnCount(); i++) {
+      columnIds.add(i);
+    }
+    return new PartitionSchema(
+        new PartitionSchema.RangeSchema(columnIds),
+        ImmutableList.<PartitionSchema.HashBucketSchema>of());
+  }
+
   @Test
-  public void testBoolKey() {
+  public void testBoolPartitionKeys() {
     List<ColumnSchema> cols1 = new ArrayList<ColumnSchema>();
     cols1.add(new ColumnSchema.ColumnSchemaBuilder("key", Type.BOOL)
         .key(true)
         .build());
     Schema schema = new Schema(cols1);
-    KuduTable table = new KuduTable(null, "one", schema);
+    PartitionSchema partitionSchema = defaultPartitionSchema(schema);
+    KuduTable table = new KuduTable(null, "one", schema, partitionSchema);
     Insert oneKeyInsert = new Insert(table);
     PartialRow row = oneKeyInsert.getRow();
     row.addBoolean("key", true);
-    assertTrue(Bytes.pretty(oneKeyInsert.key()) + " isn't foo",
-        Bytes.equals(new byte[]{1}, oneKeyInsert.key()));
+    assertTrue(Bytes.pretty(oneKeyInsert.partitionKey()) + " isn't foo",
+        Bytes.equals(new byte[]{1}, oneKeyInsert.partitionKey()));
 
     oneKeyInsert = new Insert(table);
     row = oneKeyInsert.getRow();
     row.addBoolean("key", false);
-    assertTrue(Bytes.pretty(oneKeyInsert.key()) + " isn't foo",
-            Bytes.equals(new byte[] {0}, oneKeyInsert.key()));
-
+    assertTrue(Bytes.pretty(oneKeyInsert.partitionKey()) + " isn't foo",
+            Bytes.equals(new byte[] {0}, oneKeyInsert.partitionKey()));
   }
 
   @Test
-  public void test() {
+  public void testPartitionKeys() {
     List<ColumnSchema> cols1 = new ArrayList<ColumnSchema>();
     cols1.add(new ColumnSchema.ColumnSchemaBuilder("key", Type.STRING)
         .key(true)
         .build());
     Schema schemaOneString = new Schema(cols1);
-    KuduTable table = new KuduTable(null, "one", schemaOneString);
+    PartitionSchema partitionSchemaOneString = defaultPartitionSchema(schemaOneString);
+    KuduTable table = new KuduTable(null, "one", schemaOneString, partitionSchemaOneString);
     Insert oneKeyInsert = new Insert(table);
     PartialRow row = oneKeyInsert.getRow();
     row.addString("key", "foo");
-    assertTrue(Bytes.pretty(oneKeyInsert.key()) + " isn't foo", Bytes.equals(new byte[] {'f', 'o',
-        'o'}, oneKeyInsert.key()));
+    assertTrue(Bytes.pretty(oneKeyInsert.partitionKey()) + " isn't foo", Bytes.equals(new byte[] {'f', 'o',
+        'o'}, oneKeyInsert.partitionKey()));
 
     List<ColumnSchema> cols2 = new ArrayList<ColumnSchema>();
     cols2.add(new ColumnSchema.ColumnSchemaBuilder("key", Type.STRING)
@@ -58,27 +76,28 @@ public class TestKeyEncoding {
         .key(true)
         .build());
     Schema schemaTwoString = new Schema(cols2);
-    KuduTable table2 = new KuduTable(null, "two", schemaTwoString);
+    PartitionSchema partitionSchemaTwoString = defaultPartitionSchema(schemaTwoString);
+    KuduTable table2 = new KuduTable(null, "two", schemaTwoString, partitionSchemaTwoString);
     Insert twoKeyInsert = new Insert(table2);
     row = twoKeyInsert.getRow();
     row.addString("key", "foo");
     row.addString("key2", "bar");
-    assertTrue(Bytes.pretty(twoKeyInsert.key()) + " isn't foo0x000x00bar",
+    assertTrue(Bytes.pretty(twoKeyInsert.partitionKey()) + " isn't foo0x000x00bar",
         Bytes.equals(new byte[] {'f',
-        'o', 'o', 0x00, 0x00, 'b', 'a', 'r'}, twoKeyInsert.key()));
+        'o', 'o', 0x00, 0x00, 'b', 'a', 'r'}, twoKeyInsert.partitionKey()));
 
     Insert twoKeyInsertWithNull = new Insert(table2);
     row = twoKeyInsertWithNull.getRow();
     row.addString("key", "xxx\0yyy");
     row.addString("key2", "bar");
-    assertTrue(Bytes.pretty(twoKeyInsertWithNull.key()) + " isn't " +
+    assertTrue(Bytes.pretty(twoKeyInsertWithNull.partitionKey()) + " isn't " +
         "xxx0x000x01yyy0x000x00bar",
         Bytes.equals(new byte[] {'x', 'x', 'x', 0x00, 0x01, 'y', 'y', 'y', 0x00, 0x00, 'b', 'a',
             'r'},
-            twoKeyInsertWithNull.key()));
+            twoKeyInsertWithNull.partitionKey()));
 
     // test that we get the correct memcmp result, the bytes are in big-endian order in a key
-    List<ColumnSchema> cols3 = new ArrayList<ColumnSchema>();
+    List<ColumnSchema> cols3 = new ArrayList<>();
     cols3.add(new ColumnSchema.ColumnSchemaBuilder("key", Type.INT32)
         .key(true)
         .build());
@@ -86,19 +105,20 @@ public class TestKeyEncoding {
         .key(true)
         .build());
     Schema schemaIntString = new Schema(cols3);
-    KuduTable table3 = new KuduTable(null, "three", schemaIntString);
+    PartitionSchema partitionSchemaIntString = defaultPartitionSchema(schemaIntString);
+    KuduTable table3 = new KuduTable(null, "three", schemaIntString, partitionSchemaIntString);
     Insert small = new Insert(table3);
     row = small.getRow();
     row.addInt("key", 20);
     row.addString("key2", "data");
-    assertEquals(0, Bytes.memcmp(small.key(), small.key()));
+    assertEquals(0, Bytes.memcmp(small.partitionKey(), small.partitionKey()));
 
     Insert big = new Insert(table3);
     row = big.getRow();
     row.addInt("key", 10000);
     row.addString("key2", "data");
-    assertTrue(Bytes.memcmp(small.key(), big.key()) < 0);
-    assertTrue(Bytes.memcmp(big.key(), small.key()) > 0);
+    assertTrue(Bytes.memcmp(small.partitionKey(), big.partitionKey()) < 0);
+    assertTrue(Bytes.memcmp(big.partitionKey(), small.partitionKey()) > 0);
 
     // The following tests test our assumptions on unsigned data types sorting from KeyEncoder
     byte four = 4;

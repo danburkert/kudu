@@ -2,6 +2,7 @@
 // Confidential Cloudera Information: Covered by NDA.
 package org.kududb.client;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.net.HostAndPort;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.ZeroCopyLiteralByteString;
@@ -72,6 +73,58 @@ public class ProtobufHelper {
       columnIds.add(id);
     }
     return new Schema(columns, columnIds);
+  }
+
+  /**
+   * Factory method for creating a {@code PartitionSchema} from a protobuf message.
+   *
+   * @param pb the partition schema protobuf message.
+   * @return a partition instance.
+   */
+  static PartitionSchema pbToPartitionSchema(Common.PartitionSchemaPB pb) {
+    List<Integer> rangeColumns = pbToIds(pb.getRangeSchema().getColumnsList());
+    PartitionSchema.RangeSchema rangeSchema = new PartitionSchema.RangeSchema(rangeColumns);
+
+    ImmutableList.Builder<PartitionSchema.HashBucketSchema> hashSchemas = ImmutableList.builder();
+
+    for (Common.PartitionSchemaPB.HashBucketSchemaPB hashBucketSchemaPB : pb.getHashBucketSchemasList()) {
+      List<Integer> hashColumns = pbToIds(pb.getRangeSchema().getColumnsList());
+
+      PartitionSchema.HashBucketSchema hashSchema = new PartitionSchema.HashBucketSchema(hashColumns,
+                                                         hashBucketSchemaPB.getNumBuckets(),
+                                                         hashBucketSchemaPB.getSeed());
+
+      hashSchemas.add(hashSchema);
+    }
+
+    return new PartitionSchema(rangeSchema, hashSchemas.build());
+  }
+
+  /**
+   * Deserializes a list of column identifier protobufs into a list of column IDs. This method
+   * relies on the fact that the master will aways send a partition schema with column IDs, and not
+   * column names (column names are only used when the client is sending the partition schema to
+   * the master as part of the create table process).
+   *
+   * @param columnIdentifiers the column identifiers.
+   * @return
+   */
+  private static List<Integer> pbToIds(
+      List<Common.PartitionSchemaPB.ColumnIdentifierPB> columnIdentifiers) {
+    ImmutableList.Builder<Integer> columns = ImmutableList.builder();
+    for (Common.PartitionSchemaPB.ColumnIdentifierPB column : columnIdentifiers) {
+      switch (column.getIdentifierCase()) {
+        case ID:
+          columns.add(column.getId());
+          break;
+        case NAME:
+          throw new IllegalArgumentException(
+              String.format("Expected column ID from master: %s", column));
+        case IDENTIFIER_NOT_SET:
+          throw new IllegalArgumentException("Unknown column: " + column);
+      }
+    }
+    return columns.build();
   }
 
   private static byte[] objectToWireFormat(ColumnSchema col, Object value) {
