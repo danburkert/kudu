@@ -5,7 +5,6 @@ package org.kududb;
 import org.kududb.client.Bytes;
 import org.kududb.client.PartialRow;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,56 +15,95 @@ import java.util.Map;
  */
 public class Schema {
 
-  private final List<ColumnSchema> columns;
-  private final Map<String, ColumnSchema> columnsMap;
+  /**
+   * Mapping of column index to column.
+   */
+  private final List<ColumnSchema> columnsByIndex;
+
+  /**
+   * The primary key columns.
+   */
+  private final List<ColumnSchema> primaryKeyColumns;
+
+  /**
+   * Mapping of column name to index.
+   */
+  private final Map<String, Integer> columnsByName;
+
+  /**
+   * Mapping of column ID to column, or null if the schema does not have assigned column IDs.
+   */
+  private final Map<Integer, Integer> columnsById;
+
+  /**
+   * Mapping of column index to backing byte array offset.
+   */
   private final int[] columnOffsets;
+
   private final int varLengthColumnCount;
   private final int rowSize;
-  private final int keysCount;
   private final boolean hasNullableColumns;
 
   /**
    * Constructs a schema using the specified columns and does some internal accounting
-   * @param columns
+   * @param columns the columns in index order.
    * @throws IllegalArgumentException If the key columns aren't specified first
    *
    * See {@code ColumnPBsToSchema()} in {@code src/kudu/common/wire_protocol.cc}
    */
   public Schema(List<ColumnSchema> columns) {
-    this.columns = columns;
-    int varlencnt = 0;
-    int keycnt = 0;
-    this.columnOffsets = new int[columns.size()];
-    this.columnsMap = new HashMap<String, ColumnSchema>(columns.size());
-    int pos = 0;
-    int i = 0;
-    boolean hasNulls = false;
-    boolean isHandlingKeys = true;
-    // pre-compute a few counts and offsets
-    for (ColumnSchema col : this.columns) {
-      if (col.isKey()) {
-        if (!isHandlingKeys) {
-          throw new IllegalArgumentException("Got out-of-order key column " + col);
-        }
-        keycnt++;
-      } else {
-        isHandlingKeys = false;
-      }
-      if (col.isNullable()) {
-        hasNulls = true;
-      }
-      this.columnsMap.put(col.getName(), col);
-      columnOffsets[i] = pos;
-      pos += col.getType().getSize();
-      if (col.getType() == Type.STRING || col.getType() == Type.BINARY) {
-        varlencnt++;
-      }
-      i++;
+    this(columns, null);
+  }
+
+  /**
+   * Constructs a schema using the specified columns and IDs.
+   * @param columns the columns in index order.
+   * @param columnIds the column ids of the provided columns, or null.
+   * @throws IllegalArgumentException If the primary key columns aren't specified first.
+   * @throws IllegalArgumentException If the column ids length does not match the columns length.
+   *
+   * See {@code ColumnPBsToSchema()} in {@code src/kudu/common/wire_protocol.cc}
+   */
+  public Schema(List<ColumnSchema> columns, List<Integer> columnIds) {
+    boolean hasColumnIds = columnIds != null;
+    if (hasColumnIds && columns.size() != columnIds.size()) {
+      throw new IllegalArgumentException("Schema must be constructed with all column IDs, or none.");
     }
+
+    this.columnsByIndex = columns;
+    int varLenCnt = 0;
+    this.columnOffsets = new int[columns.size()];
+    this.columnsByName = new HashMap<>(columns.size());
+    this.columnsById = hasColumnIds ? new HashMap<Integer, Integer>(columnIds.size()) : null;
+    int offset = 0;
+    boolean hasNulls = false;
+    int primaryKeyCount = 0;
+    // pre-compute a few counts and offsets
+    for (int index = 0; index < columns.size(); index++) {
+      final ColumnSchema column = columns.get(index);
+      if (column.isKey()) {
+        primaryKeyCount += 1;
+        if (primaryKeyCount != index + 1)
+          throw new IllegalArgumentException("Got out-of-order primary key column: " + column);
+      }
+
+      hasNulls |= column.isNullable();
+      columnOffsets[index] = offset;
+      offset += column.getType().getSize();
+      this.columnsByName.put(column.getName(), index);
+      if (column.getType() == Type.STRING || column.getType() == Type.BINARY) {
+        varLenCnt++;
+      }
+
+      if (hasColumnIds) {
+        this.columnsById.put(columnIds.get(index), index);
+      }
+    }
+
     this.hasNullableColumns = hasNulls;
-    this.varLengthColumnCount = varlencnt;
-    this.keysCount = keycnt;
-    this.rowSize = getRowSize(this);
+    this.varLengthColumnCount = varLenCnt;
+    this.primaryKeyColumns = columns.subList(0, primaryKeyCount);
+    this.rowSize = getRowSize(this.columnsByIndex);
   }
 
   /**
@@ -73,7 +111,7 @@ public class Schema {
    * @return list of columns
    */
   public List<ColumnSchema> getColumns() {
-    return this.columns;
+    return this.columnsByIndex;
   }
 
   /**
@@ -108,16 +146,9 @@ public class Schema {
    * @return an index in the schema
    */
   public int getColumnIndex(String columnName) {
-    return this.columns.indexOf(this.getColumn(columnName));
-  }
-
-  /**
-   * Get the index for the provided column schema.
-   * @param column column to search for
-   * @return an index in the schema
-   */
-  public int getColumnIndex(ColumnSchema column) {
-    return this.columns.indexOf(column);
+    Integer index = this.columnsByName.get(columnName);
+    if (index == null) throw new IllegalArgumentException(String.format("Unknown column: %s", columnName));
+    return index;
   }
 
   /**
@@ -125,8 +156,15 @@ public class Schema {
    * @param idx column's index
    * @return the column
    */
-  public ColumnSchema getColumn(int idx) {
-    return this.columns.get(idx);
+  public ColumnSchema getColumnByIndex(int idx) {
+    return this.columnsByIndex.get(idx);
+  }
+
+  public ColumnSchema getColumnById(int columnId) {
+    if (!hasColumnIds()) throw new IllegalStateException("Schema does not have Column IDs");
+    final Integer index = this.columnsById.get(columnId);
+    if (index == null) throw new IllegalArgumentException("Unknown column id: %s" + columnId);
+    return columnsByIndex.get(index);
   }
 
   /**
@@ -135,7 +173,7 @@ public class Schema {
    * @return the column
    */
   public ColumnSchema getColumn(String columnName) {
-    return this.columnsMap.get(columnName);
+    return columnsByIndex.get(getColumnIndex(columnName));
   }
 
   /**
@@ -143,15 +181,23 @@ public class Schema {
    * @return count of columns
    */
   public int getColumnCount() {
-    return this.columns.size();
+    return this.columnsByIndex.size();
   }
 
   /**
-   * Get the count of columns that are part of the keys
-   * @return count of keys
+   * Get the count of columns that are part of the primary key.
+   * @return count of primary key columns.
    */
-  public int getKeysCount() {
-    return this.keysCount;
+  public int getPrimaryKeyColumnCount() {
+    return this.primaryKeyColumns.size();
+  }
+
+  /**
+   * Get the primary key columns.
+   * @return the primary key columns.
+   */
+  public List<ColumnSchema> getPrimaryKeyColumns() {
+    return primaryKeyColumns;
   }
 
   /**
@@ -159,15 +205,8 @@ public class Schema {
    * @return new schema with only the keys
    */
   public Schema getRowKeyProjection() {
-    List<ColumnSchema> columns = new ArrayList<ColumnSchema>(this.keysCount);
-    for (ColumnSchema col : this.columns) {
-      if (col.isKey()) {
-        columns.add(col);
-      }
-    }
-    return new Schema(columns);
+    return new Schema(primaryKeyColumns);
   }
-
 
   /**
    * Tells if there's at least one nullable column
@@ -178,17 +217,29 @@ public class Schema {
   }
 
   /**
+   * Tells whether this schema includes IDs for columns. A schema created by a client as part of
+   * table creation will not include IDs, but schemas for open tables will include IDs.
+   *
+   * @return whether this schema includes column IDs.
+   */
+  public boolean hasColumnIds() {
+    return columnsById != null;
+  }
+
+  /**
    * Gives the size in bytes for a single row given the specified schema
-   * @param schema row's schema
+   * @param columns the row's columns.
    * @return row size in bytes
    */
-  public static int getRowSize(Schema schema) {
+  private static int getRowSize(List<ColumnSchema> columns) {
     int totalSize = 0;
-    for (ColumnSchema column : schema.getColumns()) {
+    boolean hasNullables = false;
+    for (ColumnSchema column : columns) {
       totalSize += column.getType().getSize();
+      hasNullables |= column.isNullable();
     }
-    if (schema.hasNullableColumns()) {
-      totalSize += Bytes.getBitSetSize(schema.getColumnCount());
+    if (hasNullables) {
+      totalSize += Bytes.getBitSetSize(columns.size());
     }
     return totalSize;
   }
