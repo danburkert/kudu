@@ -23,6 +23,10 @@
 #include "kudu/util/test_util.h"
 #include "kudu/util/thread.h"
 
+#if defined(__APPLE__)
+#include <signal.h>
+#endif
+
 using std::string;
 using std::vector;
 
