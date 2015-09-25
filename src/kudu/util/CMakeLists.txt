@@ -124,7 +124,6 @@ set(UTIL_SRCS
   net/net_util.cc
   net/sockaddr.cc
   net/socket.cc
-  nvm_cache.cc
   oid_generator.cc
   once.cc
   os-util.cc
@@ -155,6 +154,14 @@ set(UTIL_SRCS
   version_info.cc
 )
 
+if(NOT APPLE)
+  set(UTIL_SRCS
+    nvm_cache.cc
+    ${UTIL_SRCS}
+  )
+endif()
+
+
 set(UTIL_LIBS
   boost_system
   boost_thread
@@ -165,13 +172,13 @@ set(UTIL_LIBS
   histogram_proto
   pb_util_proto
   protobuf
-  vmem
   version_info_proto
   zlib)
 
 if(NOT APPLE)
   target_link_libraries(kudu_util
-    rt)
+    rt
+    vmem)
 endif()
 
 # We use MallocExtension and HeapChecker, but not in the exported version of
@@ -200,8 +207,14 @@ target_link_libraries(kudu_test_util
   gflags
   glog
   gmock
-  kudu_util
+  kudu_util)
+
+if(NOT APPLE)
+target_link_libraries(kudu_test_util
+  ${CURL_LIBRARIES}
   vmem)
+endif()
+
 
 #######################################
 # kudu_test_main
@@ -240,7 +253,7 @@ ADD_KUDU_TEST(bit-util-test)
 ADD_KUDU_TEST(bitmap-test)
 ADD_KUDU_TEST(blocking_queue-test)
 ADD_KUDU_TEST(bloom_filter-test)
-ADD_KUDU_TEST(cache-test)
+#ADD_KUDU_TEST(cache-test)
 ADD_KUDU_TEST(callback_bind-test)
 ADD_KUDU_TEST(countdown_latch-test)
 ADD_KUDU_TEST(crc-test RUN_SERIAL true) # has a benchmark
