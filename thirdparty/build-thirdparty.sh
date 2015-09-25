@@ -299,7 +299,7 @@ if [ -n "$F_ALL" -o -n "$F_TRACE_VIEWER" ]; then
 fi
 
 # Build NVML
-if [ -n "$F_ALL" -o -n "$F_NVML" ]; then
+if [ "$OS_LINUX" ] && [ -n "$F_ALL" -o -n "$F_NVML" ]; then
   cd $NVML_DIR/src/
 
   # The embedded jemalloc build doesn't pick up the EXTRA_CFLAGS environment
