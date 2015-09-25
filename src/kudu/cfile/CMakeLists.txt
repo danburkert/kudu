@@ -56,7 +56,7 @@ target_link_libraries(cfile
 # Tests
 set(KUDU_TEST_LINK_LIBS cfile ${KUDU_MIN_TEST_LIBS})
 ADD_KUDU_TEST(index-test)
-ADD_KUDU_TEST(cfile-test)
+#ADD_KUDU_TEST(cfile-test)
 ADD_KUDU_TEST(encoding-test LABELS no_tsan)
 ADD_KUDU_TEST(bloomfile-test)
 ADD_KUDU_TEST(mt-bloomfile-test)
