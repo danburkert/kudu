@@ -29,6 +29,10 @@
 #include "kudu/util/errno.h"
 #include "kudu/util/monotime.h"
 
+#if defined(__APPLE__)
+typedef sig_t sighandler_t;
+#endif  // defined(__APPLE__)
+
 // Evil hack to grab a few useful functions from glog
 namespace google {
 
