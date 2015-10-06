@@ -39,18 +39,14 @@ TEST_F(DebugUtilTest, TestStackTrace) {
 }
 
 TEST_F(DebugUtilTest, TestStackTraceInvalidTid) {
-  string s = DumpThreadStack(1);
+  pthread_t thread;
+  string s = DumpThreadStack(thread);
   ASSERT_STR_CONTAINS(s, "unable to deliver signal");
 }
 
 TEST_F(DebugUtilTest, TestStackTraceSelf) {
-  string s = DumpThreadStack(syscall(SYS_gettid));
+  string s = DumpThreadStack(pthread_self());
   ASSERT_STR_CONTAINS(s, "kudu::DebugUtilTest_TestStackTraceSelf_Test::TestBody()");
-}
-
-TEST_F(DebugUtilTest, TestStackTraceMainThread) {
-  string s = DumpThreadStack(getpid());
-  ASSERT_STR_CONTAINS(s, "kudu::DebugUtilTest_TestStackTraceMainThread_Test::TestBody()");
 }
 
 namespace {
@@ -81,7 +77,7 @@ TEST_F(DebugUtilTest, TestSignalStackTrace) {
   // to start up and actually call our function.
   string stack;
   for (int i = 0; i < 10000; i++) {
-    stack = DumpThreadStack(t->tid());
+    stack = DumpThreadStack(t->pthread());
     if (stack.find("SleeperThread") != string::npos) break;
     SleepFor(MonoDelta::FromMicroseconds(100));
   }
@@ -99,7 +95,7 @@ TEST_F(DebugUtilTest, TestSignalStackTrace) {
   ASSERT_FALSE(IsSignalHandlerRegistered(SIGUSR2));
 
   // Stack traces should work using the new handler.
-  ASSERT_STR_CONTAINS(DumpThreadStack(t->tid()), "SleeperThread");
+  ASSERT_STR_CONTAINS(DumpThreadStack(t->pthread()), "SleeperThread");
 
   // Switch back to SIGUSR2 and ensure it changes back.
   ASSERT_OK(SetStackTraceSignal(SIGUSR2));
@@ -107,7 +103,7 @@ TEST_F(DebugUtilTest, TestSignalStackTrace) {
   ASSERT_FALSE(IsSignalHandlerRegistered(SIGUSR1));
 
   // Stack traces should work using the new handler.
-  ASSERT_STR_CONTAINS(DumpThreadStack(t->tid()), "SleeperThread");
+  ASSERT_STR_CONTAINS(DumpThreadStack(t->pthread()), "SleeperThread");
 
   // Register our own signal handler on SIGUSR1, and ensure that
   // we get a bad Status if we try to use it.
@@ -117,7 +113,7 @@ TEST_F(DebugUtilTest, TestSignalStackTrace) {
   signal(SIGUSR1, SIG_IGN);
 
   // Stack traces should be disabled
-  ASSERT_STR_CONTAINS(DumpThreadStack(t->tid()), "unable to take thread stack");
+  ASSERT_STR_CONTAINS(DumpThreadStack(t->pthread()), "unable to take thread stack");
 
   // Re-enable so that other tests pass.
   ASSERT_OK(SetStackTraceSignal(SIGUSR2));
@@ -125,17 +121,6 @@ TEST_F(DebugUtilTest, TestSignalStackTrace) {
   // Allow the thread to finish.
   l.CountDown();
   t->Join();
-}
-
-// Test which dumps all known threads within this process.
-// We don't validate the results in any way -- but this verifies that we can
-// dump library threads such as the libc timer_thread and properly time out.
-TEST_F(DebugUtilTest, TestDumpAllThreads) {
-  vector<pid_t> tids;
-  ASSERT_OK(ListThreads(&tids));
-  BOOST_FOREACH(pid_t tid, tids) {
-    LOG(INFO) << DumpThreadStack(tid);
-  }
 }
 
 } // namespace kudu

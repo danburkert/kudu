@@ -69,11 +69,10 @@ struct SignalCommunication {
   // The actual stack trace collected from the target thread.
   StackTrace stack;
 
-  // The current target. Signals can be delivered asynchronously, so the
-  // dumper thread sets this variable first before sending a signal. If
-  // a signal is received on a thread that doesn't match 'target_tid', it is
-  // ignored.
-  pid_t target_tid;
+  // The current target. Signals can be delivered asynchronously, so the dumper
+  // thread sets this variable first before sending a signal. If a signal is
+  // received on a thread that doesn't match 'target_thread', it is ignored.
+  pthread_t target_thread;
 
   // Set to 1 when the target thread has successfully collected its stack.
   // The dumper thread spins waiting for this to become true.
@@ -111,8 +110,7 @@ void HandleStackTraceSignal(int signum) {
   // case the dumper thread would have already timed out and moved on with
   // its life. In that case, we don't want to race with some other thread's
   // dump.
-  pid_t my_tid = syscall(SYS_gettid);
-  if (g_comm.target_tid != my_tid) {
+  if (!pthread_equal(g_comm.target_thread, pthread_self())) {
     return;
   }
 
@@ -130,8 +128,7 @@ bool InitSignalHandlerUnlocked(int signum) {
 
   // If we've already registered a handler, but we're being asked to
   // change our signal, unregister the old one.
-  if (signum != g_stack_trace_signum &&
-      state == INITIALIZED) {
+  if (signum != g_stack_trace_signum && state == INITIALIZED) {
     struct sigaction old_act;
     PCHECK(sigaction(g_stack_trace_signum, NULL, &old_act) == 0);
     if (old_act.sa_handler == &HandleStackTraceSignal) {
@@ -180,7 +177,7 @@ Status SetStackTraceSignal(int signum) {
   return Status::OK();
 }
 
-std::string DumpThreadStack(pid_t tid) {
+std::string DumpThreadStack(pthread_t thread) {
   base::SpinLockHolder h(&g_dumper_thread_lock);
 
   // Ensure that our signal handler is installed. We don't need any fancy GoogleOnce here
@@ -189,21 +186,18 @@ std::string DumpThreadStack(pid_t tid) {
     return "<unable to take thread stack: signal handler unavailable>";
   }
 
-  // Set the target TID in our communication structure, so if we end up with any
+  // Set the target thread ID in our communication structure, so if we end up with any
   // delayed signal reaching some other thread, it will know to ignore it.
   {
     SignalCommunication::Lock l;
-    CHECK_EQ(0, g_comm.target_tid);
-    g_comm.target_tid = tid;
+    CHECK_EQ(0, g_comm.target_thread);
+    g_comm.target_thread = thread;
   }
 
-  // We use the raw syscall here instead of kill() to ensure that we don't accidentally
-  // send a signal to some other process in the case that the thread has exited and
-  // the TID been recycled.
-  if (syscall(SYS_tgkill, getpid(), tid, g_stack_trace_signum) != 0) {
+  if (pthread_kill(thread, g_stack_trace_signum)) {
     {
       SignalCommunication::Lock l;
-      g_comm.target_tid = 0;
+      g_comm.target_thread = 0;
     }
     return "(unable to deliver signal: process may have exited)";
   }
@@ -216,14 +210,13 @@ std::string DumpThreadStack(pid_t tid) {
   // on that one.
   string ret;
   int i = 0;
-  while (!base::subtle::Acquire_Load(&g_comm.result_ready) &&
-         i++ < 100) {
+  while (!base::subtle::Acquire_Load(&g_comm.result_ready) && i++ < 100) {
     SleepFor(MonoDelta::FromMilliseconds(10));
   }
 
   {
     SignalCommunication::Lock l;
-    CHECK_EQ(tid, g_comm.target_tid);
+    CHECK_EQ(thread, g_comm.target_thread);
 
     if (!g_comm.result_ready) {
       ret = "(thread did not respond: maybe it is blocking signals)";
@@ -231,30 +224,10 @@ std::string DumpThreadStack(pid_t tid) {
       ret = g_comm.stack.Symbolize();
     }
 
-    g_comm.target_tid = 0;
+    g_comm.target_thread = 0;
     g_comm.result_ready = 0;
   }
   return ret;
-}
-
-Status ListThreads(vector<pid_t> *tids) {
-  DIR *dir = opendir("/proc/self/task/");
-  if (dir == NULL) {
-    return Status::IOError("failed to open task dir", ErrnoToString(errno), errno);
-  }
-  struct dirent *d;
-  while ((d = readdir(dir)) != NULL) {
-    if (d->d_name[0] != '.') {
-      uint32_t tid;
-      if (!safe_strtou32(d->d_name, &tid)) {
-        LOG(WARNING) << "bad tid found in procfs: " << d->d_name;
-        continue;
-      }
-      tids->push_back(tid);
-    }
-  }
-  closedir(dir);
-  return Status::OK();
 }
 
 std::string GetStackTrace() {

@@ -24,10 +24,6 @@
 
 namespace kudu {
 
-// Return a list of all of the thread IDs currently running in this process.
-// Not async-safe.
-Status ListThreads(std::vector<pid_t>* tids);
-
 // Set which POSIX signal number should be used internally for triggering
 // stack traces. If the specified signal handler is already in use, this
 // returns an error, and stack traces will be disabled.
@@ -44,7 +40,7 @@ Status SetStackTraceSignal(int signum);
 //
 // This function is thread-safe but coarsely synchronized: only one "dumper" thread
 // may be active at a time.
-std::string DumpThreadStack(pid_t tid);
+std::string DumpThreadStack(pthread_t thread);
 
 // Return the current stack trace, stringified.
 std::string GetStackTrace();

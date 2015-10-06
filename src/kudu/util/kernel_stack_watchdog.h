@@ -173,14 +173,14 @@ class KernelStackWatchdog {
 
   DECLARE_STATIC_THREAD_LOCAL(TLS, tls_);
 
-  typedef std::tr1::unordered_map<pid_t, TLS*> TLSMap;
-  TLSMap tls_by_tid_;
+  typedef std::tr1::unordered_map<pthread_t, TLS*> TLSMap;
+  TLSMap tls_by_pthread_;
 
   // If non-NULL, warnings will be emitted into this vector instead of glog.
   // Used by tests.
   gscoped_ptr<std::vector<std::string> > log_collector_;
 
-  // Lock protecting tls_by_tid_ and log_collector_.
+  // Lock protecting tls_by_pthread_ and log_collector_.
   mutable Mutex lock_;
 
   // The watchdog thread itself.

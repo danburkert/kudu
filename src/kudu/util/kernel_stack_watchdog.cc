@@ -71,17 +71,17 @@ vector<string> KernelStackWatchdog::LoggedMessagesForTests() const {
 
 void KernelStackWatchdog::Register(TLS* tls) {
   MutexLock l(lock_);
-  InsertOrDie(&tls_by_tid_, syscall(SYS_gettid), tls);
+  InsertOrDie(&tls_by_pthread_, pthread_self(), tls);
 }
 
 void KernelStackWatchdog::Unregister(TLS* tls) {
   MutexLock l(lock_);
-  CHECK(tls_by_tid_.erase(syscall(SYS_gettid)));
+  CHECK(tls_by_pthread_.erase(pthread_self()));
 }
 
-Status GetKernelStack(pid_t p, string* ret) {
+Status GetKernelStack(string* ret) {
   faststring buf;
-  RETURN_NOT_OK(ReadFileToString(Env::Default(), Substitute("/proc/$0/stack", p), &buf));
+  RETURN_NOT_OK(ReadFileToString(Env::Default(), "/proc/self/stack", &buf));
   *ret = buf.ToString();
   return Status::OK();
 }
@@ -98,8 +98,8 @@ void KernelStackWatchdog::RunThread() {
       MutexLock l(lock_);
       MicrosecondsInt64 now = GetMonoTimeMicros();
 
-      BOOST_FOREACH(const TLSMap::value_type& map_entry, tls_by_tid_) {
-        pid_t p = map_entry.first;
+      BOOST_FOREACH(const TLSMap::value_type& map_entry, tls_by_pthread_) {
+        pthread_t thread = map_entry.first;
         const TLS::Data* tls = &map_entry.second->data_;
 
         TLS::Data tls_copy;
@@ -111,16 +111,16 @@ void KernelStackWatchdog::RunThread() {
           int paused_ms = (now - frame->start_time_) / 1000;
           if (paused_ms > frame->threshold_ms_) {
             string kernel_stack;
-            Status s = GetKernelStack(p, &kernel_stack);
+            Status s = GetKernelStack(&kernel_stack);
             if (!s.ok()) {
-              // Can't read the kernel stack of the pid -- it's possible that the thread exited
-              // while we were iterating, so just ignore it.
+              // Can't read the kernel stack of the pthread -- it's possible
+              // that the thread exited while we were iterating, so just ignore it.
               kernel_stack = "(could not read kernel stack)";
             }
 
-            string user_stack = DumpThreadStack(p);
+            string user_stack = DumpThreadStack(thread);
             LOG_STRING(WARNING, log_collector_.get())
-              << "Thread " << p << " stuck at " << frame->status_
+              << "Thread " << thread << " stuck at " << frame->status_
               << " for " << paused_ms << "ms" << ":\n"
               << "Kernel stack:\n" << kernel_stack << "\n"
               << "User stack:\n" << user_stack;

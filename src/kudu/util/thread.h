@@ -193,6 +193,7 @@ class Thread : public RefCountedThreadSafe<Thread> {
 
   const std::string& name() const { return name_; }
   const std::string& category() const { return category_; }
+  const pthread_t& pthread() const { return thread_; }
 
   // Return a string representation of the thread identifying information.
   std::string ToString() const;
