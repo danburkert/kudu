@@ -44,7 +44,7 @@ class BlockPointer {
 
   string ToString() const {
     char tmp[100];
-    snprintf(tmp, sizeof(tmp), "offset=%ld size=%d",
+    snprintf(tmp, sizeof(tmp), "offset=%" PRIu64 " size=%" PRIu32,
              offset_, size_);
     return string(tmp);
   }

@@ -93,7 +93,7 @@ class BloomFileTestBase : public KuduTest {
 
   uint64_t ReadBenchmark() {
     uint64_t count_present = 0;
-    LOG_TIMING(INFO, StringPrintf("Running %ld queries", FLAGS_benchmark_queries)) {
+    LOG_TIMING(INFO, StringPrintf("Running %" PRId64 " queries", FLAGS_benchmark_queries)) {
 
       for (uint64_t i = 0; i < FLAGS_benchmark_queries; i++) {
         uint64_t key = random() % FLAGS_n_keys;

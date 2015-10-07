@@ -204,7 +204,9 @@ install(SCRIPT MungeExportedInstallTargets.cmake)
 # and therefore don't need to worry about export strictness)
 add_library(kudu_client_test_util
   client-test-util.cc)
-target_link_libraries(kudu_client_test_util kudu_client)
+target_link_libraries(kudu_client_test_util
+  gmock
+  kudu_client)
 
 # Tests
 
