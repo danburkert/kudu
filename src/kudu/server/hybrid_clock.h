@@ -144,7 +144,16 @@ class HybridClock : public Clock {
   static std::string StringifyTimestamp(const Timestamp& timestamp);
 
  private:
+
+#if !defined(__APPLE__)
   uint64_t GetTimeUsecs(ntptimeval* timeval);
+
+  uint64_t divisor_;
+
+  double tolerance_adjustment_;
+
+  mutable simple_spinlock lock_;
+#endif
 
   // Used to get the timestamp for metrics.
   uint64_t NowForMetrics();
@@ -152,11 +161,6 @@ class HybridClock : public Clock {
   // Used to get the current error, for metrics.
   uint64_t ErrorForMetrics();
 
-  uint64_t divisor_;
-
-  double tolerance_adjustment_;
-
-  mutable simple_spinlock lock_;
 
   // the last clock read/update, in microseconds.
   uint64_t last_usec_;
