@@ -20,6 +20,7 @@
 #include "kudu/cfile/bloomfile.h"
 #include "kudu/fs/fs_manager.h"
 #include "kudu/gutil/endian.h"
+#include "kudu/gutil/strings/substitute.h"
 #include "kudu/util/stopwatch.h"
 #include "kudu/util/test_util.h"
 #include "kudu/util/thread.h"
@@ -93,7 +94,7 @@ class BloomFileTestBase : public KuduTest {
 
   uint64_t ReadBenchmark() {
     uint64_t count_present = 0;
-    LOG_TIMING(INFO, StringPrintf("Running %ld queries", FLAGS_benchmark_queries)) {
+    LOG_TIMING(INFO, strings::Substitute("Running $0 queries", FLAGS_benchmark_queries)) {
 
       for (uint64_t i = 0; i < FLAGS_benchmark_queries; i++) {
         uint64_t key = random() % FLAGS_n_keys;
