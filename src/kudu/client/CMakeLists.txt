@@ -109,7 +109,7 @@ set_target_properties(kudu_client_exported
   PROPERTIES
   # Localize thirdparty symbols using a linker version script. This hides them
   # from the client application.
-  LINK_FLAGS "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map"
+  # LINK_FLAGS "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map"
   # This version is appended to the filename.
   #
   # For example: libkudu_client.so.1.2.3
