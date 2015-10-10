@@ -55,7 +55,9 @@
 DEFINE_int32(num_reactor_threads, 4, "Number of libev reactor threads to start.");
 TAG_FLAG(num_reactor_threads, advanced);
 
+#if !defined(__APPLE__)
 DECLARE_bool(use_hybrid_clock);
+#endif
 
 using std::string;
 using std::stringstream;
@@ -100,11 +102,15 @@ ServerBase::ServerBase(const string& name,
   fs_opts.data_paths = options.fs_opts.data_paths;
   fs_manager_.reset(new FsManager(options.env, fs_opts));
 
+#if defined(__APPLE__)
+  clock_ = LogicalClock::CreateStartingAt(Timestamp::kInitialTimestamp);
+#else
   if (FLAGS_use_hybrid_clock) {
     clock_ = new HybridClock();
   } else {
     clock_ = LogicalClock::CreateStartingAt(Timestamp::kInitialTimestamp);
   }
+#endif
 
   CHECK_OK(StartThreadInstrumentation(metric_entity_, web_server_.get()));
   CHECK_OK(codegen::CompilationManager::GetSingleton()->StartInstrumentation(
@@ -151,12 +157,14 @@ Status ServerBase::Init() {
 
   InitSpinLockContentionProfiling();
 
+#if !defined(__APPLE__)
   // Check for NTP errors so it's less likely to get into a partially
   // initialized state on disk during startup.
   // TODO: Remove this check after fully fixing KUDU-1186.
   if (FLAGS_use_hybrid_clock) {
     RETURN_NOT_OK_PREPEND(CheckClockSynchronized(), "Clock is not synchronized");
   }
+#endif
 
   Status s = fs_manager_->Open();
   if (s.IsNotFound()) {

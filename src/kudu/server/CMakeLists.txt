@@ -17,9 +17,15 @@
 #########################################
 
 set(SERVER_COMMON_SRCS
-  hybrid_clock.cc
-  logical_clock.cc
-)
+  logical_clock.cc)
+
+# OS X does not allow programatic access to NTP, which is required for
+# hybrid clock.
+if(NOT APPLE)
+  set(SERVER_COMMON_SRCS
+    ${SERVER_COMMON_SRCS}
+    hybrid_clock.cc)
+endif()
 
 add_library(server_common ${SERVER_COMMON_SRCS})
 target_link_libraries(server_common
@@ -35,7 +41,9 @@ target_link_libraries(server_common
 #########################################
 
 set(KUDU_TEST_LINK_LIBS server_common ${KUDU_MIN_TEST_LIBS})
-ADD_KUDU_TEST(hybrid_clock-test)
+if(NOT APPLE)
+  ADD_KUDU_TEST(hybrid_clock-test)
+endif()
 ADD_KUDU_TEST(logical_clock-test)
 
 #########################################
