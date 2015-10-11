@@ -298,7 +298,7 @@ void TpchRealWorld::RunQueriesThread() {
   while (!stop_threads_.Load()) {
     string log;
     if (FLAGS_tpch_load_data) {
-      log = StringPrintf("querying %ld rows", rows_inserted_.Load());
+      log = Substitute("querying $0 rows", rows_inserted_.Load());
     } else {
       log = "querying data in cluster";
     }

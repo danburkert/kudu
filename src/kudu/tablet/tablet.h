@@ -251,7 +251,7 @@ class Tablet {
   // Returns the exact current size of the MRS, in bytes. A value greater than 0 doesn't imply
   // that the MRS has data, only that it has allocated that amount of memory.
   // This method takes a read lock on component_lock_ and is thread-safe.
-  size_t MemRowSetSize() const;
+  uint64_t MemRowSetSize() const;
 
   // Returns true if the MRS is empty, else false. Doesn't rely on size and
   // actually verifies that the MRS has no elements.
@@ -262,7 +262,7 @@ class Tablet {
   size_t MemRowSetLogRetentionSize(const MaxIdxToSegmentMap& max_idx_to_segment_size) const;
 
   // Estimate the total on-disk size of this tablet, in bytes.
-  size_t EstimateOnDiskSize() const;
+  uint64_t EstimateOnDiskSize() const;
 
   // Get the total size of all the DMS
   size_t DeltaMemStoresSize() const;

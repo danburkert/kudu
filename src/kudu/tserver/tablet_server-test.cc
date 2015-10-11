@@ -17,12 +17,15 @@
 #include "kudu/gutil/strings/escaping.h"
 #include "kudu/gutil/strings/substitute.h"
 #include "kudu/master/master.pb.h"
-#include "kudu/server/hybrid_clock.h"
 #include "kudu/server/server_base.pb.h"
 #include "kudu/server/server_base.proxy.h"
 #include "kudu/util/crc.h"
 #include "kudu/util/curl_util.h"
 #include "kudu/util/url-coding.h"
+
+#if !defined(__APPLE__)
+#include "kudu/server/hybrid_clock.h"
+#endif
 
 using std::string;
 using std::tr1::shared_ptr;
@@ -32,10 +35,13 @@ using kudu::rpc::Messenger;
 using kudu::rpc::MessengerBuilder;
 using kudu::rpc::RpcController;
 using kudu::server::Clock;
-using kudu::server::HybridClock;
 using kudu::tablet::Tablet;
 using kudu::tablet::TabletPeer;
 using strings::Substitute;
+
+#if !defined(__APPLE__)
+using kudu::server::HybridClock;
+#endif
 
 DEFINE_int32(single_threaded_insert_latency_bench_warmup_rows, 100,
              "Number of rows to insert in the warmup phase of the single threaded"
@@ -152,6 +158,7 @@ TEST_F(TabletServerTest, TestSetFlags) {
   }
 }
 
+#if !defined(__APPLE__)
 TEST_F(TabletServerTest, TestWebPages) {
   EasyCurl c;
   faststring buf;
@@ -230,6 +237,7 @@ TEST_F(TabletServerTest, TestWebPages) {
   ASSERT_STR_CONTAINS(buf.ToString(), "discarded samples = 0");
   ASSERT_STR_CONTAINS(buf.ToString(), "tablet_server-test");
 }
+#endif // !defined(__APPLE__)
 
 TEST_F(TabletServerTest, TestInsert) {
   WriteRequestPB req;
@@ -329,6 +337,7 @@ TEST_F(TabletServerTest, TestInsert) {
   ASSERT_GE(now_after.value(), now_before.value());
 }
 
+#if !defined(__APPLE__)
 TEST_F(TabletServerTest, TestExternalConsistencyModes_ClientPropagated) {
   WriteRequestPB req;
   req.set_tablet_id(kTabletId);
@@ -446,7 +455,7 @@ TEST_F(TabletServerTest, TestExternalConsistencyModes_CommitWait) {
     ASSERT_GE(write_took, error_before);
   }
 }
-
+#endif // !defined(__APPLE__)
 
 TEST_F(TabletServerTest, TestInsertAndMutate) {
 
@@ -1088,6 +1097,7 @@ TEST_F(TabletServerTest, TestSnapshotScan_WithoutSnapshotTimestamp) {
   ASSERT_GE(resp.snap_timestamp(), now.ToUint64());
 }
 
+#if !defined(__APPLE__)
 // Tests that a snapshot in the future (beyond the current time plus maximum
 // synchronization error) fails as an invalid snapshot.
 TEST_F(TabletServerTest, TestSnapshotScan_SnapshotInTheFutureFails) {
@@ -1124,7 +1134,7 @@ TEST_F(TabletServerTest, TestSnapshotScan_SnapshotInTheFutureFails) {
     ASSERT_EQ(TabletServerErrorPB::INVALID_SNAPSHOT, resp.error().code());
   }
 }
-
+#endif // !defined(__APPLE__)
 
 // Test tserver shutdown with an active scanner open.
 TEST_F(TabletServerTest, TestSnapshotScan_OpenScanner) {
@@ -1243,6 +1253,7 @@ TEST_F(TabletServerTest, TestSnapshotScan_LastRow) {
 }
 
 
+#if !defined(__APPLE__)
 // Tests that a read in the future succeeds if a propagated_timestamp (that is even
 // further in the future) follows along. Also tests that the clock was updated so
 // that no writes will ever have a timestamp post this snapshot.
@@ -1301,7 +1312,6 @@ TEST_F(TabletServerTest, TestSnapshotScan_SnapshotInTheFutureWithPropagatedTimes
   ASSERT_EQ("(int32 key=0, int32 int_val=0, string string_val=original0)", results[0]);
 }
 
-
 // Test that a read in the future fails, even if a propagated_timestamp is sent along,
 // if the read_timestamp is beyond the propagated_timestamp.
 TEST_F(TabletServerTest, TestSnapshotScan__SnapshotInTheFutureBeyondPropagatedTimestampFails) {
@@ -1344,6 +1354,7 @@ TEST_F(TabletServerTest, TestSnapshotScan__SnapshotInTheFutureBeyondPropagatedTi
     ASSERT_EQ(TabletServerErrorPB::INVALID_SNAPSHOT, resp.error().code());
   }
 }
+#endif // !defined(__APPLE__)
 
 TEST_F(TabletServerTest, TestScanWithStringPredicates) {
   InsertTestRowsDirect(0, 100);

@@ -497,8 +497,8 @@ Status SysCatalogTable::AddTabletsToPB(const vector<TabletInfo*>& tablets,
 Status SysCatalogTable::AddAndUpdateTablets(const vector<TabletInfo*>& tablets_to_add,
                                             const vector<TabletInfo*>& tablets_to_update) {
   TRACE_EVENT2("master", "AddAndUpdateTablets",
-               "num_add", tablets_to_add.size(),
-               "num_update", tablets_to_update.size());
+               "num_add", static_cast<uint64_t>(tablets_to_add.size()),
+               "num_update", static_cast<uint64_t>(tablets_to_update.size()));
 
   WriteRequestPB req;
   WriteResponsePB resp;
@@ -533,7 +533,7 @@ Status SysCatalogTable::UpdateTablets(const vector<TabletInfo*>& tablets) {
 
 Status SysCatalogTable::DeleteTablets(const vector<TabletInfo*>& tablets) {
   TRACE_EVENT1("master", "DeleteTablets",
-               "num_tablets", tablets.size());
+               "num_tablets", static_cast<uint64_t>(tablets.size()));
   WriteRequestPB req;
   WriteResponsePB resp;
   req.set_tablet_id(kSysCatalogTabletId);

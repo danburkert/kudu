@@ -297,7 +297,7 @@ Status Tablet::DecodeWriteOperations(const Schema* client_schema,
 
 Status Tablet::AcquireRowLocks(WriteTransactionState* tx_state) {
   TRACE_EVENT1("tablet", "Tablet::AcquireRowLocks",
-               "num_locks", tx_state->row_ops().size());
+               "num_locks", static_cast<uint64_t>(tx_state->row_ops().size()));
   TRACE("PREPARE: Acquiring locks for $0 operations", tx_state->row_ops().size());
   BOOST_FOREACH(RowOp* op, tx_state->row_ops()) {
     RETURN_NOT_OK(AcquireLockForOp(tx_state, op));
@@ -1455,7 +1455,7 @@ Status Tablet::CountRows(uint64_t *count) const {
   return Status::OK();
 }
 
-size_t Tablet::MemRowSetSize() const {
+uint64_t Tablet::MemRowSetSize() const {
   scoped_refptr<TabletComponents> comps;
   GetComponents(&comps);
 
@@ -1480,13 +1480,13 @@ size_t Tablet::MemRowSetLogRetentionSize(const MaxIdxToSegmentMap& max_idx_to_se
                                      max_idx_to_segment_size);
 }
 
-size_t Tablet::EstimateOnDiskSize() const {
+uint64_t Tablet::EstimateOnDiskSize() const {
   scoped_refptr<TabletComponents> comps;
   GetComponents(&comps);
 
   if (!comps) return 0;
 
-  size_t ret = 0;
+  uint64_t ret = 0;
   BOOST_FOREACH(const shared_ptr<RowSet> &rowset, comps->rowsets->all_rowsets()) {
     ret += rowset->EstimateOnDiskSize();
   }

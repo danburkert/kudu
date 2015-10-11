@@ -18,12 +18,15 @@
 
 #include "kudu/common/wire_protocol.h"
 #include "kudu/rpc/rpc_context.h"
-#include "kudu/server/hybrid_clock.h"
 #include "kudu/tablet/tablet.h"
 #include "kudu/tablet/tablet_peer.h"
 #include "kudu/tablet/tablet_metrics.h"
 #include "kudu/tserver/tserver.pb.h"
 #include "kudu/util/trace.h"
+
+#if !defined(__APPLE__)
+#include "kudu/server/hybrid_clock.h"
+#endif
 
 namespace kudu {
 namespace tablet {
@@ -96,7 +99,9 @@ Status AlterSchemaTransaction::Start() {
   if (!state_->has_timestamp()) {
     state_->set_timestamp(state_->tablet_peer()->clock()->Now());
   }
+#if !defined(__APPLE__)
   TRACE("START. Timestamp: $0", server::HybridClock::GetPhysicalValueMicros(state_->timestamp()));
+#endif
   return Status::OK();
 }
 

@@ -80,7 +80,7 @@ class ScannerManager {
   bool UnregisterScanner(const std::string& scanner_id);
 
   // Return the number of scanners currently active.
-  size_t CountActiveScanners() const;
+  uint64_t CountActiveScanners() const;
 
   // List all active scanners.
   void ListScanners(std::vector<SharedScanner>* scanners);

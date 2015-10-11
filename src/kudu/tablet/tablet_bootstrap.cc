@@ -64,7 +64,9 @@ DEFINE_double(fault_crash_during_log_replay, 0.0,
               "(For testing only!)");
 TAG_FLAG(fault_crash_during_log_replay, unsafe);
 
+#if !defined(__APPLE__)
 DECLARE_int32(max_clock_sync_error_usec);
+#endif
 
 namespace kudu {
 namespace tablet {
@@ -981,9 +983,11 @@ Status TabletBootstrap::HandleEntryPair(LogEntryPB* replicate_entry, LogEntryPB*
   } else {
     DCHECK(clock_->SupportsExternalConsistencyMode(COMMIT_WAIT)) << "The provided clock does not"
         "support COMMIT_WAIT external consistency mode.";
+#if !defined(__APPLE__)
     safe_time = server::HybridClock::AddPhysicalTimeToTimestamp(
         Timestamp(replicate->timestamp()),
         MonoDelta::FromMicroseconds(-FLAGS_max_clock_sync_error_usec));
+#endif
   }
   tablet_->mvcc_manager()->OfflineAdjustSafeTime(safe_time);
 

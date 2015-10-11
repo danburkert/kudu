@@ -170,7 +170,7 @@ void Log::AppendThread::RunThread() {
     if (log_->metrics_) {
       log_->metrics_->entry_batches_per_group->Increment(entry_batches.size());
     }
-    TRACE_EVENT1("log", "batch", "batch_size", entry_batches.size());
+    TRACE_EVENT1("log", "batch", "batch_size", static_cast<uint64_t>(entry_batches.size()));
 
     SCOPED_LATENCY_METRIC(log_->metrics_, group_commit_latency);
 
