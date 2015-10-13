@@ -356,7 +356,6 @@ bool HybridClock::IsAfter(Timestamp t) {
   uint64_t now_usec = GetTimeUsecs(&now_ntp);
 
   boost::lock_guard<simple_spinlock> lock(lock_);
-  now_usec = std::max(now_usec, last_usec_);
 
   Timestamp now;
   if (now_usec > last_usec_) {

@@ -96,6 +96,12 @@ TEST_F(HybridClockTest, TestWaitUntilAfter_TestCase1) {
 
   ASSERT_OK(s);
 
+  MonoTime a = MonoTime::Now(MonoTime::FINE);
+  MonoTime b = MonoTime::Now(MonoTime::FINE);
+
+  LOG(INFO) << "a: " << a.ToString() << ", b: " << b.ToString() << ", delta: " << a.GetDeltaSince(a).ToMicroseconds();
+
+
   MonoTime after = MonoTime::Now(MonoTime::FINE);
   MonoDelta delta = after.GetDeltaSince(before);
   // Actually this should be close to 0, but we are sure it can't be bigger than

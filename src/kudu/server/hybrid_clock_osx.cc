@@ -43,6 +43,10 @@ METRIC_DEFINE_gauge_uint64(server, hybrid_clock_timestamp,
                            "Hybrid Clock Timestamp",
                            kudu::MetricUnit::kMicroseconds,
                            "Hybrid clock timestamp.");
+METRIC_DEFINE_gauge_uint64(server, hybrid_clock_error,
+                           "Hybrid Clock Error",
+                           kudu::MetricUnit::kMicroseconds,
+                           "Server clock maximum error.");
 
 using kudu::Status;
 using strings::Substitute;
@@ -50,9 +54,27 @@ using strings::Substitute;
 namespace kudu {
 namespace server {
 
+namespace {
+
+Status CheckDeadlineNotWithinMicros(const MonoTime& deadline, int64_t wait_for_usec) {
+  if (!deadline.Initialized()) {
+    // No deadline.
+    return Status::OK();
+  }
+  int64_t us_until_deadline = deadline.GetDeltaSince(
+      MonoTime::Now(MonoTime::FINE)).ToMicroseconds();
+  if (us_until_deadline <= wait_for_usec) {
+    return Status::TimedOut(Substitute(
+        "specified time is $0us in the future, but deadline expires in $1us",
+        wait_for_usec, us_until_deadline));
+  }
+  return Status::OK();
+}
+
+}  // anonymous namespace
+
 Status CheckClockSynchronized() {
-  ntptimeval junk;
-  return GetClockTime(&junk);
+  return Status::OK();
 }
 
 // Left shifting 12 bits gives us 12 bits for the logical value
@@ -66,8 +88,7 @@ const uint64_t HybridClock::kNanosPerSec = 1000000;
 const double HybridClock::kAdjtimexScalingFactor = 65536;
 
 HybridClock::HybridClock()
-    : tolerance_adjustment_(0),
-      last_usec_(0),
+    : last_usec_(0),
       next_logical_(0),
       state_(kNotInitialized) {
 }
@@ -123,7 +144,7 @@ void HybridClock::NowWithError(Timestamp* timestamp, uint64_t* max_error_usec) {
     last_usec_ = now_usec;
     next_logical_ = 1;
     *timestamp = TimestampFromMicroseconds(last_usec_);
-    *max_error_usec = 0;
+    *max_error_usec = 1;
     if (PREDICT_FALSE(VLOG_IS_ON(2))) {
       VLOG(2) << "Current clock is higher than the last one. Resetting logical values."
           << " Physical Value: " << now_usec << " usec Logical Value: 0  Error: constant 0";
@@ -186,6 +207,7 @@ Status HybridClock::WaitUntilAfter(const Timestamp& then_latest,
 
   // Case 1, event happened definitely in the past, return
   if (PREDICT_TRUE(then_latest_usec < now_earliest_usec)) {
+    LOG(INFO) << "Short circuting";
     return Status::OK();
   }
 
@@ -194,10 +216,6 @@ Status HybridClock::WaitUntilAfter(const Timestamp& then_latest,
   // We'll sleep then_latest_usec - now_earliest_usec so that the new
   // nw.earliest is higher than then.latest.
   uint64_t wait_for_usec = (then_latest_usec - now_earliest_usec);
-
-  // Additionally adjust the sleep time with the max tolerance adjustment
-  // to account for the worst case clock skew while we're sleeping.
-  wait_for_usec *= tolerance_adjustment_;
 
   // Check that sleeping wouldn't sleep longer than our deadline.
   RETURN_NOT_OK(CheckDeadlineNotWithinMicros(deadline, wait_for_usec));
@@ -234,19 +252,13 @@ Status HybridClock::WaitUntilAfter(const Timestamp& then_latest,
 bool HybridClock::IsAfter(Timestamp t) {
   // Manually get the time, rather than using Now(), so we don't end up
   // causing a time update.
-  ntptimeval now_ntp;
-  CHECK_OK(GetClockTime(&now_ntp));
-  uint64_t now_usec = GetTimeUsecs(&now_ntp);
-
+  uint64_t now_usec = GetCurrentTimeMicros();
   boost::lock_guard<simple_spinlock> lock(lock_);
-  now_usec = std::max(now_usec, last_usec_);
-
   Timestamp now;
   if (now_usec > last_usec_) {
     now = TimestampFromMicroseconds(now_usec);
   } else {
-    // last_usec_ may be in the future if we were updated from a remote
-    // node.
+    // last_usec_ may be in the future if we were updated from a remote node.
     now = TimestampFromMicrosecondsAndLogicalValue(last_usec_, next_logical_);
   }
 
@@ -260,12 +272,7 @@ uint64_t HybridClock::NowForMetrics() {
 
 // Used to get the current error, for metrics.
 uint64_t HybridClock::ErrorForMetrics() {
-  Timestamp now;
-  uint64_t error;
-
-  boost::lock_guard<simple_spinlock> lock(lock_);
-  NowWithError(&now, &error);
-  return error;
+  return 0;
 }
 
 void HybridClock::RegisterMetrics(const scoped_refptr<MetricEntity>& metric_entity) {
@@ -281,10 +288,6 @@ void HybridClock::RegisterMetrics(const scoped_refptr<MetricEntity>& metric_enti
 
 string HybridClock::Stringify(Timestamp timestamp) {
   return StringifyTimestamp(timestamp);
-}
-
-uint64_t HybridClock::GetTimeUsecs(ntptimeval* timeval) {
-  return timeval->time.tv_sec * kNanosPerSec + timeval->time.tv_usec / divisor_;
 }
 
 uint64_t HybridClock::GetLogicalValue(const Timestamp& timestamp) {
