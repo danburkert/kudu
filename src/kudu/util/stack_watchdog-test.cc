@@ -43,6 +43,7 @@ class StackWatchdogTest : public KuduTest {
   }
 };
 
+#if defined(__linux__)
 TEST_F(StackWatchdogTest, TestWatchdog) {
   vector<string> log;
   {
@@ -61,6 +62,7 @@ TEST_F(StackWatchdogTest, TestWatchdog) {
   ASSERT_STR_CONTAINS(s, "TestWatchdog_Test::TestBody()");
   ASSERT_STR_CONTAINS(s, "nanosleep");
 }
+#endif
 
 // Test that SCOPED_WATCH_STACK scopes can be nested.
 TEST_F(StackWatchdogTest, TestNestedScopes) {
