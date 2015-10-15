@@ -141,12 +141,6 @@ set(CMAKE_CXX_FLAGS "${CXX_COMMON_FLAGS} ${CMAKE_CXX_FLAGS}")
 include(CompilerInfo)
 
 if ("${COMPILER_FAMILY}" STREQUAL "clang")
-  # Clang helpfully provides a few extensions from C++11 such as the 'override'
-  # keyword on methods. This doesn't change behavior, and we selectively enable
-  # it in src/gutil/port.h only on clang. So, we can safely use it, and don't want
-  # to trigger warnings when we do so.
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-c++11-extensions")
-
   # Using Clang with ccache causes a bunch of spurious warnings that are
   # purportedly fixed in the next version of ccache. See the following for details:
   #
@@ -166,10 +160,6 @@ if ("${COMPILER_FAMILY}" STREQUAL "clang")
   else()
     message("Running without a controlling terminal or in a dumb terminal")
   endif()
-
-  # Use libstdc++ and not libc++. The latter lacks support for tr1 in OSX
-  # and since 10.9 is now the default.
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libstdc++")
 endif()
 
 # Sanity check linking option.
@@ -220,6 +210,9 @@ endif()
 
 # For any C code, use the same flags.
 set(CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS}")
+# We would use -std=c++14, but the thirdparty LLVM version (3.4.2) does not yet
+# support that flag, but does support c++14 features through c++1y.
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1y")
 
 # Flag to enable clang undefined behavior sanitizer
 # We explicitly don't enable all of the sanitizer flags:
