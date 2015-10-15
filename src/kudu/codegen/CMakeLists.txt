@@ -77,7 +77,6 @@ set(IR_FLAGS
   -DIR_BUILD
   ${CMAKE_CXX_FLAGS}
   ${PREFIXED_IR_PP_DEFS}
-  -Wno-c++11-extensions # OVERRIDE macro conflicts with c++11 override
   ${IR_INCLUDES})
 separate_arguments(IR_FLAGS)
 
