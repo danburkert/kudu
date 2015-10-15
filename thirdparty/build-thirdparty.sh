@@ -24,14 +24,16 @@ TP_DIR=$(cd "$(dirname "$BASH_SOURCE")"; pwd)
 # We also enable -fno-omit-frame-pointer so that profiling tools which
 # use frame-pointer based stack unwinding can function correctly.
 DEBUG_CFLAGS="-g -fno-omit-frame-pointer"
-EXTRA_CXXFLAGS="-O2 $DEBUG_CFLAGS $CXXFLAGS "
+EXTRA_CXXFLAGS="-O2 $DEBUG_CFLAGS $CXXFLAGS"
 if [[ "$OSTYPE" =~ ^linux ]]; then
   OS_LINUX=1
   DYLIB_SUFFIX="so"
 elif [[ "$OSTYPE" == "darwin"* ]]; then
   OS_OSX=1
-  EXTRA_CXXFLAGS="$EXTRA_CXXFLAGS -stdlib=libstdc++"
   DYLIB_SUFFIX="dylib"
+  EXTRA_CXXFLAGS="${EXTRA_CXXFLAGS} -stdlib=libc++"
+  EXTRA_LDFLAGS="-stdlib=libc++"
+  EXTRA_LIBS="-lc++ -lc++abi"
 fi
 
 source $TP_DIR/vars.sh
@@ -159,7 +161,7 @@ fi
 # build protobuf
 if [ -n "$F_ALL" -o -n "$F_PROTOBUF" ]; then
   cd $PROTOBUF_DIR
-  CXXFLAGS="$EXTRA_CXXFLAGS" ./configure \
+  CXXFLAGS="$EXTRA_CXXFLAGS" LDFLAGS="${EXTRA_LDFLAGS}" LIBS="${EXTRA_LIBS}" ./configure \
     --with-pic \
     --enable-shared \
     --enable-static \
