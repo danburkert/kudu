@@ -98,6 +98,37 @@ namespace kudu {
 
 namespace {
 
+#if defined(__APPLE__)
+// Simulates Linux's fallocate file preallocation API on OS X.
+int fallocate(int fd, int mode, off_t offset, off_t len) {
+  CHECK(mode == 0);
+  off_t size = offset + len;
+
+  struct stat stat;
+  int ret = fstat(fd, &stat);
+  if (ret < 0) {
+    return ret;
+  }
+
+  if (stat.st_blocks * 512 < size) {
+    fstore_t store = {F_ALLOCATECONTIG, F_PEOFPOSMODE, 0, size};
+    if (fcntl(fd, F_PREALLOCATE, &store) < 0) {
+      LOG(INFO) << "Unable to allocate contiguous disk space, attempting non-contiguous allocation";
+      store.fst_flags = F_ALLOCATEALL;
+      ret = fcntl(fd, F_PREALLOCATE, &store);
+      if (ret < 0) {
+        return ret;
+      }
+    }
+  }
+
+  if (stat.st_size < size) {
+    return ftruncate(fd, size);
+  }
+  return 0;
+}
+#endif
+
 // Close file descriptor when object goes out of scope.
 class ScopedFdCloser {
  public:
@@ -423,7 +454,6 @@ class PosixMmapFile : public WritableFile {
   }
 
   virtual Status PreAllocate(uint64_t size) OVERRIDE {
-#if defined(__linux__)
     ThreadRestrictions::AssertIOAllowed();
     TRACE_EVENT1("io", "PosixMmapFile::PreAllocate", "path", filename_);
 
@@ -435,9 +465,6 @@ class PosixMmapFile : public WritableFile {
     // doesn't get truncated on MapNewRegion().
     pre_allocated_size_ = offset + size;
     return Status::OK();
-#else
-    return Status::NotSupported("Preallocation is not supported on this platform");
-#endif // defined(__linux__)
   }
 
   virtual Status Append(const Slice& data) OVERRIDE {
@@ -610,10 +637,10 @@ class PosixWritableFile : public WritableFile {
   }
 
   virtual Status PreAllocate(uint64_t size) OVERRIDE {
-#if defined(__linux__)
     TRACE_EVENT1("io", "PosixWritableFile::PreAllocate", "path", filename_);
     ThreadRestrictions::AssertIOAllowed();
     uint64_t offset = std::max(filesize_, pre_allocated_size_);
+
     if (fallocate(fd_, 0, offset, size) < 0) {
       if (errno == EOPNOTSUPP) {
         KLOG_FIRST_N(WARNING, 1) << "The filesystem does not support fallocate().";
@@ -622,13 +649,9 @@ class PosixWritableFile : public WritableFile {
       } else {
         return IOError(filename_, errno);
       }
-    } else {
-      pre_allocated_size_ = offset + size;
     }
+    pre_allocated_size_ = offset + size;
     return Status::OK();
-#else
-    return Status::NotSupported("Preallocation is not supported on this platform");
-#endif // defined(__linux__)
   }
 
   virtual Status Close() OVERRIDE {
@@ -833,7 +856,6 @@ class PosixRWFile : public RWFile {
 
   virtual Status PreAllocate(uint64_t offset, size_t length) OVERRIDE {
     TRACE_EVENT1("io", "PosixRWFile::PreAllocate", "path", filename_);
-#if defined(__linux__)
     ThreadRestrictions::AssertIOAllowed();
     if (fallocate(fd_, 0, offset, length) < 0) {
       if (errno == EOPNOTSUPP) {
@@ -845,9 +867,6 @@ class PosixRWFile : public RWFile {
       }
     }
     return Status::OK();
-#else
-    return Status::NotSupported("Preallocation is not supported on this platform");
-#endif // defined(__linux__)
   }
 
   virtual Status PunchHole(uint64_t offset, size_t length) OVERRIDE {
