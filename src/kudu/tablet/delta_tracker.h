@@ -167,8 +167,8 @@ class DeltaTracker {
 
   uint64_t EstimateOnDiskSize() const;
 
-  // Retrieves the list of column indexes that currently have updates.
-  void GetColumnIdsWithUpdates(std::vector<int>* col_ids) const;
+  // Retrieves the list of column IDs that currently have updates.
+  void GetColumnIdsWithUpdates(std::vector<size_t>* col_ids) const;
 
   Mutex* compact_flush_lock() {
     return &compact_flush_lock_;

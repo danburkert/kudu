@@ -87,10 +87,10 @@ class DeltaStats {
 
   // For each column which has at least one update, add that column's ID to the
   // set 'col_ids'.
-  void AddColumnIdsWithUpdates(std::set<int>* col_ids) const;
+  void AddColumnIdsWithUpdates(std::set<size_t>* col_ids) const;
 
  private:
-  std::tr1::unordered_map<int, int64_t> update_counts_by_col_id_;
+  std::tr1::unordered_map<size_t, int64_t> update_counts_by_col_id_;
   uint64_t delete_count_;
   Timestamp max_timestamp_;
   Timestamp min_timestamp_;

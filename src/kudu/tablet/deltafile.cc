@@ -816,13 +816,13 @@ struct FilterAndAppendVisitor {
   }
 
   const DeltaFileIterator* dfi;
-  const vector<int>& col_ids;
+  const vector<size_t>& col_ids;
   vector<DeltaKeyAndUpdate>* out;
   Arena* arena;
 };
 
 Status DeltaFileIterator::FilterColumnIdsAndCollectDeltas(
-    const vector<int>& col_ids,
+    const vector<size_t>& col_ids,
     vector<DeltaKeyAndUpdate>* out,
     Arena* arena) {
   FilterAndAppendVisitor visitor = {this, col_ids, out, arena};

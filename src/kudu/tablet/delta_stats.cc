@@ -107,8 +107,8 @@ Status DeltaStats::InitFromPB(const DeltaStatsPB& pb) {
   return Status::OK();
 }
 
-void DeltaStats::AddColumnIdsWithUpdates(std::set<int>* col_ids) const {
-  typedef std::pair<int, int64_t> entry;
+void DeltaStats::AddColumnIdsWithUpdates(std::set<size_t>* col_ids) const {
+  typedef std::pair<size_t, int64_t> entry;
   BOOST_FOREACH(const entry& e, update_counts_by_col_id_) {
     if (e.second > 0) {
       col_ids->insert(e.first);

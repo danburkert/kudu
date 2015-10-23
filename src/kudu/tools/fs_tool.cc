@@ -551,7 +551,7 @@ Status FsTool::DumpDeltaCFileBlockInternal(const Schema& schema,
 
     RETURN_NOT_OK(delta_iter->PrepareBatch(n, DeltaIterator::PREPARE_FOR_COLLECT));
     vector<DeltaKeyAndUpdate> out;
-    RETURN_NOT_OK(delta_iter->FilterColumnIdsAndCollectDeltas(vector<int>(),
+    RETURN_NOT_OK(delta_iter->FilterColumnIdsAndCollectDeltas(vector<size_t>(),
                                                               &out,
                                                               &arena));
     BOOST_FOREACH(const DeltaKeyAndUpdate& upd, out) {

@@ -320,7 +320,7 @@ class RowChangeListDecoder {
   // valid for the duration of this method, but not have been
   // previously initialized.
   static Status RemoveColumnIdsFromChangeList(const RowChangeList& src,
-                                              const std::vector<int>& column_ids,
+                                              const std::vector<size_t>& column_ids,
                                               RowChangeListEncoder* out);
 
   struct DecodedUpdate {

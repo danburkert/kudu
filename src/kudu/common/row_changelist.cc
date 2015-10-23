@@ -265,7 +265,7 @@ Status RowChangeListDecoder::ApplyToOneColumn(size_t row_idx, ColumnBlock* dst_c
 }
 
 Status RowChangeListDecoder::RemoveColumnIdsFromChangeList(const RowChangeList& src,
-                                                           const std::vector<int>& col_ids,
+                                                           const std::vector<size_t>& col_ids,
                                                            RowChangeListEncoder* out) {
   RowChangeListDecoder decoder(src);
   RETURN_NOT_OK(decoder.Init());

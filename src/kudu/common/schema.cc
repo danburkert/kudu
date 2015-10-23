@@ -208,20 +208,19 @@ Status Schema::CreateProjectionByNames(const std::vector<StringPiece>& col_names
   return out->Reset(cols, ids, 0);
 }
 
-Status Schema::CreateProjectionByIdsIgnoreMissing(const std::vector<int>& col_ids,
+Status Schema::CreateProjectionByIdsIgnoreMissing(const std::vector<size_t>& col_ids,
                                                   Schema* out) const {
+  vector<size_t> filtered_col_ids;
   vector<ColumnSchema> cols;
-  // TODO: this class still uses size_t for col_ids, so we have to convert.
-  vector<size_t> col_ids_size_t;
-  BOOST_FOREACH(int id, col_ids) {
+  BOOST_FOREACH(size_t id, col_ids) {
     int idx = find_column_by_id(id);
     if (idx == -1) {
       continue;
     }
+    filtered_col_ids.push_back(id);
     cols.push_back(column(idx));
-    col_ids_size_t.push_back(id);
   }
-  return out->Reset(cols, col_ids_size_t, 0);
+  return out->Reset(cols, filtered_col_ids, 0);
 }
 
 Schema Schema::CopyWithColumnIds() const {

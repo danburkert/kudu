@@ -174,9 +174,9 @@ TEST_F(TestMajorDeltaCompaction, TestCompact) {
 
   shared_ptr<RowSet> rs = all_rowsets.front();
 
-  vector<int> col_ids_to_compact = { schema_.column_id(1),
-                                     schema_.column_id(3),
-                                     schema_.column_id(4) };
+  vector<size_t> col_ids_to_compact = { schema_.column_id(1),
+                                        schema_.column_id(3),
+                                        schema_.column_id(4) };
 
   // We'll run a few rounds of update/compact to make sure
   // that we don't get into some funny state (regression test for
@@ -199,7 +199,7 @@ TEST_F(TestMajorDeltaCompaction, TestCompact) {
     ASSERT_NO_FATAL_FAILURE(VerifyData());
 
     // Major compact some columns.
-    vector<int> col_ids;
+    vector<size_t> col_ids;
     for (int col_index = 0; col_index < col_ids_to_compact.size() - i; col_index++) {
       col_ids.push_back(col_ids_to_compact[col_index]);
     }
@@ -233,9 +233,9 @@ TEST_F(TestMajorDeltaCompaction, TestUndos) {
   ASSERT_NO_FATAL_FAILURE(VerifyDataWithMvccAndExpectedState(snap, old_state));
 
   // Major compact, check we still have the old data.
-  vector<int> col_ids_to_compact = { schema_.column_id(1),
-                                     schema_.column_id(3),
-                                     schema_.column_id(4) };
+  vector<size_t> col_ids_to_compact = { schema_.column_id(1),
+                                        schema_.column_id(3),
+                                        schema_.column_id(4) };
   ASSERT_OK(tablet()->DoMajorDeltaCompaction(col_ids_to_compact, rs));
   ASSERT_NO_FATAL_FAILURE(VerifyDataWithMvccAndExpectedState(snap, old_state));
 
@@ -276,7 +276,7 @@ TEST_F(TestMajorDeltaCompaction, TestCarryDeletesOver) {
   ASSERT_NO_FATAL_FAILURE(DeleteRows(kNumRows));
   ASSERT_OK(tablet()->FlushBiggestDMS());
 
-  vector<int> col_ids_to_compact = { schema_.column_id(4) };
+  vector<size_t> col_ids_to_compact = { schema_.column_id(4) };
   ASSERT_OK(tablet()->DoMajorDeltaCompaction(col_ids_to_compact, rs));
 
   ASSERT_NO_FATAL_FAILURE(VerifyData());
@@ -322,7 +322,7 @@ TEST_F(TestMajorDeltaCompaction, TestReinserts) {
 
   // Now we'll push some of the updates down.
   shared_ptr<RowSet> rs = all_rowsets.front();
-  vector<int> col_ids_to_compact = { schema_.column_id(4) };
+  vector<size_t> col_ids_to_compact = { schema_.column_id(4) };
   ASSERT_OK(tablet()->DoMajorDeltaCompaction(col_ids_to_compact, rs));
 
   // The data we'll see here is the 3rd batch of inserts, doesn't have updates.
