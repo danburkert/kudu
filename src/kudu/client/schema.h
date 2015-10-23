@@ -113,6 +113,9 @@ class KUDU_EXPORT KuduColumnSchema {
                    const void* default_value = NULL,
                    KuduColumnStorageAttributes attributes = KuduColumnStorageAttributes());
   KuduColumnSchema(const KuduColumnSchema& other);
+
+  KuduColumnSchema();
+
   ~KuduColumnSchema();
 
   KuduColumnSchema& operator=(const KuduColumnSchema& other);
@@ -135,8 +138,6 @@ class KUDU_EXPORT KuduColumnSchema {
   // is transitive to nested classes. See http://tiny.cloudera.com/jwtui
   friend class KuduTableAlterer;
   friend class std::vector<KuduColumnSchema>;
-
-  KuduColumnSchema();
 
   // Owned.
   ColumnSchema* col_;
