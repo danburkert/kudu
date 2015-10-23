@@ -17,7 +17,10 @@
 #include <boost/foreach.hpp>
 #include <stdint.h>
 #include <string>
+<<<<<<< Updated upstream
 #include <tr1/memory>
+=======
+>>>>>>> Stashed changes
 #include <utility>
 
 #include <gflags/gflags.h>
