@@ -35,7 +35,7 @@ DECLARE_bool(enable_leader_failure_detection);
 METRIC_DECLARE_entity(tablet);
 
 using std::string;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 namespace kudu {
 namespace consensus {

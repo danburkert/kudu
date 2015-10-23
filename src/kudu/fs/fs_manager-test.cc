@@ -25,7 +25,7 @@
 #include "kudu/util/test_util.h"
 
 using boost::assign::list_of;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 namespace kudu {
 

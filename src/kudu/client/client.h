@@ -16,7 +16,6 @@
 
 #include <stdint.h>
 #include <string>
-#include <tr1/unordered_set>
 #include <vector>
 
 #include "kudu/client/scan_predicate.h"

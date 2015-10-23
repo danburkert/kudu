@@ -14,6 +14,7 @@
 #ifndef KUDU_RPC_RPC_H
 #define KUDU_RPC_RPC_H
 
+#include <memory>
 #include <string>
 
 #include "kudu/gutil/callback.h"
@@ -34,7 +35,7 @@ class Rpc;
 class RpcRetrier {
  public:
   RpcRetrier(const MonoTime& deadline,
-             const std::tr1::shared_ptr<rpc::Messenger>& messenger)
+             const std::shared_ptr<rpc::Messenger>& messenger)
     : attempt_num_(1),
       deadline_(deadline),
       messenger_(messenger) {
@@ -67,7 +68,7 @@ class RpcRetrier {
 
   const MonoTime& deadline() const { return deadline_; }
 
-  const std::tr1::shared_ptr<Messenger>& messenger() const {
+  const std::shared_ptr<Messenger>& messenger() const {
     return messenger_;
   }
 
@@ -87,7 +88,7 @@ class RpcRetrier {
   MonoTime deadline_;
 
   // Messenger to use when sending the RPC.
-  std::tr1::shared_ptr<Messenger> messenger_;
+  std::shared_ptr<Messenger> messenger_;
 
   // RPC controller to use when sending the RPC.
   RpcController controller_;
@@ -99,7 +100,7 @@ class RpcRetrier {
 class Rpc {
  public:
   Rpc(const MonoTime& deadline,
-      const std::tr1::shared_ptr<rpc::Messenger>& messenger)
+      const std::shared_ptr<rpc::Messenger>& messenger)
   : retrier_(deadline, messenger) {
   }
 

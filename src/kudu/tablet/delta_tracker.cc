@@ -14,8 +14,6 @@
 
 #include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
-#include <tr1/memory>
-#include <string>
 
 #include "kudu/gutil/strings/join.h"
 #include "kudu/gutil/strings/strip.h"
@@ -36,7 +34,7 @@ using boost::assign::list_of;
 using fs::ReadableBlock;
 using fs::WritableBlock;
 using std::string;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using strings::Substitute;
 
 DeltaTracker::DeltaTracker(const shared_ptr<RowSetMetadata>& rowset_metadata,
@@ -107,7 +105,7 @@ Status DeltaTracker::MakeDeltaIteratorMergerUnlocked(size_t start_idx, size_t en
                                                      const Schema* projection,
                                                      vector<shared_ptr<DeltaStore> > *target_stores,
                                                      vector<BlockId> *target_blocks,
-                                                     std::tr1::shared_ptr<DeltaIterator> *out) {
+                                                     std::shared_ptr<DeltaIterator> *out) {
   CHECK(open_);
   CHECK_LE(start_idx, end_idx);
   CHECK_LT(end_idx, redo_delta_stores_.size());
@@ -118,7 +116,7 @@ Status DeltaTracker::MakeDeltaIteratorMergerUnlocked(size_t start_idx, size_t en
     // In DEBUG mode, the following asserts that the object is of the right type
     // (using RTTI)
     ignore_result(down_cast<DeltaFileReader*>(delta_store.get()));
-    shared_ptr<DeltaFileReader> dfr = std::tr1::static_pointer_cast<DeltaFileReader>(delta_store);
+    shared_ptr<DeltaFileReader> dfr = std::static_pointer_cast<DeltaFileReader>(delta_store);
 
     LOG(INFO) << "Preparing to minor compact delta file: " << dfr->ToString();
 

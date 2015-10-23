@@ -15,7 +15,7 @@
 #include <boost/assign/list_of.hpp>
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
-#include <tr1/memory>
+#include <memory>
 
 #include "kudu/common/schema.h"
 #include "kudu/fs/fs-test-util.h"
@@ -34,13 +34,14 @@ DEFINE_int32(last_row_to_update, 100000, "the last row to update");
 DEFINE_int32(n_verify, 1, "number of times to verify the updates"
              "(useful for benchmarks");
 
+using std::shared_ptr;
+
 namespace kudu {
 namespace tablet {
 
 using fs::CountingReadableBlock;
 using fs::ReadableBlock;
 using fs::WritableBlock;
-using std::tr1::shared_ptr;
 using util::gtl::is_sorted;
 
 // Test path to write delta file to (in in-memory environment)

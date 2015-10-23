@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <gtest/gtest.h>
+#include <memory>
 #include <string>
-#include <tr1/memory>
 #include <vector>
 
 #include "kudu/client/client.h"
@@ -26,7 +26,7 @@
 #include "kudu/util/monotime.h"
 #include "kudu/util/test_util.h"
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::string;
 using std::vector;
 
@@ -104,12 +104,12 @@ void ClusterVerifier::CheckRowCount(const std::string& table_name,
 Status ClusterVerifier::DoCheckRowCount(const std::string& table_name,
                                         ComparisonMode mode,
                                         int expected_row_count) {
-  shared_ptr<client::KuduClient> client;
+  kudu::shared_ptr<client::KuduClient> client;
   client::KuduClientBuilder builder;
   RETURN_NOT_OK_PREPEND(cluster_->CreateClient(builder,
                                                &client),
                         "Unable to connect to cluster");
-  shared_ptr<client::KuduTable> table;
+  kudu::shared_ptr<client::KuduTable> table;
   RETURN_NOT_OK_PREPEND(client->OpenTable(table_name, &table),
                         "Unable to open table");
   client::KuduScanner scanner(table.get());

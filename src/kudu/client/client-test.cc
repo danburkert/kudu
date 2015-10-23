@@ -18,8 +18,8 @@
 #include <gflags/gflags.h>
 #include <glog/stl_logging.h>
 
-#include <vector>
 #include <algorithm>
+#include <vector>
 
 #include "kudu/client/callbacks.h"
 #include "kudu/client/client.h"
@@ -75,10 +75,10 @@ METRIC_DECLARE_counter(scans_started);
 METRIC_DECLARE_counter(rpcs_queue_overflow);
 
 using boost::assign::list_of;
+using kudu::shared_ptr;
 using std::set;
 using std::string;
 using std::vector;
-using kudu::shared_ptr;
 
 namespace kudu {
 namespace client {

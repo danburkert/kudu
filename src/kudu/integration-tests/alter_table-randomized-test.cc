@@ -17,7 +17,7 @@
 
 #include <algorithm>
 #include <map>
-#include <tr1/memory>
+#include <memory>
 #include <vector>
 
 #include "kudu/client/client-test-util.h"
@@ -48,7 +48,7 @@ using client::KuduWriteOperation;
 using std::make_pair;
 using std::map;
 using std::pair;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 using strings::SubstituteAndAppend;
 

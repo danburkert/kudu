@@ -16,8 +16,8 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
+#include <memory>
 #include <time.h>
-#include <tr1/memory>
 
 #include "kudu/common/row.h"
 #include "kudu/common/schema.h"
@@ -38,13 +38,13 @@ DECLARE_int32(cfile_default_block_size);
 DECLARE_double(tablet_delta_store_major_compact_min_ratio);
 DECLARE_int32(tablet_delta_store_minor_compact_max);
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
+using std::unordered_set;
 
 namespace kudu {
 namespace tablet {
 
 using boost::assign::list_of;
-using std::tr1::unordered_set;
 using util::gtl::is_sorted;
 
 // TODO: add test which calls CopyNextRows on an iterator with no more

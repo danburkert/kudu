@@ -14,11 +14,11 @@
 
 #include "kudu/tablet/compaction.h"
 
-#include <glog/logging.h>
 #include <deque>
+#include <glog/logging.h>
+#include <memory>
 #include <string>
-#include <tr1/memory>
-#include <tr1/unordered_set>
+#include <unordered_set>
 #include <vector>
 
 #include "kudu/common/wire_protocol.h"
@@ -35,8 +35,8 @@
 #include "kudu/tablet/transactions/write_transaction.h"
 #include "kudu/util/debug/trace_event.h"
 
-using std::tr1::shared_ptr;
-using std::tr1::unordered_set;
+using std::shared_ptr;
+using std::unordered_set;
 using strings::Substitute;
 
 namespace kudu {
@@ -131,8 +131,8 @@ class MemRowSetCompactionInput : public CompactionInput {
 class DiskRowSetCompactionInput : public CompactionInput {
  public:
   DiskRowSetCompactionInput(gscoped_ptr<RowwiseIterator> base_iter,
-                        shared_ptr<DeltaIterator> redo_delta_iter,
-                        shared_ptr<DeltaIterator> undo_delta_iter) :
+                            shared_ptr<DeltaIterator> redo_delta_iter,
+                            shared_ptr<DeltaIterator> undo_delta_iter) :
     base_iter_(base_iter.Pass()),
     redo_delta_iter_(redo_delta_iter),
     undo_delta_iter_(undo_delta_iter),

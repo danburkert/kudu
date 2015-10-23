@@ -14,6 +14,7 @@
 #ifndef KUDU_CLIENT_CLIENT_TEST_UTIL_H
 #define KUDU_CLIENT_CLIENT_TEST_UTIL_H
 
+#include <memory>
 #include <string>
 #include <vector>
 

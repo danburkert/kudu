@@ -14,12 +14,11 @@
 #ifndef KUDU_TABLET_TABLET_TEST_BASE_H
 #define KUDU_TABLET_TABLET_TEST_BASE_H
 
+#include <algorithm>
 #include <boost/assign/list_of.hpp>
 #include <boost/thread/thread.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
-#include <tr1/unordered_set>
-#include <algorithm>
 #include <limits>
 #include <string>
 #include <vector>
@@ -42,7 +41,6 @@
 #include "kudu/tablet/tablet-test-util.h"
 #include "kudu/gutil/strings/numbers.h"
 
-using std::tr1::unordered_set;
 using strings::Substitute;
 
 namespace kudu {

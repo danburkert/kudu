@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/lexical_cast.hpp>
 #include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/lexical_cast.hpp>
 #include <gtest/gtest.h>
+#include <memory>
+#include <unordered_map>
 
 #include "kudu/gutil/strings/substitute.h"
 #include "kudu/gutil/map-util.h"
@@ -25,10 +28,10 @@
 namespace kudu {
 namespace tools {
 
-using std::tr1::shared_ptr;
-using std::tr1::static_pointer_cast;
-using std::tr1::unordered_map;
+using std::shared_ptr;
+using std::static_pointer_cast;
 using std::string;
+using std::unordered_map;
 using std::vector;
 
 class MockKsckTabletServer : public KsckTabletServer {

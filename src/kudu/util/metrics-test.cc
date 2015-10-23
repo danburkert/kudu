@@ -15,7 +15,7 @@
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>
 #include <string>
-#include <tr1/unordered_set>
+#include <unordered_set>
 #include <vector>
 
 #include "kudu/gutil/bind.h"
@@ -28,7 +28,7 @@
 
 using boost::assign::list_of;
 using std::string;
-using std::tr1::unordered_set;
+using std::unordered_set;
 using std::vector;
 
 DECLARE_int32(metrics_retirement_age_ms);

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <tr1/memory>
+#include <memory>
 
 #include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
@@ -34,7 +34,7 @@
 
 using boost::assign::list_of;
 using std::string;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 using strings::Substitute;
 

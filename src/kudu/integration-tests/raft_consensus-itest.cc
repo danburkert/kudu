@@ -16,11 +16,11 @@
 #include <boost/assign/list_of.hpp>
 #include <boost/optional.hpp>
 #include <gflags/gflags.h>
-#include <gtest/gtest.h>
 #include <glog/logging.h>
 #include <glog/stl_logging.h>
-#include <tr1/unordered_map>
-#include <tr1/unordered_set>
+#include <gtest/gtest.h>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "kudu/client/client.h"
 #include "kudu/client/client-test-util.h"
@@ -54,20 +54,25 @@ METRIC_DECLARE_entity(tablet);
 METRIC_DECLARE_counter(transaction_memory_pressure_rejections);
 METRIC_DECLARE_gauge_int64(raft_term);
 
+using std::shared_ptr;
+using std::unordered_map;
+using std::unordered_set;
+using std::vector;
+
 namespace kudu {
 namespace tserver {
 
 using boost::assign::list_of;
-using consensus::ConsensusResponsePB;
+using client::KuduInsert;
+using client::KuduSession;
+using client::KuduTable;
 using consensus::ConsensusRequestPB;
+using consensus::ConsensusResponsePB;
 using consensus::ConsensusServiceProxy;
 using consensus::MajoritySize;
 using consensus::MakeOpId;
 using consensus::RaftPeerPB;
 using consensus::ReplicateMsg;
-using client::KuduInsert;
-using client::KuduSession;
-using client::KuduTable;
 using itest::AddServer;
 using itest::GetReplicaStatusAndCheckIfLeader;
 using itest::LeaderStepDown;
@@ -81,10 +86,6 @@ using master::TabletLocationsPB;
 using rpc::RpcController;
 using server::SetFlagRequestPB;
 using server::SetFlagResponsePB;
-using std::vector;
-using std::tr1::shared_ptr;
-using std::tr1::unordered_map;
-using std::tr1::unordered_set;
 using strings::Substitute;
 
 static const int kConsensusRpcTimeoutForTests = 50;
@@ -202,10 +203,10 @@ class RaftConsensusITest : public TabletServerIntegrationTestBase {
                                   uint64_t count,
                                   uint64_t num_batches,
                                   const vector<CountDownLatch*>& latches) {
-    shared_ptr<KuduTable> table;
+    kudu::shared_ptr<KuduTable> table;
     CHECK_OK(client_->OpenTable(kTableId, &table));
 
-    shared_ptr<KuduSession> session = client_->NewSession();
+    kudu::shared_ptr<KuduSession> session = client_->NewSession();
     session->SetTimeoutMillis(60000);
     CHECK_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
 
@@ -391,7 +392,7 @@ class RaftConsensusITest : public TabletServerIntegrationTestBase {
                                       int64_t* orig_term,
                                       string* fell_behind_uuid);
 
-  shared_ptr<KuduTable> table_;
+  kudu::shared_ptr<KuduTable> table_;
   std::vector<scoped_refptr<kudu::Thread> > threads_;
   CountDownLatch inserters_;
 };

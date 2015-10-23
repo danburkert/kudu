@@ -20,7 +20,7 @@
 #include <algorithm>
 #include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
-#include <tr1/unordered_set>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -44,7 +44,7 @@
 #define HOST_NAME_MAX 64
 #endif
 
-using std::tr1::unordered_set;
+using std::unordered_set;
 using std::vector;
 using strings::Substitute;
 

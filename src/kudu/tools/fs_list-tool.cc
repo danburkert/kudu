@@ -18,7 +18,6 @@
 
 #include <iostream>
 #include <sstream>
-#include <tr1/memory>
 #include <vector>
 
 #include <boost/assign/list_of.hpp>

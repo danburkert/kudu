@@ -14,8 +14,8 @@
 
 #include <boost/foreach.hpp>
 #include <boost/thread/thread.hpp>
-#include <tr1/memory>
-#include <tr1/unordered_map>
+#include <memory>
+#include <unordered_map>
 
 #include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/stringprintf.h"
@@ -36,7 +36,7 @@ DEFINE_int32(num_compaction_threads, kDefaultNumCompactionThreads, "Number of co
 DEFINE_int32(num_seconds_per_thread, kDefaultNumSecondsPerThread,
              "Minimum number of seconds each thread should work");
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 namespace kudu {
 namespace tablet {

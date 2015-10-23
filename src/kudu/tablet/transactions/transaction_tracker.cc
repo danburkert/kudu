@@ -57,7 +57,7 @@ METRIC_DEFINE_counter(tablet, transaction_memory_pressure_rejections,
                       "Number of transactions rejected because the tablet's "
                       "transaction memory limit was reached.");
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 
 namespace kudu {
@@ -239,8 +239,7 @@ void TransactionTracker::StartInstrumentation(
   metrics_.reset(new Metrics(metric_entity));
 }
 
-void TransactionTracker::StartMemoryTracking(
-    const shared_ptr<MemTracker>& parent_mem_tracker) {
+void TransactionTracker::StartMemoryTracking(const shared_ptr<MemTracker>& parent_mem_tracker) {
   if (FLAGS_tablet_transaction_memory_limit_mb != -1) {
     mem_tracker_ = MemTracker::CreateTracker(
         FLAGS_tablet_transaction_memory_limit_mb * 1024 * 1024,

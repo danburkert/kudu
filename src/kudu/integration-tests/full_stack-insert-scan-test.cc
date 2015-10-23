@@ -14,14 +14,13 @@
 
 #include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>
-#include <gflags/gflags.h>
-#include <glog/logging.h>
-
 #include <cmath>
 #include <cstdlib>
+#include <gflags/gflags.h>
+#include <glog/logging.h>
+#include <memory>
 #include <signal.h>
 #include <string>
-#include <tr1/memory>
 #include <vector>
 
 #include "kudu/client/callbacks.h"
@@ -73,7 +72,7 @@ DECLARE_bool(enable_maintenance_manager);
 
 using boost::assign::list_of;
 using std::string;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 
 namespace kudu {

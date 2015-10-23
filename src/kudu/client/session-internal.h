@@ -14,7 +14,7 @@
 #ifndef KUDU_CLIENT_SESSION_INTERNAL_H
 #define KUDU_CLIENT_SESSION_INTERNAL_H
 
-#include <tr1/unordered_set>
+#include <unordered_set>
 
 #include "kudu/client/client.h"
 #include "kudu/util/locks.h"
@@ -69,7 +69,7 @@ class KuduSession::Data {
   // the flush is active, the batcher manages its own refcount. The Batcher will always
   // call FlushFinished() before it destructs itself, so we're guaranteed that these
   // pointers stay valid.
-  std::tr1::unordered_set<internal::Batcher*> flushed_batchers_;
+  std::unordered_set<internal::Batcher*> flushed_batchers_;
 
   FlushMode flush_mode_;
 

@@ -20,6 +20,7 @@
 #include <gperftools/malloc_extension.h>
 #include <limits>
 #include <list>
+#include <memory>
 
 #include "kudu/gutil/map-util.h"
 #include "kudu/gutil/once.h"
@@ -61,7 +62,7 @@ using std::deque;
 using std::list;
 using std::string;
 using std::stringstream;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 
 using strings::Substitute;

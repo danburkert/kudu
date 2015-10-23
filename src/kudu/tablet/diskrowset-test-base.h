@@ -17,10 +17,10 @@
 #include <boost/assign/list_of.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
+#include <memory>
 #include <string>
-#include <tr1/memory>
-#include <tr1/unordered_set>
 #include <unistd.h>
+#include <unordered_set>
 #include <vector>
 
 #include "kudu/common/iterator.h"
@@ -48,7 +48,6 @@ namespace kudu {
 namespace tablet {
 
 using boost::assign::list_of;
-using std::tr1::unordered_set;
 
 class TestRowSet : public KuduRowSetTest {
  public:
@@ -128,7 +127,7 @@ class TestRowSet : public KuduRowSetTest {
   // Picks some number of rows from the given rowset and updates
   // them. Stores the indexes of the updated rows in *updated.
   void UpdateExistingRows(DiskRowSet *rs, float update_ratio,
-                          unordered_set<uint32_t> *updated) {
+                          std::unordered_set<uint32_t> *updated) {
     int to_update = static_cast<int>(n_rows_ * update_ratio);
     faststring update_buf;
     RowChangeListEncoder update(&update_buf);
@@ -201,14 +200,14 @@ class TestRowSet : public KuduRowSetTest {
   // Updated rows (those whose index is present in 'updated') should have
   // a 'val' column equal to idx*5.
   // Other rows should have val column equal to idx.
-  void VerifyUpdates(const DiskRowSet &rs, const unordered_set<uint32_t> &updated) {
+  void VerifyUpdates(const DiskRowSet &rs, const std::unordered_set<uint32_t> &updated) {
     LOG_TIMING(INFO, "Reading updated rows with row iter") {
       VerifyUpdatesWithRowIter(rs, updated);
     }
   }
 
   void VerifyUpdatesWithRowIter(const DiskRowSet &rs,
-                                const unordered_set<uint32_t> &updated) {
+                                const std::unordered_set<uint32_t> &updated) {
     Schema proj_val = CreateProjection(schema_, list_of("val"));
     MvccSnapshot snap = MvccSnapshot::CreateSnapshotIncludingAllTransactions();
     gscoped_ptr<RowwiseIterator> row_iter;
@@ -229,7 +228,7 @@ class TestRowSet : public KuduRowSetTest {
   }
 
   void VerifyUpdatedBlock(const uint32_t *from_file, int start_row, size_t n_rows,
-                          const unordered_set<uint32_t> &updated) {
+                          const std::unordered_set<uint32_t> &updated) {
       for (int j = 0; j < n_rows; j++) {
         uint32_t idx_in_file = start_row + j;
         int expected;
@@ -318,7 +317,7 @@ class TestRowSet : public KuduRowSetTest {
     }
   }
 
-  Status OpenTestRowSet(std::tr1::shared_ptr<DiskRowSet> *rowset) {
+  Status OpenTestRowSet(std::shared_ptr<DiskRowSet> *rowset) {
     return DiskRowSet::Open(rowset_meta_, new log::LogAnchorRegistry(), rowset);
   }
 

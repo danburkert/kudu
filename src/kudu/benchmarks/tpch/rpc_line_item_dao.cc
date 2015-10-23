@@ -15,9 +15,9 @@
 #include <boost/foreach.hpp>
 #include <boost/thread/locks.hpp>
 #include <glog/logging.h>
-#include <vector>
-#include <tr1/memory>
+#include <memory>
 #include <utility>
+#include <vector>
 
 #include "kudu/benchmarks/tpch/rpc_line_item_dao.h"
 #include "kudu/client/callbacks.h"
@@ -36,7 +36,7 @@
 DEFINE_bool(tpch_cache_blocks_when_scanning, true,
             "Whether the scanners should cache the blocks that are read or not");
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 namespace kudu {
 
