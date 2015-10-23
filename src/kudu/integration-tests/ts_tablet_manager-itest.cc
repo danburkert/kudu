@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <gtest/gtest.h>
+#include <memory>
 #include <string>
-#include <tr1/memory>
 
 #include "kudu/client/client.h"
 #include "kudu/consensus/consensus.proxy.h"
@@ -59,7 +59,7 @@ using master::ReportedTabletPB;
 using master::TabletReportPB;
 using rpc::Messenger;
 using rpc::MessengerBuilder;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using strings::Substitute;
 using tablet::TabletPeer;
 using tserver::MiniTabletServer;

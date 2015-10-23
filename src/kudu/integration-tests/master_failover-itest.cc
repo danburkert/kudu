@@ -14,6 +14,7 @@
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -43,7 +44,7 @@ using client::KuduSchema;
 using client::KuduSchemaBuilder;
 using client::KuduTable;
 using std::string;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 
 class MasterFailoverTest : public KuduTest {

@@ -19,7 +19,7 @@
 #include <boost/foreach.hpp>
 #include <glog/stl_logging.h>
 #include <map>
-#include <tr1/memory>
+#include <memory>
 #include <vector>
 
 #include "kudu/client/client-test-util.h"
@@ -50,8 +50,8 @@ using client::KuduSession;
 using client::KuduTable;
 using client::KuduTableCreator;
 using client::KuduValue;
-using std::tr1::unordered_map;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
+using std::unordered_map;
 using std::vector;
 using strings::Substitute;
 

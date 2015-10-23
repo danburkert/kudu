@@ -16,10 +16,10 @@
 // This will eventually be replaced by a proper shell -- just a quick
 // hack for easy demo purposes.
 
-#include <glog/logging.h>
 #include <gflags/gflags.h>
+#include <glog/logging.h>
 #include <iostream>
-#include <tr1/memory>
+#include <memory>
 #include <vector>
 
 #include "kudu/benchmarks/tpch/tpch-schemas.h"
@@ -35,7 +35,7 @@
 #include "kudu/util/logging.h"
 
 using std::string;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 using kudu::client::KuduClient;
 using kudu::client::KuduClientBuilder;

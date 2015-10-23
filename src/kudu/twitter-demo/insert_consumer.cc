@@ -17,9 +17,9 @@
 #include <boost/foreach.hpp>
 #include <boost/thread/locks.hpp>
 #include <glog/logging.h>
+#include <memory>
 #include <string>
 #include <time.h>
-#include <tr1/memory>
 #include <vector>
 
 #include "kudu/common/wire_protocol.h"
@@ -37,7 +37,6 @@
 namespace kudu {
 namespace twitter_demo {
 
-using std::tr1::shared_ptr;
 using tserver::TabletServerServiceProxy;
 using tserver::WriteRequestPB;
 using tserver::WriteResponsePB;

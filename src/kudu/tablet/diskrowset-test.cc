@@ -15,8 +15,8 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
+#include <memory>
 #include <time.h>
-#include <tr1/memory>
 
 #include "kudu/common/row.h"
 #include "kudu/common/schema.h"
@@ -38,8 +38,8 @@ DECLARE_double(tablet_delta_store_major_compact_min_ratio);
 DECLARE_int32(tablet_delta_store_minor_compact_max);
 
 using std::is_sorted;
-using std::tr1::shared_ptr;
-using std::tr1::unordered_set;
+using std::shared_ptr;
+using std::unordered_set;
 
 namespace kudu {
 namespace tablet {

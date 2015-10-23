@@ -13,14 +13,13 @@
 // limitations under the License.
 
 #include <boost/foreach.hpp>
-#include <gflags/gflags.h>
-#include <glog/logging.h>
-
 #include <cmath>
 #include <cstdlib>
+#include <gflags/gflags.h>
+#include <glog/logging.h>
+#include <memory>
 #include <signal.h>
 #include <string>
-#include <tr1/memory>
 #include <vector>
 
 #include "kudu/client/callbacks.h"
@@ -71,7 +70,7 @@ DEFINE_bool(perf_fp_flag, false, "Only applicable with --perf_record_scan,"
 DECLARE_bool(enable_maintenance_manager);
 
 using std::string;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 
 namespace kudu {

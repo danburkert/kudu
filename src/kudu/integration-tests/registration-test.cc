@@ -14,8 +14,8 @@
 
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
+#include <memory>
 #include <string>
-#include <tr1/memory>
 
 #include "kudu/common/schema.h"
 #include "kudu/common/wire_protocol-test-util.h"
@@ -39,7 +39,7 @@ DECLARE_int32(heartbeat_interval_ms);
 namespace kudu {
 
 using std::vector;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using master::MiniMaster;
 using master::TSDescriptor;
 using master::TabletLocationsPB;

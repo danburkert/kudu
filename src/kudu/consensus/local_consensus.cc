@@ -32,7 +32,6 @@ namespace consensus {
 using base::subtle::Barrier_AtomicIncrement;
 using log::Log;
 using log::LogEntryBatch;
-using std::tr1::shared_ptr;
 using strings::Substitute;
 
 LocalConsensus::LocalConsensus(const ConsensusOptions& options,

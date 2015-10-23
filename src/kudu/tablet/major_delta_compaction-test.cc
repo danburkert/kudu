@@ -15,6 +15,8 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
+#include <memory>
+#include <unordered_set>
 
 #include "kudu/common/generic_iterators.h"
 #include "kudu/common/partial_row.h"
@@ -29,8 +31,8 @@
 #include "kudu/util/test_util.h"
 #include "kudu/gutil/algorithm.h"
 
-using std::tr1::shared_ptr;
-using std::tr1::unordered_set;
+using std::shared_ptr;
+using std::unordered_set;
 
 namespace kudu {
 namespace tablet {

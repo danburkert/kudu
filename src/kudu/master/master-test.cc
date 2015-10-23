@@ -16,7 +16,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
-#include <tr1/memory>
+#include <memory>
 #include <vector>
 
 #include "kudu/common/partial_row.h"
@@ -34,11 +34,11 @@
 #include "kudu/util/status.h"
 #include "kudu/util/test_util.h"
 
-using std::string;
-using std::tr1::shared_ptr;
 using kudu::rpc::Messenger;
 using kudu::rpc::MessengerBuilder;
 using kudu::rpc::RpcController;
+using std::shared_ptr;
+using std::string;
 
 DECLARE_bool(catalog_manager_check_ts_count_for_create_table);
 

@@ -50,7 +50,7 @@ METRIC_DECLARE_entity(tablet);
 #define REPLICATE_SEQUENCE_OF_MESSAGES(a, b, c, d, e, f, g) \
   ASSERT_NO_FATAL_FAILURE(ReplicateSequenceOfMessages(a, b, c, d, e, f, g))
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 namespace kudu {
 
