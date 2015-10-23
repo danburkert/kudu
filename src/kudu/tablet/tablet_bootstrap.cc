@@ -70,11 +70,14 @@ namespace kudu {
 namespace tablet {
 
 using boost::shared_lock;
+using consensus::ALTER_SCHEMA_OP;
+using consensus::CHANGE_CONFIG_OP;
 using consensus::ChangeConfigRecordPB;
 using consensus::CommitMsg;
 using consensus::ConsensusBootstrapInfo;
 using consensus::ConsensusMetadata;
 using consensus::ConsensusRound;
+using consensus::NO_OP;
 using consensus::OperationType;
 using consensus::OperationType_Name;
 using consensus::OpId;
@@ -84,21 +87,18 @@ using consensus::OpIdHashFunctor;
 using consensus::OpIdToString;
 using consensus::RaftConfigPB;
 using consensus::ReplicateMsg;
-using consensus::ALTER_SCHEMA_OP;
-using consensus::CHANGE_CONFIG_OP;
-using consensus::NO_OP;
 using consensus::WRITE_OP;
 using log::Log;
+using log::LogAnchorRegistry;
 using log::LogEntryPB;
 using log::LogOptions;
 using log::LogReader;
-using log::LogAnchorRegistry;
 using log::ReadableLogSegment;
 using server::Clock;
+using std::shared_ptr;
+using strings::Substitute;
 using tserver::AlterSchemaRequestPB;
 using tserver::WriteRequestPB;
-using std::tr1::shared_ptr;
-using strings::Substitute;
 
 struct ReplayState;
 
@@ -117,7 +117,7 @@ class FlushedStoresSnapshot {
 
  private:
   int64_t last_durable_mrs_id_;
-  std::tr1::unordered_map<int64_t, int64_t> flushed_dms_by_drs_id_;
+  std::unordered_map<int64_t, int64_t> flushed_dms_by_drs_id_;
 
   DISALLOW_COPY_AND_ASSIGN(FlushedStoresSnapshot);
 };
@@ -148,7 +148,7 @@ class TabletBootstrap {
   // state that is present in the log (additional soft state may be present
   // in other replicas).
   // A successful call will yield the rebuilt tablet and the rebuilt log.
-  Status Bootstrap(std::tr1::shared_ptr<Tablet>* rebuilt_tablet,
+  Status Bootstrap(std::shared_ptr<Tablet>* rebuilt_tablet,
                    scoped_refptr<Log>* rebuilt_log,
                    ConsensusBootstrapInfo* results);
 
@@ -365,7 +365,7 @@ Status BootstrapTablet(const scoped_refptr<TabletMetadata>& meta,
                        const shared_ptr<MemTracker>& mem_tracker,
                        MetricRegistry* metric_registry,
                        TabletStatusListener* listener,
-                       std::tr1::shared_ptr<tablet::Tablet>* rebuilt_tablet,
+                       std::shared_ptr<tablet::Tablet>* rebuilt_tablet,
                        scoped_refptr<log::Log>* rebuilt_log,
                        const scoped_refptr<log::LogAnchorRegistry>& log_anchor_registry,
                        ConsensusBootstrapInfo* consensus_info) {

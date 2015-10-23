@@ -24,8 +24,6 @@
 #include "kudu/util/curl_util.h"
 #include "kudu/util/url-coding.h"
 
-using std::string;
-using std::tr1::shared_ptr;
 using kudu::consensus::RaftConfigPB;
 using kudu::consensus::RaftPeerPB;
 using kudu::rpc::Messenger;
@@ -35,6 +33,8 @@ using kudu::server::Clock;
 using kudu::server::HybridClock;
 using kudu::tablet::Tablet;
 using kudu::tablet::TabletPeer;
+using std::shared_ptr;
+using std::string;
 using strings::Substitute;
 
 DEFINE_int32(single_threaded_insert_latency_bench_warmup_rows, 100,

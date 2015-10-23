@@ -16,6 +16,7 @@
 
 #include <iosfwd>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -59,8 +60,8 @@ class MaintenanceOpStats;
 
 namespace tablet {
 
+using std::shared_ptr;
 using std::string;
-using std::tr1::shared_ptr;
 
 class AlterSchemaTransactionState;
 class CompactionPolicy;
@@ -90,7 +91,7 @@ class Tablet {
   // within the provided registry. Otherwise, no metrics are collected.
   Tablet(const scoped_refptr<TabletMetadata>& metadata,
          const scoped_refptr<server::Clock>& clock,
-         const std::tr1::shared_ptr<MemTracker>& parent_mem_tracker,
+         const std::shared_ptr<MemTracker>& parent_mem_tracker,
          MetricRegistry* metric_registry,
          const scoped_refptr<log::LogAnchorRegistry>& log_anchor_registry);
 
@@ -366,7 +367,7 @@ class Tablet {
   const scoped_refptr<MetricEntity>& GetMetricEntity() const { return metric_entity_; }
 
   // Returns a reference to this tablet's memory tracker.
-  const std::tr1::shared_ptr<MemTracker>& mem_tracker() const { return mem_tracker_; }
+  const std::shared_ptr<MemTracker>& mem_tracker() const { return mem_tracker_; }
 
   static const char* kDMSMemTrackerId;
  private:
@@ -500,8 +501,8 @@ class Tablet {
   scoped_refptr<TabletComponents> components_;
 
   scoped_refptr<log::LogAnchorRegistry> log_anchor_registry_;
-  std::tr1::shared_ptr<MemTracker> mem_tracker_;
-  std::tr1::shared_ptr<MemTracker> dms_mem_tracker_;
+  std::shared_ptr<MemTracker> mem_tracker_;
+  std::shared_ptr<MemTracker> dms_mem_tracker_;
 
   scoped_refptr<MetricEntity> metric_entity_;
   gscoped_ptr<TabletMetrics> metrics_;

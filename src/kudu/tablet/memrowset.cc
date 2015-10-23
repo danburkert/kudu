@@ -371,7 +371,7 @@ gscoped_ptr<MRSRowProjector> GenerateAppropriateProjector(
 
 } // anonymous namespace
 
-MemRowSet::Iterator::Iterator(const std::tr1::shared_ptr<const MemRowSet> &mrs,
+MemRowSet::Iterator::Iterator(const std::shared_ptr<const MemRowSet> &mrs,
                               MemRowSet::MSBTIter *iter,
                               const Schema *projection,
                               const MvccSnapshot &mvcc_snap)

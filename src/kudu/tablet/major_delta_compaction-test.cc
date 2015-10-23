@@ -15,6 +15,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
+#include <memory>
 
 #include "kudu/common/generic_iterators.h"
 #include "kudu/common/partial_row.h"
@@ -32,7 +33,7 @@
 namespace kudu {
 namespace tablet {
 
-using std::tr1::unordered_set;
+using std::unordered_set;
 
 using strings::Substitute;
 

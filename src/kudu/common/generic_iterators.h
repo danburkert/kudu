@@ -14,11 +14,11 @@
 #ifndef KUDU_COMMON_MERGE_ITERATOR_H
 #define KUDU_COMMON_MERGE_ITERATOR_H
 
-#include <gtest/gtest_prod.h>
-#include <tr1/memory>
-#include <tr1/unordered_map>
 #include <deque>
+#include <gtest/gtest_prod.h>
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "kudu/common/iterator.h"
@@ -31,9 +31,9 @@ class Arena;
 class MergeIterState;
 
 using std::deque;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
-using std::tr1::unordered_multimap;
+using std::unordered_multimap;
 
 // An iterator which merges the results of other iterators, comparing
 // based on keys.

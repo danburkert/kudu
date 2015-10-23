@@ -16,9 +16,9 @@
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
-#include <tr1/unordered_set>
-#include <unistd.h>
 #include <string>
+#include <unistd.h>
+#include <unordered_set>
 #include <vector>
 
 #include "kudu/common/iterator.h"
@@ -45,7 +45,7 @@ DEFINE_int32(n_read_passes, 10,
 namespace kudu {
 namespace tablet {
 
-using std::tr1::unordered_set;
+using std::unordered_set;
 
 class TestRowSet : public KuduRowSetTest {
  public:

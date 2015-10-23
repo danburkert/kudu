@@ -14,9 +14,9 @@
 #ifndef KUDU_TEST_GRAPH_COLLECTOR_H
 #define KUDU_TEST_GRAPH_COLLECTOR_H
 
-#include <tr1/memory>
-#include <tr1/unordered_map>
+#include <memory>
 #include <string>
+#include <unordered_map>
 
 #include "kudu/gutil/ref_counted.h"
 #include "kudu/gutil/macros.h"
@@ -29,8 +29,8 @@
 namespace kudu {
 
 using std::string;
-using std::tr1::shared_ptr;
-using std::tr1::unordered_map;
+using std::shared_ptr;
+using std::unordered_map;
 
 class TimeSeries {
  public:

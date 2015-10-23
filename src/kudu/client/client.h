@@ -16,8 +16,6 @@
 
 #include <stdint.h>
 #include <string>
-#include <tr1/memory>
-#include <tr1/unordered_set>
 #include <vector>
 
 #include "kudu/client/scan_predicate.h"
@@ -33,6 +31,21 @@
 #include "kudu/util/kudu_export.h"
 #include "kudu/util/monotime.h"
 #include "kudu/util/status.h"
+
+#if __GXX_EXPERIMENTAL_CXX0X__ || __cplusplus >= 201103L
+// Import std::shared_ptr as std::tr1::shared_ptr. The effect is that on
+// compilers with support, std::shared_ptr will be used. Otherwise,
+// std::tr1::shared_ptr will be used.
+#include <memory>
+namespace std {
+namespace tr1 {
+using ::std::enable_shared_from_this;
+using ::std::shared_ptr;
+} // namespace tr1
+} // namespace std
+#else
+#include <tr1/memory>
+#endif // if __GXX_EXPERIMENTAL_CXX0X__ || __cplusplus >= 201103L
 
 namespace kudu {
 

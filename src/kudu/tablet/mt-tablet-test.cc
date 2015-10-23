@@ -16,7 +16,6 @@
 #include <boost/ptr_container/ptr_vector.hpp>
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
-#include <tr1/unordered_set>
 
 #include "kudu/codegen/compilation_manager.h"
 #include "kudu/gutil/macros.h"
@@ -50,8 +49,6 @@ DEFINE_int32(flusher_initial_frequency_ms, 30, "Number of ms to wait between flu
 
 namespace kudu {
 namespace tablet {
-
-using std::tr1::unordered_set;
 
 template<class SETUP>
 class MultiThreadedTabletTest : public TabletTestBase<SETUP> {

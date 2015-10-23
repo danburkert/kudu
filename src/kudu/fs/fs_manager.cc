@@ -17,8 +17,7 @@
 #include <deque>
 #include <iostream>
 #include <map>
-#include <tr1/memory>
-#include <tr1/unordered_set>
+#include <unordered_set>
 
 #include <boost/foreach.hpp>
 #include <glog/logging.h>
@@ -71,17 +70,16 @@ DEFINE_string(fs_data_dirs, "",
 TAG_FLAG(fs_data_dirs, stable);
 
 using google::protobuf::Message;
-using strings::Substitute;
-using std::map;
-using std::tr1::shared_ptr;
-using std::tr1::unordered_set;
 using kudu::env_util::ScopedFileDeleter;
-using kudu::fs::CreateBlockOptions;
 using kudu::fs::BlockManagerOptions;
+using kudu::fs::CreateBlockOptions;
 using kudu::fs::FileBlockManager;
 using kudu::fs::LogBlockManager;
 using kudu::fs::ReadableBlock;
 using kudu::fs::WritableBlock;
+using std::map;
+using std::unordered_set;
+using strings::Substitute;
 
 namespace kudu {
 

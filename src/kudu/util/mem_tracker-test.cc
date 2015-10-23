@@ -15,7 +15,7 @@
 #include "kudu/util/mem_tracker.h"
 
 #include <string>
-#include <tr1/unordered_map>
+#include <unordered_map>
 #include <vector>
 
 #include <boost/bind.hpp>
@@ -30,9 +30,9 @@ namespace kudu {
 
 using std::equal_to;
 using std::string;
-using std::tr1::hash;
-using std::tr1::shared_ptr;
-using std::tr1::unordered_map;
+using std::hash;
+using std::shared_ptr;
+using std::unordered_map;
 using std::vector;
 
 TEST(MemTrackerTest, SingleTrackerNoLimit) {
@@ -185,10 +185,10 @@ TEST(MemTrackerTest, STLContainerAllocator) {
   // Complex test: use it in an unordered_map, where it must be rebound in
   // order to allocate the map's buckets.
   {
-    unordered_map<int, int, equal_to<int>, hash<int>, MemTrackerAllocator<int> > um(
+    unordered_map<int, int, hash<int>, equal_to<int>, MemTrackerAllocator<int>> um(
         10,
-        equal_to<int>(),
         hash<int>(),
+        equal_to<int>(),
         alloc);
 
     // Don't care about the value (it depends on map internals).
