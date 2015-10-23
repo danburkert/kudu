@@ -16,10 +16,10 @@
 
 #include <boost/foreach.hpp>
 #include <boost/optional.hpp>
-#include <glog/logging.h>
 #include <gflags/gflags.h>
-#include <tr1/memory>
+#include <glog/logging.h>
 #include <iostream>
+#include <memory>
 #include <strstream>
 
 #include "kudu/client/client.h"
@@ -60,7 +60,7 @@ namespace tools {
 
 using std::ostringstream;
 using std::string;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 
 using google::protobuf::RepeatedPtrField;

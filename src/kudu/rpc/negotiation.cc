@@ -35,7 +35,7 @@
 namespace kudu {
 namespace rpc {
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using strings::Substitute;
 
 // Client: Send ConnectionContextPB message based on information stored in the Connection object.

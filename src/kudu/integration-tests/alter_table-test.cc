@@ -16,10 +16,10 @@
 #include <boost/foreach.hpp>
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
-#include <string>
-#include <tr1/memory>
-#include <utility>
 #include <map>
+#include <memory>
+#include <string>
+#include <utility>
 
 #include "kudu/client/client.h"
 #include "kudu/client/client-test-util.h"
@@ -55,8 +55,8 @@ namespace kudu {
 
 using std::map;
 using std::pair;
+using std::shared_ptr;
 using std::vector;
-using std::tr1::shared_ptr;
 using client::KuduClient;
 using client::KuduClientBuilder;
 using client::KuduColumnSchema;
@@ -236,7 +236,7 @@ class AlterTableTest : public KuduTest {
   static const char *kTableName;
 
   gscoped_ptr<MiniCluster> cluster_;
-  std::tr1::shared_ptr<KuduClient> client_;
+  std::shared_ptr<KuduClient> client_;
 
   KuduSchema schema_;
 

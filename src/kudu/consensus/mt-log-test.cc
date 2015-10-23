@@ -35,7 +35,6 @@ DEFINE_int32(num_ops_per_batch_avg, 5, "Target average number of ops per batch")
 namespace kudu {
 namespace log {
 
-using std::tr1::shared_ptr;
 using std::vector;
 using consensus::ReplicateRefPtr;
 using consensus::make_scoped_refptr_replicate;

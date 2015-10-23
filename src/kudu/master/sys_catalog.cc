@@ -52,7 +52,7 @@ using kudu::tablet::Tablet;
 using kudu::tablet::TabletPeer;
 using kudu::tserver::WriteRequestPB;
 using kudu::tserver::WriteResponsePB;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using strings::Substitute;
 
 namespace kudu {

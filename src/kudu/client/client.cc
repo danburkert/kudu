@@ -16,9 +16,9 @@
 
 #include <algorithm>
 #include <boost/bind.hpp>
+#include <memory>
 #include <set>
-#include <tr1/memory>
-#include <tr1/unordered_map>
+#include <unordered_map>
 #include <vector>
 
 #include "kudu/client/batcher.h"
@@ -52,10 +52,6 @@
 #include "kudu/util/logging.h"
 #include "kudu/util/net/dns_resolver.h"
 
-using std::set;
-using std::string;
-using std::tr1::shared_ptr;
-using std::vector;
 using kudu::master::AlterTableRequestPB;
 using kudu::master::AlterTableRequestPB_Step;
 using kudu::master::AlterTableResponsePB;
@@ -65,17 +61,21 @@ using kudu::master::DeleteTableRequestPB;
 using kudu::master::DeleteTableResponsePB;
 using kudu::master::GetTableSchemaRequestPB;
 using kudu::master::GetTableSchemaResponsePB;
+using kudu::master::ListTablesRequestPB;
+using kudu::master::ListTablesResponsePB;
 using kudu::master::ListTabletServersRequestPB;
 using kudu::master::ListTabletServersResponsePB;
 using kudu::master::ListTabletServersResponsePB_Entry;
-using kudu::master::ListTablesRequestPB;
-using kudu::master::ListTablesResponsePB;
 using kudu::master::MasterServiceProxy;
 using kudu::master::TabletLocationsPB;
 using kudu::rpc::Messenger;
 using kudu::rpc::MessengerBuilder;
 using kudu::rpc::RpcController;
 using kudu::tserver::ScanResponsePB;
+using std::set;
+using std::shared_ptr;
+using std::string;
+using std::vector;
 
 MAKE_ENUM_LIMITS(kudu::client::KuduSession::FlushMode,
                  kudu::client::KuduSession::AUTO_FLUSH_SYNC,

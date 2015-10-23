@@ -27,8 +27,8 @@
 #include "kudu/util/slice.h"
 #include "kudu/util/test_macros.h"
 
-using std::tr1::unordered_set;
-using std::tr1::shared_ptr;
+using std::unordered_set;
+using std::shared_ptr;
 
 namespace kudu {
 namespace tablet {

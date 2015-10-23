@@ -133,8 +133,7 @@ namespace kudu {
 namespace consensus {
 
 using log::LogEntryBatch;
-using std::tr1::shared_ptr;
-using std::tr1::unordered_set;
+using std::shared_ptr;
 using strings::Substitute;
 using tserver::TabletServerErrorPB;
 

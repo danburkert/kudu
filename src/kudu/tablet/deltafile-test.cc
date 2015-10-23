@@ -14,7 +14,7 @@
 
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
-#include <tr1/memory>
+#include <memory>
 
 #include "kudu/common/schema.h"
 #include "kudu/fs/fs-test-util.h"
@@ -34,7 +34,7 @@ DEFINE_int32(n_verify, 1, "number of times to verify the updates"
              "(useful for benchmarks");
 
 using std::is_sorted;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 namespace kudu {
 namespace tablet {

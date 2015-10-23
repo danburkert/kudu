@@ -15,8 +15,8 @@
 #include "kudu/tablet/rowset_info.h"
 
 #include <algorithm>
-#include <tr1/memory>
-#include <tr1/unordered_map>
+#include <memory>
+#include <unordered_map>
 #include <string>
 #include <utility>
 
@@ -32,8 +32,8 @@
 #include "kudu/tablet/rowset_tree.h"
 #include "kudu/util/slice.h"
 
-using std::tr1::shared_ptr;
-using std::tr1::unordered_map;
+using std::shared_ptr;
+using std::unordered_map;
 using std::vector;
 
 // Enforce a minimum size of 1MB, since otherwise the knapsack algorithm

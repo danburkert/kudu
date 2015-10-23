@@ -16,7 +16,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
-#include <tr1/memory>
+#include <memory>
 
 #include "kudu/common/partial_row.h"
 #include "kudu/consensus/log_anchor_registry.h"
@@ -46,7 +46,7 @@ DEFINE_int32(merge_benchmark_num_rows_per_rowset, 500000,
 DECLARE_string(block_manager);
 DECLARE_bool(enable_data_block_fsync);
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 namespace kudu {
 namespace tablet {

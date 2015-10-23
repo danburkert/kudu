@@ -14,7 +14,7 @@
 
 #include <boost/foreach.hpp>
 
-#include <tr1/memory>
+#include <memory>
 #include <vector>
 
 #include "kudu/client/client-test-util.h"
@@ -32,7 +32,7 @@ METRIC_DECLARE_counter(leader_memory_pressure_rejections);
 METRIC_DECLARE_counter(follower_memory_pressure_rejections);
 
 using strings::Substitute;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 
 namespace kudu {

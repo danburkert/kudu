@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <gtest/gtest.h>
-#include <tr1/memory>
+#include <memory>
 #include <vector>
 
 #include "kudu/gutil/strings/substitute.h"
@@ -24,7 +24,7 @@
 
 DEFINE_int32(num_rows_per_tablet, 100, "The number of rows to be inserted into each tablet");
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 
 namespace kudu {
@@ -416,7 +416,7 @@ class AllTypesItest : public KuduTest {
   TestSetup setup_;
   KuduSchema schema_;
   vector<KuduPartialRow> split_rows_;
-  std::tr1::shared_ptr<KuduClient> client_;
+  std::shared_ptr<KuduClient> client_;
   gscoped_ptr<ExternalMiniCluster> cluster_;
   shared_ptr<KuduTable> table_;
 };
