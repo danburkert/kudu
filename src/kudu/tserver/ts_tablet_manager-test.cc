@@ -16,7 +16,6 @@
 
 #include <gtest/gtest.h>
 #include <string>
-#include <tr1/memory>
 
 #include "kudu/common/partition.h"
 #include "kudu/common/schema.h"
@@ -42,7 +41,6 @@ using consensus::kInvalidOpIdIndex;
 using consensus::RaftConfigPB;
 using master::ReportedTabletPB;
 using master::TabletReportPB;
-using std::tr1::shared_ptr;
 using tablet::TabletPeer;
 
 static const char* const kTabletId = "my-tablet-id";

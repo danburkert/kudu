@@ -17,7 +17,7 @@
 #include "kudu/client/batcher.h"
 #include "kudu/client/error_collector.h"
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 namespace kudu {
 

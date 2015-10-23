@@ -16,7 +16,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
-#include <tr1/memory>
+#include <memory>
 #include <vector>
 
 #include "kudu/common/wire_protocol.h"
@@ -33,7 +33,7 @@
 #include "kudu/rpc/messenger.h"
 
 using std::string;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using kudu::rpc::Messenger;
 using kudu::rpc::MessengerBuilder;
 using kudu::rpc::RpcController;

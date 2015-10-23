@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <stdint.h>
 #include <boost/thread/thread.hpp>
-#include <gflags/gflags.h>
-#include <glog/logging.h>
 #include <curl/curl.h>
 #include <fstream>
+#include <gflags/gflags.h>
+#include <glog/logging.h>
 #include <iostream>
+#include <memory>
+#include <stdint.h>
 
 #include "kudu/client/client.h"
 #include "kudu/gutil/macros.h"
@@ -49,7 +50,7 @@ DEFINE_string(twitter_firehose_file, "/dev/fd/0",
 
 
 using std::string;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 namespace kudu {
 namespace twitter_demo {

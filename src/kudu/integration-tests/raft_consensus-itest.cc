@@ -15,11 +15,11 @@
 #include <boost/foreach.hpp>
 #include <boost/optional.hpp>
 #include <gflags/gflags.h>
-#include <gtest/gtest.h>
 #include <glog/logging.h>
 #include <glog/stl_logging.h>
-#include <tr1/unordered_map>
-#include <tr1/unordered_set>
+#include <gtest/gtest.h>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "kudu/client/client.h"
 #include "kudu/client/client-test-util.h"
@@ -56,16 +56,16 @@ METRIC_DECLARE_gauge_int64(raft_term);
 namespace kudu {
 namespace tserver {
 
-using consensus::ConsensusResponsePB;
+using client::KuduInsert;
+using client::KuduSession;
+using client::KuduTable;
 using consensus::ConsensusRequestPB;
+using consensus::ConsensusResponsePB;
 using consensus::ConsensusServiceProxy;
 using consensus::MajoritySize;
 using consensus::MakeOpId;
 using consensus::RaftPeerPB;
 using consensus::ReplicateMsg;
-using client::KuduInsert;
-using client::KuduSession;
-using client::KuduTable;
 using itest::AddServer;
 using itest::GetReplicaStatusAndCheckIfLeader;
 using itest::LeaderStepDown;
@@ -79,10 +79,10 @@ using master::TabletLocationsPB;
 using rpc::RpcController;
 using server::SetFlagRequestPB;
 using server::SetFlagResponsePB;
+using std::shared_ptr;
+using std::unordered_map;
+using std::unordered_set;
 using std::vector;
-using std::tr1::shared_ptr;
-using std::tr1::unordered_map;
-using std::tr1::unordered_set;
 using strings::Substitute;
 
 static const int kConsensusRpcTimeoutForTests = 50;

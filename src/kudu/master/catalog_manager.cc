@@ -141,8 +141,8 @@ DEFINE_bool(catalog_manager_check_ts_count_for_create_table, true,
             "a table to be created.");
 TAG_FLAG(catalog_manager_check_ts_count_for_create_table, hidden);
 
+using std::shared_ptr;
 using std::string;
-using std::tr1::shared_ptr;
 using std::vector;
 
 namespace kudu {

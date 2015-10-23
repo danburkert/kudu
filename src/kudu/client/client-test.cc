@@ -17,7 +17,7 @@
 #include <gflags/gflags.h>
 #include <glog/stl_logging.h>
 
-#include <tr1/memory>
+#include <memory>
 #include <vector>
 #include <algorithm>
 
@@ -76,7 +76,7 @@ METRIC_DECLARE_counter(rpcs_queue_overflow);
 
 using std::string;
 using std::set;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 
 namespace kudu {

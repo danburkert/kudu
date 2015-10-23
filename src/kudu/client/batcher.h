@@ -14,9 +14,9 @@
 #ifndef KUDU_CLIENT_BATCHER_H
 #define KUDU_CLIENT_BATCHER_H
 
-#include <tr1/memory>
-#include <tr1/unordered_set>
-#include <tr1/unordered_map>
+#include <memory>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "kudu/gutil/gscoped_ptr.h"
@@ -61,7 +61,7 @@ class Batcher : public RefCountedThreadSafe<Batcher> {
   // Takes a reference on error_collector. Creates a weak_ptr to 'session'.
   Batcher(KuduClient* client,
           ErrorCollector* error_collector,
-          const std::tr1::shared_ptr<KuduSession>& session);
+          const std::shared_ptr<KuduSession>& session);
 
   // Abort the current batch. Any writes that were buffered and not yet sent are
   // discarded. Those that were sent may still be delivered.  If there is a pending Flush
@@ -150,7 +150,7 @@ class Batcher : public RefCountedThreadSafe<Batcher> {
   State state_;
 
   KuduClient* const client_;
-  std::tr1::weak_ptr<KuduSession> weak_session_;
+  std::weak_ptr<KuduSession> weak_session_;
 
   // Errors are reported into this error collector.
   scoped_refptr<ErrorCollector> const error_collector_;
@@ -165,9 +165,9 @@ class Batcher : public RefCountedThreadSafe<Batcher> {
   KuduStatusCallback* flush_callback_;
 
   // All buffered or in-flight ops.
-  std::tr1::unordered_set<InFlightOp*> ops_;
+  std::unordered_set<InFlightOp*> ops_;
   // Each tablet's buffered ops.
-  typedef std::tr1::unordered_map<RemoteTablet*, std::vector<InFlightOp*> > OpsMap;
+  typedef std::unordered_map<RemoteTablet*, std::vector<InFlightOp*> > OpsMap;
   OpsMap per_tablet_ops_;
 
   // When each operation is added to the batcher, it is assigned a sequence number
