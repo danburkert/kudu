@@ -41,7 +41,7 @@ using client::KuduClientBuilder;
 using master::MiniMaster;
 using master::TSDescriptor;
 using master::TabletLocationsPB;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using tserver::MiniTabletServer;
 using tserver::TabletServer;
 

@@ -16,7 +16,7 @@
 #include <boost/thread/thread.hpp>
 #include <glog/stl_logging.h>
 #include <gtest/gtest.h>
-#include <tr1/memory>
+#include <memory>
 
 #include "kudu/client/client.h"
 #include "kudu/common/schema.h"
@@ -33,7 +33,7 @@
 #include "kudu/util/stopwatch.h"
 #include "kudu/util/test_util.h"
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 using kudu::client::KuduClient;
 using kudu::client::KuduClientBuilder;

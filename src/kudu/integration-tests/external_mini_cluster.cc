@@ -16,9 +16,9 @@
 
 #include <boost/foreach.hpp>
 #include <gtest/gtest.h>
+#include <memory>
 #include <rapidjson/document.h>
 #include <string>
-#include <tr1/memory>
 
 #include "kudu/client/client.h"
 #include "kudu/common/wire_protocol.h"
@@ -44,16 +44,17 @@
 #include "kudu/util/subprocess.h"
 #include "kudu/util/test_util.h"
 
-using rapidjson::Value;
-using std::string;
-using std::tr1::shared_ptr;
-using strings::Substitute;
 using kudu::master::GetLeaderMasterRpc;
 using kudu::master::MasterServiceProxy;
 using kudu::server::ServerStatusPB;
-using kudu::tserver::TabletServerServiceProxy;
 using kudu::tserver::ListTabletsRequestPB;
 using kudu::tserver::ListTabletsResponsePB;
+using kudu::tserver::TabletServerServiceProxy;
+using rapidjson::Value;
+using std::shared_ptr;
+using std::string;
+using strings::Substitute;
+
 typedef ListTabletsResponsePB::StatusAndSchemaPB StatusAndSchemaPB;
 
 namespace kudu {
@@ -771,7 +772,7 @@ ScopedResumeExternalDaemon::~ScopedResumeExternalDaemon() {
 // ExternalMaster
 //------------------------------------------------------------
 
-ExternalMaster::ExternalMaster(const std::tr1::shared_ptr<rpc::Messenger>& messenger,
+ExternalMaster::ExternalMaster(const std::shared_ptr<rpc::Messenger>& messenger,
                                const string& exe,
                                const string& data_dir,
                                const vector<string>& extra_flags)
@@ -779,7 +780,7 @@ ExternalMaster::ExternalMaster(const std::tr1::shared_ptr<rpc::Messenger>& messe
       rpc_bind_address_("127.0.0.1:0") {
 }
 
-ExternalMaster::ExternalMaster(const std::tr1::shared_ptr<rpc::Messenger>& messenger,
+ExternalMaster::ExternalMaster(const std::shared_ptr<rpc::Messenger>& messenger,
                                const string& exe,
                                const string& data_dir,
                                const string& rpc_bind_address,
@@ -822,7 +823,7 @@ Status ExternalMaster::Restart() {
 // ExternalTabletServer
 //------------------------------------------------------------
 
-ExternalTabletServer::ExternalTabletServer(const std::tr1::shared_ptr<rpc::Messenger>& messenger,
+ExternalTabletServer::ExternalTabletServer(const std::shared_ptr<rpc::Messenger>& messenger,
                                            const string& exe,
                                            const string& data_dir,
                                            const string& bind_host,

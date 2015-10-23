@@ -19,7 +19,7 @@
 #include "kudu/common/row.h"
 #include "kudu/common/wire_protocol.pb.h"
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 namespace kudu {
 namespace client {

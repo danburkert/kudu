@@ -19,7 +19,6 @@
 #include <gflags/gflags.h>
 #include <iostream>
 #include <string>
-#include <tr1/memory>
 #include <utility>
 
 #include "kudu/common/wire_protocol.h"
@@ -68,8 +67,6 @@ namespace consensus {
 using log::AsyncLogReader;
 using log::Log;
 using rpc::Messenger;
-using std::tr1::shared_ptr;
-using std::tr1::unordered_map;
 using strings::Substitute;
 
 METRIC_DEFINE_gauge_int64(tablet, majority_done_ops, "Leader Operations Acked by Majority",

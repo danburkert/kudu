@@ -14,7 +14,7 @@
 
 #include <gtest/gtest.h>
 #include <string>
-#include <tr1/memory>
+#include <memory>
 #include <vector>
 
 #include "kudu/client/client.h"
@@ -26,7 +26,7 @@
 #include "kudu/util/monotime.h"
 #include "kudu/util/test_util.h"
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::string;
 using std::vector;
 

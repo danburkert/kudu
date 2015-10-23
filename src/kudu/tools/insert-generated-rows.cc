@@ -17,10 +17,10 @@
 // Helps make things like availability demos a little easier.
 
 #include <boost/foreach.hpp>
-#include <glog/logging.h>
 #include <gflags/gflags.h>
+#include <glog/logging.h>
 #include <iostream>
-#include <tr1/memory>
+#include <memory>
 #include <vector>
 
 #include "kudu/client/client.h"
@@ -39,8 +39,8 @@ DEFINE_string(master_address, "localhost",
 namespace kudu {
 namespace tools {
 
+using std::shared_ptr;
 using std::string;
-using std::tr1::shared_ptr;
 using std::vector;
 
 using client::KuduClient;

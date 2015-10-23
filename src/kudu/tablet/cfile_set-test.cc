@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <memory>
 #include <gtest/gtest.h>
 #include <glog/logging.h>
-#include <tr1/memory>
 
 #include "kudu/common/generic_iterators.h"
 #include "kudu/tablet/cfile_set.h"
@@ -24,7 +24,7 @@
 
 DECLARE_int32(cfile_default_block_size);
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 namespace kudu {
 namespace tablet {

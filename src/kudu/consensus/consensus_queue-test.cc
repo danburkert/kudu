@@ -14,7 +14,6 @@
 
 #include <gtest/gtest.h>
 #include <gflags/gflags.h>
-#include <tr1/memory>
 
 #include "kudu/common/schema.h"
 #include "kudu/common/wire_protocol-test-util.h"
@@ -35,8 +34,6 @@ DECLARE_bool(enable_data_block_fsync);
 DECLARE_int32(consensus_max_batch_size_bytes);
 
 METRIC_DECLARE_entity(tablet);
-
-using std::tr1::shared_ptr;
 
 namespace kudu {
 namespace consensus {

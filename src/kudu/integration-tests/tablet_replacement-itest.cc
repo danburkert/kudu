@@ -15,9 +15,9 @@
 #include <boost/optional.hpp>
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
+#include <memory>
 #include <string>
-#include <tr1/memory>
-#include <tr1/unordered_map>
+#include <unordered_map>
 
 #include "kudu/common/wire_protocol.h"
 #include "kudu/common/wire_protocol-test-util.h"
@@ -31,9 +31,9 @@ using kudu::itest::TServerDetails;
 using kudu::tablet::TABLET_DATA_READY;
 using kudu::tablet::TABLET_DATA_TOMBSTONED;
 using kudu::tserver::ListTabletsResponsePB;
+using std::shared_ptr;
 using std::string;
-using std::tr1::shared_ptr;
-using std::tr1::unordered_map;
+using std::unordered_map;
 using std::vector;
 using strings::Substitute;
 

@@ -16,10 +16,10 @@
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
+#include <memory>
 #include <string>
-#include <tr1/memory>
-#include <tr1/unordered_set>
 #include <unistd.h>
+#include <unordered_set>
 #include <vector>
 
 #include "kudu/common/iterator.h"
@@ -46,7 +46,7 @@ DEFINE_int32(n_read_passes, 10,
 namespace kudu {
 namespace tablet {
 
-using std::tr1::unordered_set;
+using std::unordered_set;
 
 class TestRowSet : public KuduRowSetTest {
  public:
@@ -316,7 +316,7 @@ class TestRowSet : public KuduRowSetTest {
     }
   }
 
-  Status OpenTestRowSet(std::tr1::shared_ptr<DiskRowSet> *rowset) {
+  Status OpenTestRowSet(std::shared_ptr<DiskRowSet> *rowset) {
     return DiskRowSet::Open(rowset_meta_, new log::LogAnchorRegistry(), rowset);
   }
 

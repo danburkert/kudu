@@ -38,7 +38,7 @@ DEFINE_int32(row_count, 2000, "How many rows will be used in this test for the b
 DEFINE_int32(seconds_to_run, 4,
              "How long this test runs for, after inserting the base data, in seconds");
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 namespace kudu {
 namespace tablet {

@@ -15,7 +15,7 @@
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
 
-#include <tr1/memory>
+#include <memory>
 #include <vector>
 
 #include "kudu/client/client.h"
@@ -27,7 +27,7 @@
 #include "kudu/master/mini_master.h"
 #include "kudu/util/test_util.h"
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 
 namespace kudu {

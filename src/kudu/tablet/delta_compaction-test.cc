@@ -38,8 +38,8 @@ DEFINE_int32(num_rows, 2100, "the first row to update");
 DEFINE_int32(num_delta_files, 3, "number of delta files");
 
 using std::is_sorted;
+using std::shared_ptr;
 using std::string;
-using std::tr1::shared_ptr;
 using std::vector;
 
 namespace kudu {

@@ -15,9 +15,9 @@
 #include <boost/optional.hpp>
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
-#include <tr1/memory>
-#include <tr1/unordered_map>
+#include <memory>
 #include <string>
+#include <unordered_map>
 
 #include "kudu/client/client.h"
 #include "kudu/client/client-test-util.h"
@@ -56,9 +56,9 @@ using kudu::itest::TServerDetails;
 using kudu::tablet::TABLET_DATA_TOMBSTONED;
 using kudu::tserver::ListTabletsResponsePB;
 using kudu::tserver::RemoteBootstrapClient;
+using std::shared_ptr;
 using std::string;
-using std::tr1::shared_ptr;
-using std::tr1::unordered_map;
+using std::unordered_map;
 using std::vector;
 using strings::Substitute;
 

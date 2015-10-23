@@ -17,8 +17,8 @@
 #include "kudu/tools/fs_tool.h"
 
 #include <iostream>
+#include <memory>
 #include <sstream>
-#include <tr1/memory>
 #include <vector>
 
 #include <boost/foreach.hpp>
