@@ -14,8 +14,9 @@
 
 #include <boost/foreach.hpp>
 #include <gtest/gtest.h>
+#include <memory>
 #include <stdlib.h>
-#include <tr1/unordered_set>
+#include <unordered_set>
 
 #include "kudu/common/schema.h"
 #include "kudu/consensus/consensus.pb.h"
@@ -36,7 +37,7 @@ namespace kudu {
 namespace tablet {
 
 using fs::WritableBlock;
-using std::tr1::unordered_set;
+using std::unordered_set;
 
 class TestDeltaMemStore : public KuduTest {
  public:

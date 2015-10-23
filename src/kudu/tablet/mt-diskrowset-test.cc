@@ -23,7 +23,7 @@ DEFINE_int32(num_threads, 2, "Number of threads to test");
 namespace kudu {
 namespace tablet {
 
-using std::tr1::unordered_set;
+using std::unordered_set;
 
 
 class TestMultiThreadedRowSet : public TestRowSet {

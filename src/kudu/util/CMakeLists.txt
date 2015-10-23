@@ -150,8 +150,7 @@ set(UTIL_SRCS
   trace.cc
   user.cc
   url-coding.cc
-  version_info.cc
-)
+  version_info.cc)
 
 if(NOT APPLE)
   set(UTIL_SRCS

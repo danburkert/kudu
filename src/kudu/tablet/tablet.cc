@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include <algorithm>
 #include <boost/bind.hpp>
 #include <boost/foreach.hpp>
@@ -18,9 +19,9 @@
 #include <boost/thread/mutex.hpp>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <ostream>
-#include <tr1/memory>
-#include <tr1/unordered_set>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -101,8 +102,8 @@ using log::LogAnchorRegistry;
 using std::string;
 using std::set;
 using std::vector;
-using std::tr1::shared_ptr;
-using std::tr1::unordered_set;
+using std::shared_ptr;
+using std::unordered_set;
 using strings::Substitute;
 using base::subtle::Barrier_AtomicIncrement;
 

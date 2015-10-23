@@ -21,6 +21,7 @@
 
 #include <boost/thread/mutex.hpp>
 #include <gtest/gtest_prod.h>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -263,8 +264,8 @@ class DiskRowSet : public RowSet {
   static Status Open(const shared_ptr<RowSetMetadata>& rowset_metadata,
                      log::LogAnchorRegistry* log_anchor_registry,
                      shared_ptr<DiskRowSet> *rowset,
-                     const std::tr1::shared_ptr<MemTracker>& parent_tracker =
-                     std::tr1::shared_ptr<MemTracker>());
+                     const std::shared_ptr<MemTracker>& parent_tracker =
+                     std::shared_ptr<MemTracker>());
 
   ////////////////////////////////////////////////////////////
   // "Management" functions
@@ -369,7 +370,7 @@ class DiskRowSet : public RowSet {
 
   DiskRowSet(const shared_ptr<RowSetMetadata>& rowset_metadata,
              log::LogAnchorRegistry* log_anchor_registry,
-             const std::tr1::shared_ptr<MemTracker>& parent_tracker);
+             const std::shared_ptr<MemTracker>& parent_tracker);
 
   Status Open();
 
@@ -387,7 +388,7 @@ class DiskRowSet : public RowSet {
 
   log::LogAnchorRegistry* log_anchor_registry_;
 
-  std::tr1::shared_ptr<MemTracker> parent_tracker_;
+  std::shared_ptr<MemTracker> parent_tracker_;
 
   // Base data for this rowset.
   mutable percpu_rwlock component_lock_;

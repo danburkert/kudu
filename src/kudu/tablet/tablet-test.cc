@@ -31,7 +31,6 @@ namespace kudu {
 namespace tablet {
 
 using fs::ReadableBlock;
-using std::tr1::unordered_set;
 
 DEFINE_int32(testflush_num_inserts, 1000,
              "Number of rows inserted in TestFlush");

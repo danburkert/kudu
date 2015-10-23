@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <tr1/memory>
+#include <memory>
 
 #include <boost/foreach.hpp>
 
@@ -32,7 +32,7 @@
 #include "kudu/util/thread.h"
 
 using std::string;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 using strings::Substitute;
 

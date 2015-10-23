@@ -1611,7 +1611,7 @@ Status CatalogManager::ResetTabletReplicasFromReportedConfig(
 
   TabletInfo::ReplicaMap replica_locations;
   BOOST_FOREACH(const consensus::RaftPeerPB& peer, cstate.config().peers()) {
-    std::tr1::shared_ptr<TSDescriptor> ts_desc;
+    std::shared_ptr<TSDescriptor> ts_desc;
     if (!peer.has_permanent_uuid()) {
       return Status::InvalidArgument("Missing UUID for peer", peer.ShortDebugString());
     }
@@ -1637,7 +1637,7 @@ Status CatalogManager::ResetTabletReplicasFromReportedConfig(
     BOOST_FOREACH(const consensus::RaftPeerPB& prev_peer, prev_cstate.config().peers()) {
       const string& peer_uuid = prev_peer.permanent_uuid();
       if (!ContainsKey(current_member_uuids, peer_uuid)) {
-        std::tr1::shared_ptr<TSDescriptor> ts_desc;
+        std::shared_ptr<TSDescriptor> ts_desc;
         if (!master_->ts_manager()->LookupTSByUUID(peer_uuid, &ts_desc)) continue;
         SendDeleteTabletRequest(report.tablet_id(), TABLET_DATA_TOMBSTONED,
                                 prev_cstate.config().opid_index(), tablet->table(), ts_desc.get(),
@@ -1896,8 +1896,8 @@ class RetryingTSRpcTask : public MonitoredTask {
   int attempt_;
   rpc::RpcController rpc_;
   TSDescriptor* target_ts_desc_;
-  std::tr1::shared_ptr<tserver::TabletServerAdminServiceProxy> ts_proxy_;
-  std::tr1::shared_ptr<consensus::ConsensusServiceProxy> consensus_proxy_;
+  std::shared_ptr<tserver::TabletServerAdminServiceProxy> ts_proxy_;
+  std::shared_ptr<consensus::ConsensusServiceProxy> consensus_proxy_;
 
  private:
   // Reschedules the current task after a backoff delay.
@@ -1970,11 +1970,11 @@ class RetryingTSRpcTask : public MonitoredTask {
     // TODO: if there is no replica available, should we still keep the task running?
     RETURN_NOT_OK(replica_picker_->PickReplica(&target_ts_desc_));
 
-    std::tr1::shared_ptr<tserver::TabletServerAdminServiceProxy> ts_proxy;
+    std::shared_ptr<tserver::TabletServerAdminServiceProxy> ts_proxy;
     RETURN_NOT_OK(target_ts_desc_->GetTSAdminProxy(master_->messenger(), &ts_proxy));
     ts_proxy_.swap(ts_proxy);
 
-    std::tr1::shared_ptr<consensus::ConsensusServiceProxy> consensus_proxy;
+    std::shared_ptr<consensus::ConsensusServiceProxy> consensus_proxy;
     RETURN_NOT_OK(target_ts_desc_->GetConsensusProxy(master_->messenger(), &consensus_proxy));
     consensus_proxy_.swap(consensus_proxy);
 

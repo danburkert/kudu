@@ -15,7 +15,7 @@
 #define KUDU_TABLET_ROWSET_METADATA_H
 
 #include <string>
-#include <tr1/unordered_map>
+#include <unordered_map>
 #include <vector>
 
 #include "kudu/common/schema.h"
@@ -63,7 +63,7 @@ class TabletMetadata;
 //
 class RowSetMetadata {
  public:
-  typedef std::tr1::unordered_map<int, BlockId> ColumnIdToBlockIdMap;
+  typedef std::unordered_map<int, BlockId> ColumnIdToBlockIdMap;
 
   // Create a new RowSetMetadata
   static Status CreateNew(TabletMetadata* tablet_metadata,

@@ -15,7 +15,7 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <vector>
-#include <tr1/unordered_map>
+#include <unordered_map>
 
 #include "kudu/common/row.h"
 #include "kudu/common/schema.h"
@@ -29,7 +29,7 @@ namespace kudu {
 namespace tablet {
 
 using std::vector;
-using std::tr1::unordered_map;
+using std::unordered_map;
 using strings::Substitute;
 
 // Copy a row and its referenced data into the given Arena.

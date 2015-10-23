@@ -32,7 +32,7 @@ TAG_FLAG(materializing_iterator_do_pushdown, hidden);
 namespace kudu {
 
 using std::string;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 ////////////////////////////////////////////////////////////
 // Merge iterator

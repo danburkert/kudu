@@ -14,7 +14,6 @@
 
 #include <boost/foreach.hpp>
 #include <boost/thread/thread.hpp>
-#include <tr1/unordered_map>
 
 #include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/stringprintf.h"

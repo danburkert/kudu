@@ -59,7 +59,7 @@ using kudu::rpc_test::WhoAmIResponsePB;
 using kudu::rpc_test_diff_package::ReqDiffPackagePB;
 using kudu::rpc_test_diff_package::RespDiffPackagePB;
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 // Implementation of CalculatorService which just implements the generic
 // RPC handler (no generated code).

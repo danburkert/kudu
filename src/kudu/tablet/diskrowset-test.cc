@@ -39,7 +39,7 @@ DECLARE_int32(tablet_delta_store_minor_compact_max);
 namespace kudu {
 namespace tablet {
 
-using std::tr1::unordered_set;
+using std::unordered_set;
 
 // TODO: add test which calls CopyNextRows on an iterator with no more
 // rows - i think it segfaults!

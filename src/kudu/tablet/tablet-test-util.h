@@ -100,7 +100,7 @@ class KuduTabletTest : public KuduTest {
     tx_state.Finish();
   }
 
-  const std::tr1::shared_ptr<Tablet>& tablet() const {
+  const std::shared_ptr<Tablet>& tablet() const {
     return harness_->tablet();
   }
 

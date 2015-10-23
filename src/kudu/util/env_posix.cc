@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <fts.h>
 #include <glog/logging.h>
+#include <limits.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,10 +20,6 @@
 #include <sys/uio.h>
 #include <time.h>
 #include <unistd.h>
-#include <limits.h>
-
-#include <deque>
-#include <tr1/unordered_set>
 #include <vector>
 
 #include "kudu/gutil/atomicops.h"
@@ -86,8 +83,6 @@ TAG_FLAG(never_fsync, unsafe);
 
 using base::subtle::Atomic64;
 using base::subtle::Barrier_AtomicIncrement;
-using std::tr1::unordered_set;
-using std::deque;
 using std::vector;
 using strings::Substitute;
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <memory>
 #include <gtest/gtest.h>
 
 #include "kudu/gutil/strings/substitute.h"
@@ -413,7 +414,7 @@ class AllTypesItest : public KuduTest {
   TestSetup setup_;
   KuduSchema schema_;
   vector<KuduPartialRow> split_rows_;
-  std::tr1::shared_ptr<KuduClient> client_;
+  std::shared_ptr<KuduClient> client_;
   gscoped_ptr<ExternalMiniCluster> cluster_;
   shared_ptr<KuduTable> table_;
 };

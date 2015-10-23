@@ -58,7 +58,7 @@ using consensus::RaftPeerPB;
 using fs::WritableBlock;
 using rpc::Messenger;
 using std::string;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 using strings::Substitute;
 using tablet::ColumnDataPB;

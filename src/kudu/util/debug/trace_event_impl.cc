@@ -1855,7 +1855,7 @@ TraceEventHandle TraceLog::AddTraceEventWithThreadIdAndTimestamp(
 
         SpinLockHolder thread_info_lock(&thread_info_lock_);
 
-        std::tr1::unordered_map<int, std::string>::iterator existing_name =
+        std::unordered_map<int, std::string>::iterator existing_name =
           thread_names_.find(thread_id);
         if (existing_name == thread_names_.end()) {
           // This is a new thread id, and a new name.
@@ -2110,7 +2110,7 @@ void TraceLog::AddMetadataEventsWhileLocked() {
 
   if (process_labels_.size() > 0) {
     std::vector<std::string> labels;
-    for(std::tr1::unordered_map<int, std::string>::iterator it = process_labels_.begin();
+    for(std::unordered_map<int, std::string>::iterator it = process_labels_.begin();
         it != process_labels_.end();
         it++) {
       labels.push_back(it->second);
@@ -2122,7 +2122,7 @@ void TraceLog::AddMetadataEventsWhileLocked() {
   }
 
   // Thread sort indices.
-  for(std::tr1::unordered_map<int, int>::iterator it = thread_sort_indices_.begin();
+  for(std::unordered_map<int, int>::iterator it = thread_sort_indices_.begin();
       it != thread_sort_indices_.end();
       it++) {
     if (it->second == 0)
@@ -2135,7 +2135,7 @@ void TraceLog::AddMetadataEventsWhileLocked() {
 
   // Thread names.
   SpinLockHolder thread_info_lock(&thread_info_lock_);
-  for(std::tr1::unordered_map<int, std::string>::iterator it = thread_names_.begin();
+  for(std::unordered_map<int, std::string>::iterator it = thread_names_.begin();
       it != thread_names_.end();
       it++) {
     if (it->second.empty())
@@ -2219,7 +2219,7 @@ void TraceLog::UpdateProcessLabel(
 
 void TraceLog::RemoveProcessLabel(int label_id) {
   SpinLockHolder lock(&lock_);
-  std::tr1::unordered_map<int, std::string>::iterator it = process_labels_.find(
+  std::unordered_map<int, std::string>::iterator it = process_labels_.find(
       label_id);
   if (it == process_labels_.end())
     return;

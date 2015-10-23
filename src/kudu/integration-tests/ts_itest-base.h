@@ -51,16 +51,16 @@ using client::KuduSchemaFromSchema;
 using consensus::OpId;
 using consensus::RaftPeerPB;
 using itest::GetReplicaStatusAndCheckIfLeader;
+using itest::TServerDetails;
 using itest::TabletReplicaMap;
 using itest::TabletServerMap;
-using itest::TServerDetails;
 using master::GetTableLocationsRequestPB;
 using master::GetTableLocationsResponsePB;
 using master::TabletLocationsPB;
 using rpc::RpcController;
-using std::vector;
 using std::string;
-using std::tr1::unordered_set;
+using std::unordered_set;
+using std::vector;
 using strings::Substitute;
 
 static const int kMaxRetries = 20;
@@ -139,7 +139,7 @@ class TabletServerIntegrationTestBase : public TabletServerTestBase {
 
     bool replicas_missing = true;
     do {
-      std::tr1::unordered_multimap<string, TServerDetails*> tablet_replicas;
+      std::unordered_multimap<string, TServerDetails*> tablet_replicas;
       GetTableLocationsRequestPB req;
       GetTableLocationsResponsePB resp;
       RpcController controller;

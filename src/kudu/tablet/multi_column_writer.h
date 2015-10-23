@@ -15,7 +15,7 @@
 #define KUDU_TABLET_MULTI_COLUMN_WRITER_H
 
 #include <glog/logging.h>
-#include <tr1/unordered_map>
+#include <unordered_map>
 #include <vector>
 
 #include "kudu/fs/fs_manager.h"
@@ -73,7 +73,7 @@ class MultiColumnWriter {
   // Return the block IDs of the written columns, keyed by column ID.
   //
   // REQUIRES: Finish() already called.
-  void GetFlushedBlocksByColumnId(std::tr1::unordered_map<int, BlockId>* ret) const;
+  void GetFlushedBlocksByColumnId(std::unordered_map<int, BlockId>* ret) const;
 
  private:
   FsManager* const fs_;

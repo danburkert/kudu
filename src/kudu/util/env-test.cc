@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <fcntl.h>
+#include <memory>
 #include <string>
 #include <sys/types.h>
-#include <tr1/memory>
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
@@ -48,7 +48,7 @@
 namespace kudu {
 
 using std::string;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 
 static const uint64_t kOneMb = 1024 * 1024;
