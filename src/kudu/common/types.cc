@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <boost/shared_ptr.hpp>
-#include <tr1/unordered_map>
+#include <unordered_map>
 
 #include "kudu/gutil/singleton.h"
 
@@ -21,7 +21,7 @@
 
 namespace kudu {
 
-using std::tr1::unordered_map;
+using std::unordered_map;
 using boost::shared_ptr;
 
 template<typename TypeTraitsClass>
@@ -77,7 +77,7 @@ class TypeInfoResolver {
 
   unordered_map<DataType,
                 shared_ptr<const TypeInfo>,
-                std::tr1::hash<size_t> > mapping_;
+                std::hash<size_t> > mapping_;
 
   friend class Singleton<TypeInfoResolver>;
   DISALLOW_COPY_AND_ASSIGN(TypeInfoResolver);

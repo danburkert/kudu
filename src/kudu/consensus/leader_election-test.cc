@@ -32,7 +32,7 @@ namespace kudu {
 namespace consensus {
 
 using std::string;
-using std::tr1::unordered_map;
+using std::unordered_map;
 using std::vector;
 using strings::Substitute;
 

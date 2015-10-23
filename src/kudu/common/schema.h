@@ -16,10 +16,10 @@
 
 #include <boost/foreach.hpp>
 #include <functional>
+#include <memory>
 #include <string>
-#include <tr1/memory>
-#include <tr1/unordered_map>
-#include <tr1/unordered_set>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -48,8 +48,8 @@
 namespace kudu {
 
 using std::vector;
-using std::tr1::unordered_map;
-using std::tr1::unordered_set;
+using std::unordered_map;
+using std::unordered_set;
 
 // Class for storing column attributes such as compression and
 // encoding.  Column attributes describe the physical storage and
@@ -257,8 +257,8 @@ class ColumnSchema {
   const TypeInfo *type_info_;
   bool is_nullable_;
   // use shared_ptr since the ColumnSchema is always copied around.
-  std::tr1::shared_ptr<Variant> read_default_;
-  std::tr1::shared_ptr<Variant> write_default_;
+  std::shared_ptr<Variant> read_default_;
+  std::shared_ptr<Variant> write_default_;
   ColumnStorageAttributes attributes_;
 };
 

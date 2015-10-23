@@ -16,9 +16,9 @@
 
 #include <algorithm>
 #include <boost/bind.hpp>
+#include <memory>
 #include <set>
-#include <tr1/memory>
-#include <tr1/unordered_map>
+#include <unordered_map>
 #include <vector>
 
 #include "kudu/client/batcher.h"
@@ -53,7 +53,7 @@
 
 using std::set;
 using std::string;
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 using std::vector;
 using kudu::master::AlterTableRequestPB;
 using kudu::master::AlterTableRequestPB_Step;

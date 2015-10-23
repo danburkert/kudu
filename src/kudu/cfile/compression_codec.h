@@ -14,8 +14,8 @@
 #ifndef KUDU_CFILE_COMPRESSION_CODEC_H
 #define KUDU_CFILE_COMPRESSION_CODEC_H
 
+#include <memory>
 #include <string>
-#include <tr1/memory>
 #include <vector>
 
 #include "kudu/cfile/cfile.pb.h"
@@ -23,7 +23,7 @@
 #include "kudu/util/slice.h"
 #include "kudu/util/status.h"
 
-using std::tr1::shared_ptr;
+using std::shared_ptr;
 
 namespace kudu {
 namespace cfile {

@@ -19,8 +19,8 @@
 #include <glog/logging.h>
 #include <set>
 #include <string>
-#include <tr1/memory>
-#include <tr1/unordered_map>
+#include <memory>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -48,7 +48,7 @@
 
 using std::pair;
 using std::set;
-using std::tr1::unordered_map;
+using std::unordered_map;
 using strings::Substitute;
 
 namespace kudu {

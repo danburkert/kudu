@@ -16,8 +16,7 @@
 
 #include <map>
 #include <string>
-#include <tr1/memory>
-#include <tr1/unordered_set>
+#include <memory>
 #include <vector>
 
 #include "kudu/consensus/consensus.pb.h"
