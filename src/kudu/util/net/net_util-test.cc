@@ -61,7 +61,7 @@ TEST_F(NetUtilTest, TestParseAddresses) {
   ASSERT_OK(DoParseBindAddresses("0.0.0.0", &ret));
   ASSERT_EQ("0.0.0.0:7150", ret);
 
-  ASSERT_OK(DoParseBindAddresses("0.0.0.0:12345, 0.0.0.0:12346", &ret));
+  ASSERT_OK(DoParseBindAddresses("0.0.0.0:12346, 0.0.0.0:12345", &ret));
   ASSERT_EQ("0.0.0.0:12345,0.0.0.0:12346", ret);
 
   // Test some invalid addresses.
