@@ -147,7 +147,7 @@ Status PstackWatcher::RunGdbStackDump(pid_t pid, int flags) {
   }
   string executable;
   EnvWrapper env(Env::Default());
-  env.GetExecutablePath(&executable);
+  RETURN_NOT_OK(env.GetExecutablePath(&executable));
   argv.push_back(executable);
   argv.push_back(Substitute("$0", pid));
   return RunStackDump(prog, argv);
