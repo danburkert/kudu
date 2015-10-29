@@ -404,7 +404,8 @@ TEST_F(TestRpc, TestServerShutsDown) {
     ASSERT_TRUE(s.posix_code() == EPIPE ||
                 s.posix_code() == ECONNRESET ||
                 s.posix_code() == ESHUTDOWN ||
-                s.posix_code() == ECONNREFUSED);
+                s.posix_code() == ECONNREFUSED)
+      << "Unexpected status: " << s.ToString();
   }
 }
 
