@@ -158,7 +158,9 @@ class HybridClock : public Clock {
   // Used to get the current error, for metrics.
   uint64_t ErrorForMetrics();
 
+#if !defined(__APPLE__)
   uint64_t divisor_;
+#endif
 
   double tolerance_adjustment_;
 

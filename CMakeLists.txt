@@ -63,6 +63,9 @@ endif()
 #     fundamental limitations in escape analysis, which can result in subtle bad code generation.
 #     This has a small perf hit but worth it to avoid hard to debug crashes.
 set(CXX_COMMON_FLAGS "-fno-strict-aliasing -msse4.2 -Wall -Wno-sign-compare -Wno-deprecated -pthread -D__STDC_FORMAT_MACROS")
+if (APPLE)
+  set(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -Wno-inconsistent-missing-override")
+endif()
 
 # We want short macros from util/status.h.
 add_definitions(-DKUDU_HEADERS_USE_SHORT_STATUS_MACROS=1)
