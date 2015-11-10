@@ -60,7 +60,7 @@ class KUDU_EXPORT KuduWriteOperation {
   explicit KuduWriteOperation(const std::shared_ptr<KuduTable>& table);
   virtual Type type() const = 0;
 
-  std::shared_ptr<KuduTable> const table_;
+  shared_ptr<KuduTable> const table_;
   KuduPartialRow row_;
 
  private:

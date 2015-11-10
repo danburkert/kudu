@@ -32,21 +32,6 @@
 #include "kudu/util/monotime.h"
 #include "kudu/util/status.h"
 
-#if __GXX_EXPERIMENTAL_CXX0X__ || __cplusplus >= 201103L
-// Import std::shared_ptr as std::tr1::shared_ptr. The effect is that on
-// compilers with support, std::shared_ptr will be used. Otherwise,
-// std::tr1::shared_ptr will be used.
-#include <memory>
-namespace std {
-namespace tr1 {
-using ::std::enable_shared_from_this;
-using ::std::shared_ptr;
-} // namespace tr1
-} // namespace std
-#else
-#include <tr1/memory>
-#endif // if __GXX_EXPERIMENTAL_CXX0X__ || __cplusplus >= 201103L
-
 namespace kudu {
 
 class LinkedListTester;
@@ -144,10 +129,13 @@ class KUDU_EXPORT KuduClientBuilder {
 
   // Creates the client.
   //
+  // The caller is responsible for deleting the client.
+  //
   // The return value may indicate an error in the create operation, or a
   // misuse of the builder; in the latter case, only the last error is
   // returned.
-  Status Build(std::tr1::shared_ptr<KuduClient>* client);
+  Status Build(KuduClient** client);
+
  private:
   class KUDU_NO_EXPORT Data;
 
@@ -181,7 +169,7 @@ class KUDU_EXPORT KuduClientBuilder {
 // as well.
 //
 // This class is thread-safe.
-class KUDU_EXPORT KuduClient : public std::tr1::enable_shared_from_this<KuduClient> {
+class KUDU_EXPORT KuduClient {
  public:
   ~KuduClient();
 
@@ -224,12 +212,12 @@ class KUDU_EXPORT KuduClient : public std::tr1::enable_shared_from_this<KuduClie
   // TODO: should we offer an async version of this as well?
   // TODO: probably should have a configurable timeout in KuduClientBuilder?
   Status OpenTable(const std::string& table_name,
-                   std::tr1::shared_ptr<KuduTable>* table);
+                   KuduTable** table);
 
   // Create a new session for interacting with the cluster.
-  // User is responsible for destroying the session object.
+  // User is responsible for deleting the session object.
   // This is a fully local operation (no RPCs or blocking).
-  std::tr1::shared_ptr<KuduSession> NewSession();
+  KuduSession* NewSession();
 
   // Policy with which to choose amongst multiple replicas.
   enum ReplicaSelection {
@@ -390,7 +378,7 @@ class KUDU_EXPORT KuduTableCreator {
 // and the schema fetched for introspection.
 //
 // This class is thread-safe.
-class KUDU_EXPORT KuduTable : public std::tr1::enable_shared_from_this<KuduTable> {
+class KUDU_EXPORT KuduTable {
  public:
   ~KuduTable();
 
@@ -437,7 +425,7 @@ class KUDU_EXPORT KuduTable : public std::tr1::enable_shared_from_this<KuduTable
 
   friend class KuduClient;
 
-  KuduTable(const std::tr1::shared_ptr<KuduClient>& client,
+  KuduTable(const KuduClient& client,
             const std::string& name,
             const std::string& table_id,
             const KuduSchema& schema,
@@ -604,7 +592,7 @@ class KUDU_EXPORT KuduError {
 // concept of a Session familiar.
 //
 // This class is not thread-safe except where otherwise specified.
-class KUDU_EXPORT KuduSession : public std::tr1::enable_shared_from_this<KuduSession> {
+class KUDU_EXPORT KuduSession {
  public:
   ~KuduSession();
 
@@ -776,7 +764,7 @@ class KUDU_EXPORT KuduSession : public std::tr1::enable_shared_from_this<KuduSes
 
   friend class KuduClient;
   friend class internal::Batcher;
-  explicit KuduSession(const std::tr1::shared_ptr<KuduClient>& client);
+  explicit KuduSession(const KuduClient& client);
 
   // Owned.
   Data* data_;

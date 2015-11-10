@@ -74,7 +74,6 @@ using kudu::rpc::RpcController;
 using kudu::tserver::ScanResponsePB;
 using std::set;
 using std::string;
-using std::tr1::shared_ptr;
 using std::vector;
 
 MAKE_ENUM_LIMITS(kudu::client::KuduSession::FlushMode,
@@ -192,10 +191,10 @@ KuduClientBuilder& KuduClientBuilder::default_rpc_timeout(const MonoDelta& timeo
   return *this;
 }
 
-Status KuduClientBuilder::Build(shared_ptr<KuduClient>* client) {
+Status KuduClientBuilder::Build(KuduClient** client) {
   RETURN_NOT_OK(CheckCPUFlags());
 
-  shared_ptr<KuduClient> c(new KuduClient());
+  KuduClient* c = new KuduClient();
 
   // Init messenger.
   MessengerBuilder builder("client");
@@ -219,7 +218,7 @@ Status KuduClientBuilder::Build(shared_ptr<KuduClient>* client) {
   RETURN_NOT_OK_PREPEND(c->data_->InitLocalHostNames(),
                         "Could not determine local host names");
 
-  client->swap(c);
+  *client = c;
   return Status::OK();
 }
 
@@ -343,7 +342,7 @@ Status KuduClient::TableExists(const string& table_name, bool* exists) {
 }
 
 Status KuduClient::OpenTable(const string& table_name,
-                             shared_ptr<KuduTable>* table) {
+                             KuduTable** table) {
   KuduSchema schema;
   string table_id;
   PartitionSchema partition_schema;
@@ -358,10 +357,13 @@ Status KuduClient::OpenTable(const string& table_name,
 
   // In the future, probably will look up the table in some map to reuse KuduTable
   // instances.
-  shared_ptr<KuduTable> ret(new KuduTable(shared_from_this(), table_name, table_id,
-                                          schema, partition_schema));
-  RETURN_NOT_OK(ret->data_->Open());
-  table->swap(ret);
+  KuduTable* ret = new KuduTable(shared_from_this(),
+                                 table_name,
+                                 table_id,
+                                 schema,
+                                 partition_schema);
+  RETURN_NO_OK(table->open_->Open());
+  *table = ret;
 
   return Status::OK();
 }
@@ -612,7 +614,7 @@ KuduError::~KuduError() {
 // KuduSession
 ////////////////////////////////////////////////////////////
 
-KuduSession::KuduSession(const shared_ptr<KuduClient>& client)
+KuduSession::KuduSession(KuduClient** client)
   : data_(new KuduSession::Data(client)) {
 }
 
