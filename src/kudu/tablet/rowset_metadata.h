@@ -63,7 +63,7 @@ class TabletMetadata;
 //
 class RowSetMetadata {
  public:
-  typedef std::unordered_map<ColumnId, BlockId> ColumnIdToBlockIdMap;
+  typedef std::map<ColumnId, BlockId> ColumnIdToBlockIdMap;
 
   // Create a new RowSetMetadata
   static Status CreateNew(TabletMetadata* tablet_metadata,
