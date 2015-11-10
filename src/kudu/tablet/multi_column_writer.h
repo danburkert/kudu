@@ -74,7 +74,7 @@ class MultiColumnWriter {
   // Return the block IDs of the written columns, keyed by column ID.
   //
   // REQUIRES: Finish() already called.
-  void GetFlushedBlocksByColumnId(std::unordered_map<ColumnId, BlockId>* ret) const;
+  void GetFlushedBlocksByColumnId(std::map<ColumnId, BlockId>* ret) const;
 
  private:
   FsManager* const fs_;
