@@ -17,7 +17,6 @@
 #include <algorithm>
 #include <boost/bind.hpp>
 #include <set>
-#include <tr1/memory>
 #include <tr1/unordered_map>
 #include <vector>
 
@@ -54,7 +53,6 @@
 
 using std::set;
 using std::string;
-using std::tr1::shared_ptr;
 using std::vector;
 using kudu::master::AlterTableRequestPB;
 using kudu::master::AlterTableRequestPB_Step;
@@ -95,6 +93,7 @@ namespace client {
 using internal::Batcher;
 using internal::ErrorCollector;
 using internal::MetaCache;
+using kudu::shared_ptr;
 
 static const int kHtTimestampBitsToShift = 12;
 static const char* kProgName = "kudu_client";

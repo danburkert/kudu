@@ -18,7 +18,6 @@
 #include <gflags/gflags.h>
 #include <glog/stl_logging.h>
 
-#include <tr1/memory>
 #include <vector>
 #include <algorithm>
 
@@ -76,19 +75,18 @@ METRIC_DECLARE_counter(scans_started);
 METRIC_DECLARE_counter(rpcs_queue_overflow);
 
 using boost::assign::list_of;
-using std::string;
 using std::set;
-using std::tr1::shared_ptr;
+using std::string;
 using std::vector;
+using kudu::shared_ptr;
 
 namespace kudu {
 namespace client {
 
-
 using base::subtle::Atomic32;
+using base::subtle::NoBarrier_AtomicIncrement;
 using base::subtle::NoBarrier_Load;
 using base::subtle::NoBarrier_Store;
-using base::subtle::NoBarrier_AtomicIncrement;
 using master::CatalogManager;
 using master::GetTableLocationsRequestPB;
 using master::GetTableLocationsResponsePB;
