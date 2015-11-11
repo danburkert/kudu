@@ -14,11 +14,11 @@
 #ifndef KUDU_CLIENT_BATCHER_H
 #define KUDU_CLIENT_BATCHER_H
 
-#include <tr1/memory>
 #include <tr1/unordered_set>
 #include <tr1/unordered_map>
 #include <vector>
 
+#include "kudu/client/shared_ptr.h"
 #include "kudu/gutil/gscoped_ptr.h"
 #include "kudu/gutil/macros.h"
 #include "kudu/gutil/ref_counted.h"
@@ -61,7 +61,7 @@ class Batcher : public RefCountedThreadSafe<Batcher> {
   // Takes a reference on error_collector. Creates a weak_ptr to 'session'.
   Batcher(KuduClient* client,
           ErrorCollector* error_collector,
-          const std::tr1::shared_ptr<KuduSession>& session);
+          const kudu::shared_ptr<KuduSession>& session);
 
   // Abort the current batch. Any writes that were buffered and not yet sent are
   // discarded. Those that were sent may still be delivered.  If there is a pending Flush
@@ -150,7 +150,7 @@ class Batcher : public RefCountedThreadSafe<Batcher> {
   State state_;
 
   KuduClient* const client_;
-  std::tr1::weak_ptr<KuduSession> weak_session_;
+  kudu::weak_ptr<KuduSession> weak_session_;
 
   // Errors are reported into this error collector.
   scoped_refptr<ErrorCollector> const error_collector_;

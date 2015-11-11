@@ -125,7 +125,7 @@ class KuduRowSetTest : public KuduTabletTest {
   virtual void SetUp() OVERRIDE {
     KuduTabletTest::SetUp();
     ASSERT_OK(tablet()->metadata()->CreateRowSet(&rowset_meta_,
-                                                       SchemaBuilder(schema_).Build()));
+                                                 SchemaBuilder(schema_).Build()));
   }
 
   Status FlushMetadata() {
