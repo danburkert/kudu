@@ -24,7 +24,7 @@
 
 DEFINE_int32(num_rows_per_tablet, 100, "The number of rows to be inserted into each tablet");
 
-using std::tr1::shared_ptr;
+using kudu::shared_ptr;
 using std::vector;
 
 namespace kudu {
@@ -416,7 +416,7 @@ class AllTypesItest : public KuduTest {
   TestSetup setup_;
   KuduSchema schema_;
   vector<KuduPartialRow> split_rows_;
-  std::tr1::shared_ptr<KuduClient> client_;
+  shared_ptr<KuduClient> client_;
   gscoped_ptr<ExternalMiniCluster> cluster_;
   shared_ptr<KuduTable> table_;
 };

@@ -56,7 +56,6 @@ namespace kudu {
 using std::map;
 using std::pair;
 using std::vector;
-using std::tr1::shared_ptr;
 using client::KuduClient;
 using client::KuduClientBuilder;
 using client::KuduColumnSchema;
@@ -72,6 +71,7 @@ using client::KuduTableAlterer;
 using client::KuduTableCreator;
 using client::KuduUpdate;
 using client::KuduValue;
+using kudu::shared_ptr;
 using master::MiniMaster;
 using master::AlterTableRequestPB;
 using master::AlterTableResponsePB;
@@ -235,7 +235,7 @@ class AlterTableTest : public KuduTest {
   static const char *kTableName;
 
   gscoped_ptr<MiniCluster> cluster_;
-  std::tr1::shared_ptr<KuduClient> client_;
+  shared_ptr<KuduClient> client_;
 
   KuduSchema schema_;
 
