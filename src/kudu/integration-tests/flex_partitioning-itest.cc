@@ -50,7 +50,6 @@ using client::KuduSession;
 using client::KuduTable;
 using client::KuduTableCreator;
 using client::KuduValue;
-using std::shared_ptr;
 using std::unordered_map;
 using std::vector;
 using strings::Substitute;
@@ -180,15 +179,15 @@ class FlexPartitioningITest : public KuduTest {
   gscoped_ptr<ExternalMiniCluster> cluster_;
   unordered_map<string, TServerDetails*> ts_map_;
 
-  shared_ptr<KuduClient> client_;
-  shared_ptr<KuduTable> table_;
+  client::sp::shared_ptr<KuduClient> client_;
+  client::sp::shared_ptr<KuduTable> table_;
   vector<KuduPartialRow*> inserted_rows_;
 };
 
 Status FlexPartitioningITest::InsertRandomRows() {
   CHECK(inserted_rows_.empty());
 
-  shared_ptr<KuduSession> session(client_->NewSession());
+  client::sp::shared_ptr<KuduSession> session(client_->NewSession());
   session->SetTimeoutMillis(10000);
   RETURN_NOT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
   for (uint64_t i = 0; i < kNumRows; i++) {

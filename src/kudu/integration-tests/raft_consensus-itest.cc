@@ -79,7 +79,6 @@ using master::TabletLocationsPB;
 using rpc::RpcController;
 using server::SetFlagRequestPB;
 using server::SetFlagResponsePB;
-using std::shared_ptr;
 using std::unordered_map;
 using std::unordered_set;
 using std::vector;
@@ -200,10 +199,10 @@ class RaftConsensusITest : public TabletServerIntegrationTestBase {
                                   uint64_t count,
                                   uint64_t num_batches,
                                   const vector<CountDownLatch*>& latches) {
-    shared_ptr<KuduTable> table;
+    client::sp::shared_ptr<KuduTable> table;
     CHECK_OK(client_->OpenTable(kTableId, &table));
 
-    shared_ptr<KuduSession> session = client_->NewSession();
+    client::sp::shared_ptr<KuduSession> session = client_->NewSession();
     session->SetTimeoutMillis(60000);
     CHECK_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
 
@@ -389,7 +388,7 @@ class RaftConsensusITest : public TabletServerIntegrationTestBase {
                                       int64_t* orig_term,
                                       string* fell_behind_uuid);
 
-  shared_ptr<KuduTable> table_;
+  client::sp::shared_ptr<KuduTable> table_;
   std::vector<scoped_refptr<kudu::Thread> > threads_;
   CountDownLatch inserters_;
 };
@@ -422,7 +421,7 @@ TEST_F(RaftConsensusITest, TestGetPermanentUuid) {
 
   rpc::MessengerBuilder builder("test builder");
   builder.set_num_reactors(1);
-  shared_ptr<rpc::Messenger> messenger;
+  std::shared_ptr<rpc::Messenger> messenger;
   ASSERT_OK(builder.Build(&messenger));
 
   ASSERT_OK(consensus::SetPermanentUuidForRemotePeer(messenger, &peer));

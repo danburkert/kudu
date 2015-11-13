@@ -14,7 +14,6 @@
 #ifndef KUDU_CLIENT_BATCHER_H
 #define KUDU_CLIENT_BATCHER_H
 
-#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -36,6 +35,7 @@ class KuduClient;
 class KuduSession;
 class KuduStatusCallback;
 class KuduWriteOperation;
+
 
 namespace internal {
 
@@ -62,7 +62,7 @@ class Batcher : public RefCountedThreadSafe<Batcher> {
   // Takes a reference on error_collector. Creates a weak_ptr to 'session'.
   Batcher(KuduClient* client,
           ErrorCollector* error_collector,
-          const std::shared_ptr<KuduSession>& session,
+          const client::sp::shared_ptr<KuduSession>& session,
           kudu::client::KuduSession::ExternalConsistencyMode consistency_mode);
 
   // Abort the current batch. Any writes that were buffered and not yet sent are
@@ -158,7 +158,7 @@ class Batcher : public RefCountedThreadSafe<Batcher> {
   State state_;
 
   KuduClient* const client_;
-  std::weak_ptr<KuduSession> weak_session_;
+  client::sp::weak_ptr<KuduSession> weak_session_;
 
   // The consistency mode set in the session.
   kudu::client::KuduSession::ExternalConsistencyMode consistency_mode_;

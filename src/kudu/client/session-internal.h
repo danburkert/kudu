@@ -14,7 +14,6 @@
 #ifndef KUDU_CLIENT_SESSION_INTERNAL_H
 #define KUDU_CLIENT_SESSION_INTERNAL_H
 
-#include <memory>
 #include <unordered_set>
 
 #include "kudu/client/client.h"
@@ -31,14 +30,14 @@ class ErrorCollector;
 
 class KuduSession::Data {
  public:
-  explicit Data(const std::shared_ptr<KuduClient>& client);
+  explicit Data(const sp::shared_ptr<KuduClient>& client);
   ~Data();
 
-  void Init(const std::shared_ptr<KuduSession>& session);
+  void Init(const client::sp::shared_ptr<KuduSession>& session);
 
   // Swap in a new Batcher instance, returning the old one in '*old_batcher', unless it is
   // NULL.
-  void NewBatcher(const std::shared_ptr<KuduSession>& session,
+  void NewBatcher(const sp::shared_ptr<KuduSession>& session,
                   scoped_refptr<internal::Batcher>* old_batcher);
 
   // Called by Batcher when a flush has finished.
@@ -50,7 +49,7 @@ class KuduSession::Data {
   Status Close(bool force);
 
   // The client that this session is associated with.
-  const std::shared_ptr<KuduClient> client_;
+  const sp::shared_ptr<KuduClient> client_;
 
   // Lock protecting internal state.
   // Note that this lock should not be taken if the thread is already holding

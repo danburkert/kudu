@@ -36,7 +36,6 @@ using client::KuduSchemaBuilder;
 using client::KuduTable;
 using client::KuduTableCreator;
 using std::static_pointer_cast;
-using std::shared_ptr;
 using std::vector;
 using std::string;
 using strings::Substitute;
@@ -100,13 +99,13 @@ class RemoteKsckTest : public KuduTest {
   void GenerateRowWritesLoop(CountDownLatch* started_writing,
                              const AtomicBool& continue_writing,
                              Promise<Status>* promise) {
-    shared_ptr<KuduTable> table;
+    client::sp::shared_ptr<KuduTable> table;
     Status status;
     status = client_->OpenTable(kTableName, &table);
     if (!status.ok()) {
       promise->Set(status);
     }
-    shared_ptr<KuduSession> session(client_->NewSession());
+    client::sp::shared_ptr<KuduSession> session(client_->NewSession());
     session->SetTimeoutMillis(10000);
     status = session->SetFlushMode(KuduSession::MANUAL_FLUSH);
     if (!status.ok()) {
@@ -143,9 +142,9 @@ class RemoteKsckTest : public KuduTest {
   }
 
   Status GenerateRowWrites(uint64_t num_rows) {
-    shared_ptr<KuduTable> table;
+    client::sp::shared_ptr<KuduTable> table;
     RETURN_NOT_OK(client_->OpenTable(kTableName, &table));
-    shared_ptr<KuduSession> session(client_->NewSession());
+    client::sp::shared_ptr<KuduSession> session(client_->NewSession());
     session->SetTimeoutMillis(10000);
     RETURN_NOT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
     for (uint64_t i = 0; i < num_rows; i++) {
@@ -162,16 +161,16 @@ class RemoteKsckTest : public KuduTest {
     return Status::OK();
   }
 
-  shared_ptr<Ksck> ksck_;
-  shared_ptr<client::KuduClient> client_;
+  std::shared_ptr<Ksck> ksck_;
+  client::sp::shared_ptr<client::KuduClient> client_;
 
  private:
   Sockaddr master_rpc_addr_;
-  shared_ptr<MiniCluster> mini_cluster_;
+  std::shared_ptr<MiniCluster> mini_cluster_;
   client::KuduSchema schema_;
-  shared_ptr<client::KuduTable> client_table_;
-  shared_ptr<KsckMaster> master_;
-  shared_ptr<KsckCluster> cluster_;
+  client::sp::shared_ptr<client::KuduTable> client_table_;
+  std::shared_ptr<KsckMaster> master_;
+  std::shared_ptr<KsckCluster> cluster_;
   Random random_;
 };
 

@@ -15,7 +15,6 @@
 #include <boost/optional.hpp>
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
-#include <memory>
 #include <string>
 #include <unordered_map>
 
@@ -56,7 +55,6 @@ using kudu::itest::TServerDetails;
 using kudu::tablet::TABLET_DATA_TOMBSTONED;
 using kudu::tserver::ListTabletsResponsePB;
 using kudu::tserver::RemoteBootstrapClient;
-using std::shared_ptr;
 using std::string;
 using std::unordered_map;
 using std::vector;
@@ -99,7 +97,7 @@ class RemoteBootstrapITest : public KuduTest {
 
   gscoped_ptr<ExternalMiniCluster> cluster_;
   gscoped_ptr<itest::ExternalMiniClusterFsInspector> inspect_;
-  shared_ptr<KuduClient> client_;
+  client::sp::shared_ptr<KuduClient> client_;
   unordered_map<string, TServerDetails*> ts_map_;
 };
 

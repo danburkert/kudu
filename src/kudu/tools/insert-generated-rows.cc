@@ -39,7 +39,6 @@ DEFINE_string(master_address, "localhost",
 namespace kudu {
 namespace tools {
 
-using std::shared_ptr;
 using std::string;
 using std::vector;
 
@@ -72,17 +71,17 @@ static int WriteRandomDataToTable(int argc, char** argv) {
 
   // Set up client.
   LOG(INFO) << "Connecting to Kudu Master...";
-  shared_ptr<KuduClient> client;
+  client::sp::shared_ptr<KuduClient> client;
   CHECK_OK(KuduClientBuilder()
            .master_server_addrs(addrs)
            .Build(&client));
 
   LOG(INFO) << "Opening table...";
-  shared_ptr<KuduTable> table;
+  client::sp::shared_ptr<KuduTable> table;
   CHECK_OK(client->OpenTable(table_name, &table));
   KuduSchema schema = table->schema();
 
-  shared_ptr<KuduSession> session = client->NewSession();
+  client::sp::shared_ptr<KuduSession> session = client->NewSession();
   session->SetTimeoutMillis(5000); // Time out after 5 seconds.
   CHECK_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
 
