@@ -32,7 +32,6 @@ METRIC_DECLARE_counter(leader_memory_pressure_rejections);
 METRIC_DECLARE_counter(follower_memory_pressure_rejections);
 
 using strings::Substitute;
-using std::shared_ptr;
 using std::vector;
 
 namespace kudu {
@@ -65,7 +64,7 @@ class ClientStressTest : public KuduTest {
 
  protected:
   void ScannerThread(KuduClient* client, const CountDownLatch* go_latch, int32_t start_key) {
-    shared_ptr<KuduTable> table;
+    client::sp::shared_ptr<KuduTable> table;
     CHECK_OK(client->OpenTable(TestWorkload::kDefaultTableName, &table));
     vector<string> rows;
 
@@ -125,7 +124,7 @@ TEST_F(ClientStressTest, TestStartScans) {
   for (int run = 1; run <= (AllowSlowTests() ? 10 : 2); run++) {
     LOG(INFO) << "Starting run " << run;
     KuduClientBuilder builder;
-    shared_ptr<KuduClient> client;
+    client::sp::shared_ptr<KuduClient> client;
     CHECK_OK(cluster_->CreateClient(builder, &client));
 
     CountDownLatch go_latch(1);

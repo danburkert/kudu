@@ -238,7 +238,7 @@ class ExternalMiniCluster {
   //
   // REQUIRES: the cluster must have already been Start()ed.
   Status CreateClient(client::KuduClientBuilder& builder,
-                      std::shared_ptr<client::KuduClient>* client);
+                      client::sp::shared_ptr<client::KuduClient>* client);
 
   // Sets the given flag on the given daemon, which must be running.
   //

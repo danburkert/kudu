@@ -15,7 +15,6 @@
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
 
-#include <memory>
 #include <vector>
 
 #include "kudu/client/client.h"
@@ -27,7 +26,6 @@
 #include "kudu/master/mini_master.h"
 #include "kudu/util/test_util.h"
 
-using std::shared_ptr;
 using std::vector;
 
 namespace kudu {
@@ -96,7 +94,7 @@ class MasterReplicationTest : public KuduTest {
     }
   }
 
-  Status CreateClient(shared_ptr<KuduClient>* out) {
+  Status CreateClient(client::sp::shared_ptr<KuduClient>* out) {
     KuduClientBuilder builder;
     for (int i = 0; i < num_masters_; i++) {
       if (!cluster_->mini_master(i)->master()->IsShutdown()) {
@@ -107,7 +105,7 @@ class MasterReplicationTest : public KuduTest {
   }
 
 
-  Status CreateTable(const shared_ptr<KuduClient>& client,
+  Status CreateTable(const client::sp::shared_ptr<KuduClient>& client,
                      const std::string& table_name) {
     KuduSchema schema;
     KuduSchemaBuilder b;
@@ -143,7 +141,7 @@ class MasterReplicationTest : public KuduTest {
 // the leader and ensure that the appropriate table/tablet info is
 // replicated to the newly elected leader.
 TEST_F(MasterReplicationTest, TestSysTablesReplication) {
-  shared_ptr<KuduClient> client;
+  client::sp::shared_ptr<KuduClient> client;
 
   // Create the first table.
   ASSERT_OK(CreateClient(&client));
@@ -167,7 +165,7 @@ TEST_F(MasterReplicationTest, TestTimeoutWhenAllMastersAreDown) {
 
   cluster_->Shutdown();
 
-  shared_ptr<KuduClient> client;
+  client::sp::shared_ptr<KuduClient> client;
   KuduClientBuilder builder;
   builder.master_server_addrs(master_addrs);
   builder.default_rpc_timeout(MonoDelta::FromMilliseconds(100));
@@ -198,7 +196,7 @@ TEST_F(MasterReplicationTest, TestCycleThroughAllMasters) {
 
   // Verify that the client doesn't give up even though the entire
   // cluster is down for 100 milliseconds.
-  shared_ptr<KuduClient> client;
+  client::sp::shared_ptr<KuduClient> client;
   KuduClientBuilder builder;
   builder.master_server_addrs(master_addrs);
   builder.default_admin_operation_timeout(MonoDelta::FromSeconds(15));

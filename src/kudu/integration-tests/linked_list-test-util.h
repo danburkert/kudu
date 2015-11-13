@@ -17,7 +17,6 @@
 #include <glog/logging.h>
 #include <iostream>
 #include <list>
-#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -58,7 +57,7 @@ typedef vector<pair<uint64_t, int64_t> > SnapsAndCounts;
 // facilitates checking for data integrity.
 class LinkedListTester {
  public:
-  LinkedListTester(const std::shared_ptr<client::KuduClient>& client,
+  LinkedListTester(const client::sp::shared_ptr<client::KuduClient>& client,
                    const std::string& table_name,
                    int num_chains,
                    int num_tablets,
@@ -164,7 +163,7 @@ class LinkedListTester {
   const int num_replicas_;
   const bool enable_mutation_;
   HdrHistogram latency_histogram_;
-  std::shared_ptr<client::KuduClient> client_;
+  client::sp::shared_ptr<client::KuduClient> client_;
   SnapsAndCounts sampled_timestamps_and_counts_;
 
  private:
@@ -252,7 +251,7 @@ class ScopedRowUpdater {
 
  private:
   void RowUpdaterThread() {
-    std::shared_ptr<client::KuduSession> session(table_->client()->NewSession());
+    client::sp::shared_ptr<client::KuduSession> session(table_->client()->NewSession());
     session->SetTimeoutMillis(15000);
     CHECK_OK(session->SetFlushMode(client::KuduSession::MANUAL_FLUSH));
 
@@ -435,7 +434,7 @@ Status LinkedListTester::LoadLinkedList(
     int64_t *written_count) {
 
   sampled_timestamps_and_counts_.clear();
-  std::shared_ptr<client::KuduTable> table;
+  client::sp::shared_ptr<client::KuduTable> table;
   RETURN_NOT_OK_PREPEND(client_->OpenTable(table_name_, &table),
                         "Could not open table " + table_name_);
 
@@ -451,7 +450,7 @@ Status LinkedListTester::LoadLinkedList(
   MonoTime deadline = start;
   deadline.AddDelta(run_for);
 
-  std::shared_ptr<client::KuduSession> session = client_->NewSession();
+  client::sp::shared_ptr<client::KuduSession> session = client_->NewSession();
   session->SetTimeoutMillis(15000);
   RETURN_NOT_OK_PREPEND(session->SetFlushMode(client::KuduSession::MANUAL_FLUSH),
                         "Couldn't set flush mode");
@@ -564,7 +563,7 @@ Status LinkedListTester::VerifyLinkedListRemote(
     const uint64_t snapshot_timestamp, const int64_t expected, bool log_errors,
     const boost::function<Status(const std::string&)>& cb, int64_t* verified_count) {
 
-  std::shared_ptr<client::KuduTable> table;
+  client::sp::shared_ptr<client::KuduTable> table;
   RETURN_NOT_OK(client_->OpenTable(table_name_, &table));
 
   string snapshot_str;

@@ -16,7 +16,6 @@
 
 #include <boost/foreach.hpp>
 #include <glog/stl_logging.h>
-#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -397,7 +396,7 @@ class TabletServerIntegrationTestBase : public TabletServerTestBase {
     STLDeleteValues(&tablet_servers_);
   }
 
-  void CreateClient(std::shared_ptr<client::KuduClient>* client) {
+  void CreateClient(client::sp::shared_ptr<client::KuduClient>* client) {
     // Connect to the cluster.
     ASSERT_OK(client::KuduClientBuilder()
                      .add_master_server_addr(cluster_->master()->bound_rpc_addr().ToString())
@@ -449,8 +448,8 @@ class TabletServerIntegrationTestBase : public TabletServerTestBase {
   // Maps tablet to all replicas.
   TabletReplicaMap tablet_replicas_;
 
-  std::shared_ptr<client::KuduClient> client_;
-  std::shared_ptr<client::KuduTable> table_;
+  client::sp::shared_ptr<client::KuduClient> client_;
+  client::sp::shared_ptr<client::KuduTable> table_;
   std::string tablet_id_;
 
   ThreadSafeRandom random_;

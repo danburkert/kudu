@@ -38,24 +38,28 @@
 
 using kudu::client::KuduClient;
 using kudu::client::KuduClientBuilder;
+using kudu::client::KuduClientBuilder;
+using kudu::client::KuduSchema;
 using kudu::client::KuduSchema;
 using kudu::client::KuduSchemaFromSchema;
+using kudu::client::KuduSchemaFromSchema;
 using kudu::client::KuduTableCreator;
+using kudu::client::KuduTableCreator;
+using kudu::consensus::CONSENSUS_CONFIG_COMMITTED;
 using kudu::consensus::CONSENSUS_CONFIG_COMMITTED;
 using kudu::consensus::ConsensusMetadataPB;
 using kudu::consensus::ConsensusStatePB;
 using kudu::consensus::RaftPeerPB;
 using kudu::itest::TServerDetails;
-using kudu::tablet::TabletDataState;
 using kudu::tablet::TABLET_DATA_COPYING;
 using kudu::tablet::TABLET_DATA_DELETED;
 using kudu::tablet::TABLET_DATA_READY;
 using kudu::tablet::TABLET_DATA_TOMBSTONED;
+using kudu::tablet::TabletDataState;
 using kudu::tablet::TabletSuperBlockPB;
 using kudu::tserver::ListTabletsResponsePB;
 using kudu::tserver::TabletServerErrorPB;
 using std::numeric_limits;
-using std::shared_ptr;
 using std::string;
 using std::unordered_map;
 using std::vector;
@@ -142,7 +146,7 @@ class DeleteTableTest : public KuduTest {
 
   gscoped_ptr<ExternalMiniCluster> cluster_;
   gscoped_ptr<itest::ExternalMiniClusterFsInspector> inspect_;
-  shared_ptr<KuduClient> client_;
+  client::sp::shared_ptr<KuduClient> client_;
   unordered_map<string, TServerDetails*> ts_map_;
 };
 

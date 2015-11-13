@@ -34,8 +34,6 @@ using itest::TabletServerMap;
 using itest::TServerDetails;
 using strings::Substitute;
 
-using std::tr1::shared_ptr;
-
 static const char* const kAdminToolName = "kudu-admin";
 
 class AdminCliTest : public tserver::TabletServerIntegrationTestBase {
