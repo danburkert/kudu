@@ -33,8 +33,6 @@
 #include "kudu/util/stopwatch.h"
 #include "kudu/util/test_util.h"
 
-using std::shared_ptr;
-
 using kudu::client::KuduClient;
 using kudu::client::KuduClientBuilder;
 using kudu::client::KuduColumnSchema;
@@ -110,10 +108,10 @@ class CreateTableStressTest : public KuduTest {
   void CreateBigTable(const string& table_name, int num_tablets);
 
  protected:
-  shared_ptr<KuduClient> client_;
+  client::sp::shared_ptr<KuduClient> client_;
   gscoped_ptr<MiniCluster> cluster_;
   KuduSchema schema_;
-  shared_ptr<Messenger> messenger_;
+  std::shared_ptr<Messenger> messenger_;
   gscoped_ptr<MasterServiceProxy> master_proxy_;
   TabletServerMap ts_map_;
 };

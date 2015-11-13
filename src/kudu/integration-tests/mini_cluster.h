@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "kudu/client/shared_ptr.h"
 #include "kudu/gutil/macros.h"
 #include "kudu/util/env.h"
 
@@ -155,7 +156,7 @@ class MiniCluster {
   //
   // REQUIRES: the cluster must have already been Start()ed.
   Status CreateClient(client::KuduClientBuilder* builder,
-                      std::shared_ptr<client::KuduClient>* client);
+                      client::sp::shared_ptr<client::KuduClient>* client);
 
  private:
   enum {

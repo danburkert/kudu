@@ -15,7 +15,7 @@
 #include <ctime>
 #include <iostream>
 #include <sstream>
-#include <memory>
+#include <tr1/memory>
 
 #include "kudu/client/callbacks.h"
 #include "kudu/client/client.h"
@@ -47,7 +47,7 @@ using kudu::Status;
 using std::string;
 using std::stringstream;
 using std::vector;
-using std::shared_ptr;
+using std::tr1::shared_ptr;
 
 static Status CreateClient(const string& addr,
                            shared_ptr<KuduClient>* client) {

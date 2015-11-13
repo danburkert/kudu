@@ -38,8 +38,6 @@ DEFINE_int32(row_count, 2000, "How many rows will be used in this test for the b
 DEFINE_int32(seconds_to_run, 4,
              "How long this test runs for, after inserting the base data, in seconds");
 
-using std::shared_ptr;
-
 namespace kudu {
 namespace tablet {
 
@@ -117,8 +115,8 @@ class UpdateScanDeltaCompactionTest : public KuduTest {
     ASSERT_OK(client_builder.Build(&client_));
   }
 
-  shared_ptr<KuduSession> CreateSession() {
-    shared_ptr<KuduSession> session = client_->NewSession();
+  client::sp::shared_ptr<KuduSession> CreateSession() {
+    client::sp::shared_ptr<KuduSession> session = client_->NewSession();
     session->SetTimeoutMillis(5000);
     CHECK_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
     return session;
@@ -142,12 +140,12 @@ class UpdateScanDeltaCompactionTest : public KuduTest {
   Status WaitForLastBatchAndFlush(int64_t key,
                                   Synchronizer* last_s,
                                   KuduStatusCallback* last_s_cb,
-                                  shared_ptr<KuduSession> session);
+                                  client::sp::shared_ptr<KuduSession> session);
 
   KuduSchema schema_;
-  shared_ptr<MiniCluster> cluster_;
-  shared_ptr<KuduTable> table_;
-  shared_ptr<KuduClient> client_;
+  client::sp::shared_ptr<MiniCluster> cluster_;
+  client::sp::shared_ptr<KuduTable> table_;
+  client::sp::shared_ptr<KuduClient> client_;
 };
 
 const char* const UpdateScanDeltaCompactionTest::kTableName = "update-scan-delta-compact-tbl";
@@ -172,7 +170,7 @@ TEST_F(UpdateScanDeltaCompactionTest, TestAll) {
 }
 
 void UpdateScanDeltaCompactionTest::InsertBaseData() {
-  shared_ptr<KuduSession> session = CreateSession();
+  client::sp::shared_ptr<KuduSession> session = CreateSession();
   Synchronizer last_s;
   KuduStatusMemberCallback<Synchronizer> last_s_cb(&last_s,
                                                    &Synchronizer::StatusCB);
@@ -233,7 +231,7 @@ void UpdateScanDeltaCompactionTest::RunThreads() {
 }
 
 void UpdateScanDeltaCompactionTest::UpdateRows(CountDownLatch* stop_latch) {
-  shared_ptr<KuduSession> session = CreateSession();
+  client::sp::shared_ptr<KuduSession> session = CreateSession();
   Synchronizer last_s;
   KuduStatusMemberCallback<Synchronizer> last_s_cb(&last_s,
                                                    &Synchronizer::StatusCB);
@@ -296,7 +294,7 @@ void UpdateScanDeltaCompactionTest::MakeRow(int64_t key,
 Status UpdateScanDeltaCompactionTest::WaitForLastBatchAndFlush(int64_t key,
                                                                Synchronizer* last_s,
                                                                KuduStatusCallback* last_s_cb,
-                                                               shared_ptr<KuduSession> session) {
+                                                               client::sp::shared_ptr<KuduSession> session) {
   if (key % kSessionBatchSize == 0) {
     RETURN_NOT_OK(last_s->Wait());
     last_s->Reset();
