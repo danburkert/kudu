@@ -16,7 +16,6 @@
 
 #include <algorithm>
 #include <boost/bind.hpp>
-#include <memory>
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -73,7 +72,6 @@ using kudu::rpc::MessengerBuilder;
 using kudu::rpc::RpcController;
 using kudu::tserver::ScanResponsePB;
 using std::set;
-using std::shared_ptr;
 using std::string;
 using std::vector;
 
@@ -196,10 +194,10 @@ KuduClientBuilder& KuduClientBuilder::default_rpc_timeout(const MonoDelta& timeo
   return *this;
 }
 
-Status KuduClientBuilder::Build(shared_ptr<KuduClient>* client) {
+Status KuduClientBuilder::Build(sp::shared_ptr<KuduClient>* client) {
   RETURN_NOT_OK(CheckCPUFlags());
 
-  shared_ptr<KuduClient> c(new KuduClient());
+  sp::shared_ptr<KuduClient> c(new KuduClient());
 
   // Init messenger.
   MessengerBuilder builder("client");
@@ -347,7 +345,7 @@ Status KuduClient::TableExists(const string& table_name, bool* exists) {
 }
 
 Status KuduClient::OpenTable(const string& table_name,
-                             shared_ptr<KuduTable>* table) {
+                             sp::shared_ptr<KuduTable>* table) {
   KuduSchema schema;
   string table_id;
   PartitionSchema partition_schema;
@@ -362,16 +360,16 @@ Status KuduClient::OpenTable(const string& table_name,
 
   // In the future, probably will look up the table in some map to reuse KuduTable
   // instances.
-  shared_ptr<KuduTable> ret(new KuduTable(shared_from_this(), table_name, table_id,
-                                          schema, partition_schema));
+  sp::shared_ptr<KuduTable> ret(new KuduTable(shared_from_this(), table_name, table_id,
+                                 schema, partition_schema));
   RETURN_NOT_OK(ret->data_->Open());
   table->swap(ret);
 
   return Status::OK();
 }
 
-shared_ptr<KuduSession> KuduClient::NewSession() {
-  shared_ptr<KuduSession> ret(new KuduSession(shared_from_this()));
+sp::shared_ptr<KuduSession> KuduClient::NewSession() {
+  sp::shared_ptr<KuduSession> ret(new KuduSession(shared_from_this()));
   ret->data_->Init(ret);
   return ret;
 }
@@ -521,7 +519,7 @@ Status KuduTableCreator::Create() {
 // KuduTable
 ////////////////////////////////////////////////////////////
 
-KuduTable::KuduTable(const shared_ptr<KuduClient>& client,
+KuduTable::KuduTable(const sp::shared_ptr<KuduClient>& client,
                      const string& name,
                      const string& table_id,
                      const KuduSchema& schema,
@@ -620,7 +618,7 @@ KuduError::~KuduError() {
 // KuduSession
 ////////////////////////////////////////////////////////////
 
-KuduSession::KuduSession(const shared_ptr<KuduClient>& client)
+KuduSession::KuduSession(const sp::shared_ptr<KuduClient>& client)
   : data_(new KuduSession::Data(client)) {
 }
 

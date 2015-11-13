@@ -17,7 +17,6 @@
 #include <boost/function.hpp>
 #include <list>
 #include <memory>
-#include <memory>
 #include <stdint.h>
 #include <string>
 #include <vector>

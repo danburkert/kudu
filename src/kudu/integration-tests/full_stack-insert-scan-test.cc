@@ -70,16 +70,15 @@ DEFINE_bool(perf_fp_flag, false, "Only applicable with --perf_record_scan,"
 DECLARE_bool(enable_maintenance_manager);
 
 using std::string;
-using std::shared_ptr;
 using std::vector;
 
 namespace kudu {
 namespace tablet {
 
-using client::KuduInsert;
 using client::KuduClient;
 using client::KuduClientBuilder;
 using client::KuduColumnSchema;
+using client::KuduInsert;
 using client::KuduRowResult;
 using client::KuduScanner;
 using client::KuduSchema;
@@ -173,7 +172,7 @@ class FullStackInsertScanTest : public KuduTest {
   // Adds newly generated client's session and table pointers to arrays at id
   void CreateNewClient(int id) {
     ASSERT_OK(client_->OpenTable(kTableName, &tables_[id]));
-    shared_ptr<KuduSession> session = client_->NewSession();
+    client::sp::shared_ptr<KuduSession> session = client_->NewSession();
     session->SetTimeoutMillis(kSessionTimeoutMs);
     ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
     sessions_[id] = session;
@@ -207,12 +206,12 @@ class FullStackInsertScanTest : public KuduTest {
   Random random_;
 
   KuduSchema schema_;
-  shared_ptr<MiniCluster> cluster_;
-  shared_ptr<KuduClient> client_;
-  shared_ptr<KuduTable> reader_table_;
+  std::shared_ptr<MiniCluster> cluster_;
+  client::sp::shared_ptr<KuduClient> client_;
+  client::sp::shared_ptr<KuduTable> reader_table_;
   // Concurrent client insertion test variables
-  vector<shared_ptr<KuduSession> > sessions_;
-  vector<shared_ptr<KuduTable> > tables_;
+  vector<client::sp::shared_ptr<KuduSession> > sessions_;
+  vector<client::sp::shared_ptr<KuduTable> > tables_;
 };
 
 namespace {
@@ -347,8 +346,8 @@ void FullStackInsertScanTest::InsertRows(CountDownLatch* start_latch, int id,
 
   start_latch->Wait();
   // Retrieve id's session and table
-  shared_ptr<KuduSession> session = sessions_[id];
-  shared_ptr<KuduTable> table = tables_[id];
+  client::sp::shared_ptr<KuduSession> session = sessions_[id];
+  client::sp::shared_ptr<KuduTable> table = tables_[id];
   // Identify start and end of keyrange id is responsible for
   int64_t start = kNumInsertsPerClient * id;
   int64_t end = start + kNumInsertsPerClient;

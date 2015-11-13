@@ -60,7 +60,6 @@ namespace tools {
 
 using std::ostringstream;
 using std::string;
-using std::shared_ptr;
 using std::vector;
 
 using google::protobuf::RepeatedPtrField;
@@ -126,9 +125,9 @@ class ClusterAdminClient {
   const MonoDelta timeout_;
 
   bool initted_;
-  shared_ptr<rpc::Messenger> messenger_;
+  std::shared_ptr<rpc::Messenger> messenger_;
   gscoped_ptr<MasterServiceProxy> master_proxy_;
-  shared_ptr<KuduClient> kudu_client_;
+  client::sp::shared_ptr<KuduClient> kudu_client_;
 
   DISALLOW_COPY_AND_ASSIGN(ClusterAdminClient);
 };

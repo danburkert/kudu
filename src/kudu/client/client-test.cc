@@ -17,7 +17,6 @@
 #include <gflags/gflags.h>
 #include <glog/stl_logging.h>
 
-#include <memory>
 #include <vector>
 #include <algorithm>
 
@@ -76,7 +75,6 @@ METRIC_DECLARE_counter(rpcs_queue_overflow);
 
 using std::string;
 using std::set;
-using std::shared_ptr;
 using std::vector;
 
 namespace kudu {
@@ -182,7 +180,7 @@ class ClientTest : public KuduTest {
 
   // Inserts 'num_rows' test rows using 'client'
   void InsertTestRows(KuduClient* client, KuduTable* table, int num_rows, int first_row = 0) {
-    shared_ptr<KuduSession> session = client->NewSession();
+    sp::shared_ptr<KuduSession> session = client->NewSession();
     ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
     session->SetTimeoutMillis(10000);
     for (int i = first_row; i < num_rows + first_row; i++) {
@@ -199,7 +197,7 @@ class ClientTest : public KuduTest {
   }
 
   void UpdateTestRows(KuduTable* table, int lo, int hi) {
-    shared_ptr<KuduSession> session = client_->NewSession();
+    sp::shared_ptr<KuduSession> session = client_->NewSession();
     ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
     session->SetTimeoutMillis(10000);
     for (int i = lo; i < hi; i++) {
@@ -211,7 +209,7 @@ class ClientTest : public KuduTest {
   }
 
   void DeleteTestRows(KuduTable* table, int lo, int hi) {
-    shared_ptr<KuduSession> session = client_->NewSession();
+    sp::shared_ptr<KuduSession> session = client_->NewSession();
     ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
     session->SetTimeoutMillis(10000);
     for (int i = lo; i < hi; i++) {
@@ -370,7 +368,7 @@ class ClientTest : public KuduTest {
   void CreateTable(const string& table_name,
                    int num_replicas,
                    const vector<const KuduPartialRow*>& split_rows,
-                   shared_ptr<KuduTable>* table) {
+                   sp::shared_ptr<KuduTable>* table) {
 
     bool added_replicas = false;
     // Add more tablet servers to satisfy all replicas, if necessary.
@@ -447,9 +445,9 @@ class ClientTest : public KuduTest {
   KuduSchema schema_;
 
   gscoped_ptr<MiniCluster> cluster_;
-  shared_ptr<KuduClient> client_;
-  shared_ptr<KuduTable> client_table_;
-  shared_ptr<KuduTable> client_table2_;
+  sp::shared_ptr<KuduClient> client_;
+  sp::shared_ptr<KuduTable> client_table_;
+  sp::shared_ptr<KuduTable> client_table2_;
 };
 
 const char *ClientTest::kTableName = "client-testtb";
@@ -480,7 +478,7 @@ TEST_F(ClientTest, TestListTabletServers) {
 }
 
 TEST_F(ClientTest, TestBadTable) {
-  shared_ptr<KuduTable> t;
+  sp::shared_ptr<KuduTable> t;
   Status s = client_->OpenTable("xxx-does-not-exist", &t);
   ASSERT_TRUE(s.IsNotFound());
   ASSERT_STR_CONTAINS(s.ToString(), "Not found: The table does not exist");
@@ -490,7 +488,7 @@ TEST_F(ClientTest, TestBadTable) {
 // to it (no "find the new leader master" since there's only one master).
 TEST_F(ClientTest, TestMasterDown) {
   cluster_->mini_master()->Shutdown();
-  shared_ptr<KuduTable> t;
+  sp::shared_ptr<KuduTable> t;
   client_->data_->default_admin_operation_timeout_ = MonoDelta::FromSeconds(1);
   Status s = client_->OpenTable("other-tablet", &t);
   ASSERT_TRUE(s.IsNetworkError());
@@ -607,12 +605,12 @@ TEST_F(ClientTest, TestScanMultiTablet) {
             .split_rows(rows)
             .Create());
 
-  shared_ptr<KuduTable> table;
+  sp::shared_ptr<KuduTable> table;
   ASSERT_OK(client_->OpenTable("TestScanMultiTablet", &table));
 
   // Insert rows with keys 12, 13, 15, 17, 22, 23, 25, 27...47 into each
   // tablet, except the first which is empty.
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
   session->SetTimeoutMillis(5000);
   for (int i = 1; i < 5; i++) {
@@ -869,7 +867,7 @@ TEST_F(ClientTest, TestInvalidPredicates) {
 // Check that the tserver proxy is reset on close, even for empty tables.
 TEST_F(ClientTest, TestScanCloseProxy) {
   const string kEmptyTable = "TestScanCloseProxy";
-  shared_ptr<KuduTable> table;
+  sp::shared_ptr<KuduTable> table;
   ASSERT_NO_FATAL_FAILURE(CreateTable(kEmptyTable, 3, GenerateSplitRows(), &table));
 
   {
@@ -956,7 +954,7 @@ static void DoScanWithCallback(KuduTable* table,
 TEST_F(ClientTest, TestScanFaultTolerance) {
   // Create test table and insert test rows.
   const string kScanTable = "TestScanFaultTolerance";
-  shared_ptr<KuduTable> table;
+  sp::shared_ptr<KuduTable> table;
   ASSERT_NO_FATAL_FAILURE(CreateTable(kScanTable, 3, vector<const KuduPartialRow*>(), &table));
   ASSERT_NO_FATAL_FAILURE(InsertTestRows(table.get(), FLAGS_test_scan_num_rows));
 
@@ -1016,7 +1014,7 @@ TEST_F(ClientTest, TestScanFaultTolerance) {
 }
 
 TEST_F(ClientTest, TestGetTabletServerBlacklist) {
-  shared_ptr<KuduTable> table;
+  sp::shared_ptr<KuduTable> table;
   ASSERT_NO_FATAL_FAILURE(CreateTable("blacklist",
                                       3,
                                       GenerateSplitRows(),
@@ -1095,7 +1093,7 @@ TEST_F(ClientTest, TestGetTabletServerBlacklist) {
 }
 
 TEST_F(ClientTest, TestScanWithEncodedRangePredicate) {
-  shared_ptr<KuduTable> table;
+  sp::shared_ptr<KuduTable> table;
   ASSERT_NO_FATAL_FAILURE(CreateTable("split-table",
                                       1, /* replicas */
                                       GenerateSplitRows(),
@@ -1392,7 +1390,7 @@ static gscoped_ptr<KuduError> GetSingleErrorFromSession(KuduSession* session) {
 // Simplest case of inserting through the client API: a single row
 // with manual batching.
 TEST_F(ClientTest, TestInsertSingleRowManualBatch) {
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   ASSERT_FALSE(session->HasPendingOperations());
 
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
@@ -1425,7 +1423,7 @@ TEST_F(ClientTest, TestInsertSingleRowManualBatch) {
 }
 
 static Status ApplyInsertToSession(KuduSession* session,
-                                   const shared_ptr<KuduTable>& table,
+                                   const sp::shared_ptr<KuduTable>& table,
                                    int row_key,
                                    int int_val,
                                    const char* string_val) {
@@ -1437,7 +1435,7 @@ static Status ApplyInsertToSession(KuduSession* session,
 }
 
 static Status ApplyUpdateToSession(KuduSession* session,
-                                   const shared_ptr<KuduTable>& table,
+                                   const sp::shared_ptr<KuduTable>& table,
                                    int row_key,
                                    int int_val) {
   gscoped_ptr<KuduUpdate> update(table->NewUpdate());
@@ -1447,7 +1445,7 @@ static Status ApplyUpdateToSession(KuduSession* session,
 }
 
 static Status ApplyDeleteToSession(KuduSession* session,
-                                   const shared_ptr<KuduTable>& table,
+                                   const sp::shared_ptr<KuduTable>& table,
                                    int row_key) {
   gscoped_ptr<KuduDelete> del(table->NewDelete());
   RETURN_NOT_OK(del->mutable_row()->SetInt32("key", row_key));
@@ -1455,7 +1453,7 @@ static Status ApplyDeleteToSession(KuduSession* session,
 }
 
 TEST_F(ClientTest, TestWriteTimeout) {
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
 
   // First time out the lookup on the master side.
@@ -1495,7 +1493,7 @@ TEST_F(ClientTest, TestWriteTimeout) {
 // Test which does an async flush and then drops the reference
 // to the Session. This should still call the callback.
 TEST_F(ClientTest, TestAsyncFlushResponseAfterSessionDropped) {
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
   ASSERT_OK(ApplyInsertToSession(session.get(), client_table_, 1, 1, "row"));
   Synchronizer s;
@@ -1517,7 +1515,7 @@ TEST_F(ClientTest, TestAsyncFlushResponseAfterSessionDropped) {
 }
 
 TEST_F(ClientTest, TestSessionClose) {
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
   ASSERT_OK(ApplyInsertToSession(session.get(), client_table_, 1, 1, "row"));
   // Closing the session now should return Status::IllegalState since we
@@ -1535,7 +1533,7 @@ TEST_F(ClientTest, TestSessionClose) {
 // Test which sends multiple batches through the same session, each of which
 // contains multiple rows spread across multiple tablets.
 TEST_F(ClientTest, TestMultipleMultiRowManualBatches) {
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
 
   const int kNumBatches = 5;
@@ -1573,7 +1571,7 @@ TEST_F(ClientTest, TestMultipleMultiRowManualBatches) {
 // Test a batch where one of the inserted rows succeeds while another
 // fails.
 TEST_F(ClientTest, TestBatchWithPartialError) {
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
 
   // Insert a row with key "1"
@@ -1607,13 +1605,13 @@ TEST_F(ClientTest, TestBatchWithPartialError) {
 
 // Test flushing an empty batch (should be a no-op).
 TEST_F(ClientTest, TestEmptyBatch) {
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
   FlushSessionOrDie(session);
 }
 
 void ClientTest::DoTestWriteWithDeadServer(WhichServerToKill which) {
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   session->SetTimeoutMillis(1000);
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
 
@@ -1660,7 +1658,7 @@ TEST_F(ClientTest, TestWriteWithDeadTabletServer) {
 }
 
 void ClientTest::DoApplyWithoutFlushTest(int sleep_micros) {
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
   ASSERT_OK(ApplyInsertToSession(session.get(), client_table_, 1, 1, "x"));
   SleepFor(MonoDelta::FromMicroseconds(sleep_micros));
@@ -1699,7 +1697,7 @@ TEST_F(ClientTest, TestApplyTooMuchWithoutFlushing) {
   // in an error.
   {
     bool got_expected_error = false;
-    shared_ptr<KuduSession> session = client_->NewSession();
+    sp::shared_ptr<KuduSession> session = client_->NewSession();
     ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
     for (int i = 0; i < 1000000; i++) {
       Status s = ApplyInsertToSession(session.get(), client_table_, 1, 1, "x");
@@ -1718,7 +1716,7 @@ TEST_F(ClientTest, TestApplyTooMuchWithoutFlushing) {
   {
     string huge_string(10 * 1024 * 1024, 'x');
 
-    shared_ptr<KuduSession> session = client_->NewSession();
+    sp::shared_ptr<KuduSession> session = client_->NewSession();
     Status s = ApplyInsertToSession(session.get(), client_table_, 1, 1, huge_string.c_str());
     ASSERT_TRUE(s.IsIncomplete()) << "got unexpected status: " << s.ToString();
   }
@@ -1726,7 +1724,7 @@ TEST_F(ClientTest, TestApplyTooMuchWithoutFlushing) {
 
 // Test that update updates and delete deletes with expected use
 TEST_F(ClientTest, TestMutationsWork) {
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
   ASSERT_OK(ApplyInsertToSession(session.get(), client_table_, 1, 1, "original row"));
   FlushSessionOrDie(session);
@@ -1748,7 +1746,7 @@ TEST_F(ClientTest, TestMutationsWork) {
 
 TEST_F(ClientTest, TestMutateDeletedRow) {
   vector<string> rows;
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
   ASSERT_OK(ApplyInsertToSession(session.get(), client_table_, 1, 1, "original row"));
   FlushSessionOrDie(session);
@@ -1784,7 +1782,7 @@ TEST_F(ClientTest, TestMutateDeletedRow) {
 
 TEST_F(ClientTest, TestMutateNonexistentRow) {
   vector<string> rows;
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
 
   // Attempt update nonexistent row
@@ -1813,11 +1811,11 @@ TEST_F(ClientTest, TestMutateNonexistentRow) {
 }
 
 TEST_F(ClientTest, TestWriteWithBadColumn) {
-  shared_ptr<KuduTable> table;
+  sp::shared_ptr<KuduTable> table;
   ASSERT_OK(client_->OpenTable(kTableName, &table));
 
   // Try to do a write with the bad schema.
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
   gscoped_ptr<KuduInsert> insert(table->NewInsert());
   ASSERT_OK(insert->mutable_row()->SetInt32("key", 12345));
@@ -1829,7 +1827,7 @@ TEST_F(ClientTest, TestWriteWithBadColumn) {
 // Do a write with a bad schema on the client side. This should make the Prepare
 // phase of the write fail, which will result in an error on the RPC response.
 TEST_F(ClientTest, TestWriteWithBadSchema) {
-  shared_ptr<KuduTable> table;
+  sp::shared_ptr<KuduTable> table;
   ASSERT_OK(client_->OpenTable(kTableName, &table));
 
   // Remove the 'int_val' column.
@@ -1840,7 +1838,7 @@ TEST_F(ClientTest, TestWriteWithBadSchema) {
             ->Alter());
 
   // Try to do a write with the bad schema.
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
   ASSERT_OK(ApplyInsertToSession(session.get(), client_table_,
                                         12345, 12345, "x"));
@@ -2057,7 +2055,7 @@ TEST_F(ClientTest, TestReplicatedMultiTabletTable) {
   const int kNumRowsToWrite = 100;
   const int kNumReplicas = 3;
 
-  shared_ptr<KuduTable> table;
+  sp::shared_ptr<KuduTable> table;
   ASSERT_NO_FATAL_FAILURE(CreateTable(kReplicatedTable,
                                       kNumReplicas,
                                       GenerateSplitRows(),
@@ -2082,7 +2080,7 @@ TEST_F(ClientTest, TestReplicatedMultiTabletTableFailover) {
   const int kNumReplicas = 3;
   const int kNumTries = 100;
 
-  shared_ptr<KuduTable> table;
+  sp::shared_ptr<KuduTable> table;
   ASSERT_NO_FATAL_FAILURE(CreateTable(kReplicatedTable,
                                       kNumReplicas,
                                       GenerateSplitRows(),
@@ -2133,7 +2131,7 @@ TEST_F(ClientTest, TestReplicatedTabletWritesWithLeaderElection) {
   const int kNumRowsToWrite = 100;
   const int kNumReplicas = 3;
 
-  shared_ptr<KuduTable> table;
+  sp::shared_ptr<KuduTable> table;
   ASSERT_NO_FATAL_FAILURE(CreateTable(kReplicatedTable,
                                       kNumReplicas,
                                       vector<const KuduPartialRow*>(),
@@ -2171,7 +2169,7 @@ TEST_F(ClientTest, TestReplicatedTabletWritesWithLeaderElection) {
 
   // Since we waited before, hopefully all replicas will be up to date
   // and we can just promote another replica.
-  shared_ptr<rpc::Messenger> client_messenger;
+  std::shared_ptr<rpc::Messenger> client_messenger;
   rpc::MessengerBuilder bld("client");
   ASSERT_OK(bld.Build(&client_messenger));
   gscoped_ptr<consensus::ConsensusServiceProxy> new_leader_proxy;
@@ -2259,7 +2257,7 @@ void CheckCorrectness(KuduScanner* scanner, int expected[], int nrows) {
 
 // Randomized mutations accuracy testing
 TEST_F(ClientTest, TestRandomWriteOperation) {
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   session->SetTimeoutMillis(5000);
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
   int row[FLAGS_test_scan_num_rows]; // -1 indicates empty
@@ -2326,7 +2324,7 @@ TEST_F(ClientTest, TestRandomWriteOperation) {
 
 // Test whether a batch can handle several mutations in a batch
 TEST_F(ClientTest, TestSeveralRowMutatesPerBatch) {
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   session->SetTimeoutMillis(5000);
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
 
@@ -2409,7 +2407,7 @@ namespace {
   };
 
   // Returns col1 value of first row.
-  int32_t ReadFirstRowKeyFirstCol(const shared_ptr<KuduTable>& tbl) {
+  int32_t ReadFirstRowKeyFirstCol(const sp::shared_ptr<KuduTable>& tbl) {
     KuduScanner scanner(tbl.get());
 
     scanner.Open();
@@ -2423,7 +2421,7 @@ namespace {
   }
 
   // Checks that all rows have value equal to expected, return number of rows.
-  int CheckRowsEqual(const shared_ptr<KuduTable>& tbl, int32_t expected) {
+  int CheckRowsEqual(const sp::shared_ptr<KuduTable>& tbl, int32_t expected) {
     KuduScanner scanner(tbl.get());
     scanner.Open();
     vector<KuduRowResult> rows;
@@ -2454,10 +2452,10 @@ namespace {
 
   // Return a session "loaded" with updates. Sets the session timeout
   // to the parameter value. Larger timeouts decrease false positives.
-  shared_ptr<KuduSession> LoadedSession(const shared_ptr<KuduClient>& client,
-                                        const shared_ptr<KuduTable>& tbl,
+  sp::shared_ptr<KuduSession> LoadedSession(const sp::shared_ptr<KuduClient>& client,
+                                        const sp::shared_ptr<KuduTable>& tbl,
                                         bool fwd, int max, int timeout) {
-    shared_ptr<KuduSession> session = client->NewSession();
+    sp::shared_ptr<KuduSession> session = client->NewSession();
     session->SetTimeoutMillis(timeout);
     CHECK_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
     for (int i = 0; i < max; ++i) {
@@ -2480,17 +2478,17 @@ TEST_F(ClientTest, TestDeadlockSimulation) {
 
   // Make reverse client who will make batches that update rows
   // in reverse order. Separate client used so rpc calls come in at same time.
-  shared_ptr<KuduClient> rev_client;
+  sp::shared_ptr<KuduClient> rev_client;
   ASSERT_OK(KuduClientBuilder()
                    .add_master_server_addr(cluster_->mini_master()->bound_rpc_addr().ToString())
                    .Build(&rev_client));
-  shared_ptr<KuduTable> rev_table;
+  sp::shared_ptr<KuduTable> rev_table;
   ASSERT_OK(client_->OpenTable(kTableName, &rev_table));
 
   // Load up some rows
   const int kNumRows = 300;
   const int kTimeoutMillis = 60000;
-  shared_ptr<KuduSession> session = client_->NewSession();
+  sp::shared_ptr<KuduSession> session = client_->NewSession();
   session->SetTimeoutMillis(kTimeoutMillis);
   ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
   for (int i = 0; i < kNumRows; ++i)
@@ -2505,8 +2503,8 @@ TEST_F(ClientTest, TestDeadlockSimulation) {
 
   // Generate sessions
   const int kNumSessions = 100;
-  shared_ptr<KuduSession> fwd_sessions[kNumSessions];
-  shared_ptr<KuduSession> rev_sessions[kNumSessions];
+  sp::shared_ptr<KuduSession> fwd_sessions[kNumSessions];
+  sp::shared_ptr<KuduSession> rev_sessions[kNumSessions];
   for (int i = 0; i < kNumSessions; ++i) {
     fwd_sessions[i] = LoadedSession(client_, client_table_, true, kNumRows, kTimeoutMillis);
     rev_sessions[i] = LoadedSession(rev_client, rev_table, true, kNumRows, kTimeoutMillis);
@@ -2602,8 +2600,8 @@ TEST_F(ClientTest, TestLatestObservedTimestamp) {
 
   // Check that the timestamp of the previous write will be observed by another
   // client performing a snapshot scan at that timestamp.
-  shared_ptr<KuduClient> client;
-  shared_ptr<KuduTable> table;
+  sp::shared_ptr<KuduClient> client;
+  sp::shared_ptr<KuduTable> table;
   ASSERT_OK(KuduClientBuilder()
       .add_master_server_addr(cluster_->mini_master()->bound_rpc_addr().ToString())
       .Build(&client));
