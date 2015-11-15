@@ -15,10 +15,10 @@
 #define KUDU_UTIL_MEM_TRACKER_H
 
 #include <boost/function.hpp>
+#include <cstddef>
+#include <cstdint>
 #include <list>
 #include <memory>
-#include <memory>
-#include <stdint.h>
 #include <string>
 #include <vector>
 
@@ -342,19 +342,16 @@ class MemTracker : public std::enable_shared_from_this<MemTracker> {
 
 // An std::allocator that manipulates a MemTracker during allocation
 // and deallocation.
-template<typename T, typename Alloc = std::allocator<T> >
+template<typename T, typename Alloc = std::allocator<T>>
 class MemTrackerAllocator : public Alloc {
  public:
-  typedef typename Alloc::pointer pointer;
-  typedef typename Alloc::const_pointer const_pointer;
-  typedef typename Alloc::size_type size_type;
+  typedef T value_type;
 
   explicit MemTrackerAllocator(const std::shared_ptr<MemTracker>& mem_tracker)
       : mem_tracker_(mem_tracker) {
   }
 
-  // This constructor is used for rebinding.
-  template <typename U>
+  template<typename U>
   explicit MemTrackerAllocator(const MemTrackerAllocator<U>& allocator)
       : Alloc(allocator),
         mem_tracker_(allocator.mem_tracker()) {
@@ -363,30 +360,33 @@ class MemTrackerAllocator : public Alloc {
   ~MemTrackerAllocator() {
   }
 
-  pointer allocate(size_type n, const_pointer hint = 0) {
+  T* allocate(size_t n) {
     // Ideally we'd use TryConsume() here to enforce the tracker's limit.
     // However, that means throwing bad_alloc if the limit is exceeded, and
     // it's not clear that the rest of Kudu can handle that.
     mem_tracker_->Consume(n * sizeof(T));
-    return Alloc::allocate(n, hint);
+    return Alloc::allocate(n);
   }
 
-  void deallocate(pointer p, size_type n) {
-    Alloc::deallocate(p, n);
+  void deallocate(T* p, size_t n) {
+    return Alloc::deallocate(p, n);
     mem_tracker_->Release(n * sizeof(T));
   }
-
-  // This allows an allocator<T> to be used for a different type.
-  template <class U>
-  struct rebind {
-    typedef MemTrackerAllocator<U, typename Alloc::template rebind<U>::other> other;
-  };
 
   const std::shared_ptr<MemTracker>& mem_tracker() const { return mem_tracker_; }
 
  private:
   std::shared_ptr<MemTracker> mem_tracker_;
 };
+
+template <class T, class U>
+bool operator==(const MemTrackerAllocator<T>&, const MemTrackerAllocator<U>&) {
+  return true;
+}
+template <class T, class U>
+bool operator!=(const MemTrackerAllocator<T>&, const MemTrackerAllocator<U>&) {
+  return false;
+}
 
 // Convenience class that adds memory consumption to a tracker when declared,
 // releasing it when the end of scope is reached.
