@@ -765,12 +765,12 @@ class Schema {
   // The map is instrumented with a counting allocator so that we can accurately
   // measure its memory footprint.
   int64_t name_to_index_bytes_;
-  typedef STLCountingAllocator<std::pair<StringPiece, size_t> > NameToIndexMapAllocator;
+  typedef STLCountingAllocator<std::pair<const StringPiece, size_t> > NameToIndexMapAllocator;
   typedef unordered_map<
       StringPiece,
       size_t,
-      __gnu_cxx::hash<StringPiece>,
-      __gnu_cxx::equal_to<StringPiece>,
+      std::hash<StringPiece>,
+      std::equal_to<StringPiece>,
       NameToIndexMapAllocator> NameToIndexMap;
   NameToIndexMap name_to_index_;
 
