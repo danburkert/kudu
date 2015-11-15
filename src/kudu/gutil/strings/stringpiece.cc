@@ -22,16 +22,6 @@ using std::string;
 #include "kudu/gutil/stl_util.h"
 #include "kudu/gutil/hash/hash.h"
 
-#include <ext/hash_set>
-namespace __gnu_cxx {
-
-size_t hash<StringPiece>::operator()(StringPiece s) const {
-  return HashTo32(s.data(), s.size());
-}
-
-}  // namespace __gnu_cxx
-
-
 std::ostream& operator<<(std::ostream& o, StringPiece piece) {
   o.write(piece.data(), piece.size());
   return o;
