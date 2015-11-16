@@ -64,6 +64,14 @@ set(IR_INCLUDES
   -I ${GTEST_INCLUDE_DIR}
   -I ${Boost_INCLUDE_DIR})
 
+if (APPLE)
+  # OS X keeps the libc++ headers in a non-standard location that the thirdparty
+  # Clang does not know about by default.
+  set(IR_INCLUDES
+    ${IR_INCLUDES}
+    -cxx-isystem "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1")
+endif()
+
 # Get preprocessing definitions, which enable directives for glog and gtest
 get_directory_property(IR_PP_DEFINITIONS
   DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
