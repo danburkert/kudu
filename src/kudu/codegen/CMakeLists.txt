@@ -62,7 +62,8 @@ set(IR_INCLUDES
   -I ${CMAKE_SOURCE_DIR}/src
   -I ${GLOG_INCLUDE_DIR}
   -I ${GTEST_INCLUDE_DIR}
-  -I ${Boost_INCLUDE_DIR})
+  -I ${Boost_INCLUDE_DIR}
+  -I /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1)
 
 # Get preprocessing definitions, which enable directives for glog and gtest
 get_directory_property(IR_PP_DEFINITIONS
