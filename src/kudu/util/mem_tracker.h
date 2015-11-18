@@ -354,7 +354,7 @@ class MemTrackerAllocator : public Alloc {
 
   // This constructor is used for rebinding.
   template <typename U>
-  explicit MemTrackerAllocator(const MemTrackerAllocator<U>& allocator)
+  MemTrackerAllocator(const MemTrackerAllocator<U>& allocator)
       : Alloc(allocator),
         mem_tracker_(allocator.mem_tracker()) {
   }
