@@ -1,0 +1,27 @@
+language: cpp
+
+os:
+  - osx
+
+before_install:
+  - brew update
+  - brew install autoconf || brew outdated autoconf || brew upgrade autoconf
+  - brew install automake || brew outdated automake || brew upgrade automake
+  - brew install cmake || brew outdated cmake || brew upgrade cmake
+  - brew install libtool || brew outdated libtool || brew upgrade libtool
+  - brew install pkg-config || brew outdated pkg-config || brew upgrade pkg-config
+  - brew install boost || brew outdated boost || brew upgrade boost
+  - brew install pstree || brew outdated pstree || brew upgrade pstree
+  - brew install gdb || brew outdated gdb || brew upgrade gdb
+
+install:
+  - thirdparty/build-if-necessary.sh
+  - cmake .
+  - make
+
+test:
+  - ctest
+
+notifications:
+  email:
+    on_success: never
