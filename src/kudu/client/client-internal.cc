@@ -15,7 +15,6 @@
 #include "kudu/client/client-internal.h"
 
 #include <algorithm>
-#include <boost/foreach.hpp>
 #include <limits>
 #include <string>
 #include <vector>
@@ -257,7 +256,7 @@ RemoteTabletServer* KuduClient::Data::SelectTServer(const scoped_refptr<RemoteTa
       rt->GetRemoteTabletServers(candidates);
       // Filter out all the blacklisted candidates.
       vector<RemoteTabletServer*> filtered;
-      BOOST_FOREACH(RemoteTabletServer* rts, *candidates) {
+      for (RemoteTabletServer* rts : *candidates) {
         if (!ContainsKey(blacklist, rts->permanent_uuid())) {
           filtered.push_back(rts);
         } else {
@@ -270,7 +269,7 @@ RemoteTabletServer* KuduClient::Data::SelectTServer(const scoped_refptr<RemoteTa
         }
       } else if (selection == CLOSEST_REPLICA) {
         // Choose a local replica.
-        BOOST_FOREACH(RemoteTabletServer* rts, filtered) {
+        for (RemoteTabletServer* rts : filtered) {
           if (IsTabletServerLocal(*rts)) {
             ret = rts;
             break;
@@ -517,7 +516,7 @@ Status KuduClient::Data::InitLocalHostNames() {
   RETURN_NOT_OK_PREPEND(HostPort(hostname, 0).ResolveAddresses(&addresses),
                         Substitute("Could not resolve local host name '$0'", hostname));
 
-  BOOST_FOREACH(const Sockaddr& addr, addresses) {
+  for (const Sockaddr& addr : addresses) {
     // Similar to above, ignore local or wildcard addresses.
     if (addr.IsWildcard()) continue;
     if (addr.IsAnyLocalAddress()) continue;
@@ -536,7 +535,7 @@ bool KuduClient::Data::IsLocalHostPort(const HostPort& hp) const {
 bool KuduClient::Data::IsTabletServerLocal(const RemoteTabletServer& rts) const {
   vector<HostPort> host_ports;
   rts.GetHostPorts(&host_ports);
-  BOOST_FOREACH(const HostPort& hp, host_ports) {
+  for (const HostPort& hp : host_ports) {
     if (IsLocalHostPort(hp)) return true;
   }
   return false;
@@ -744,7 +743,7 @@ void KuduClient::Data::LeaderMasterDetermined(const Status& status,
     }
   }
 
-  BOOST_FOREACH(const StatusCallback& cb, cbs) {
+  for (const StatusCallback& cb : cbs) {
     cb.Run(new_status);
   }
 }
@@ -762,7 +761,7 @@ void KuduClient::Data::SetMasterServerProxyAsync(KuduClient* client,
   DCHECK(deadline.Initialized());
 
   vector<Sockaddr> master_sockaddrs;
-  BOOST_FOREACH(const string& master_server_addr, master_server_addrs_) {
+  for (const string& master_server_addr : master_server_addrs_) {
     vector<Sockaddr> addrs;
     Status s;
     // TODO: Do address resolution asynchronously as well.

@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include <boost/foreach.hpp>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -491,7 +490,7 @@ class PosixMmapFile : public WritableFile {
   }
 
   virtual Status AppendVector(const vector<Slice>& data_vector) OVERRIDE {
-    BOOST_FOREACH(const Slice& data, data_vector) {
+    for (const Slice& data : data_vector) {
       RETURN_NOT_OK(Append(data));
     }
     return Status::OK();

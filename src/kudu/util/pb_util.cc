@@ -26,7 +26,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include <boost/foreach.hpp>
 #include <glog/logging.h>
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/descriptor.pb.h>
@@ -225,7 +224,7 @@ void TruncateFields(Message* message, int max_len) {
   const Reflection* reflection = message->GetReflection();
   vector<const FieldDescriptor*> fields;
   reflection->ListFields(*message, &fields);
-  BOOST_FOREACH(const FieldDescriptor* field, fields) {
+  for (const FieldDescriptor* field : fields) {
     if (field->is_repeated()) {
       for (int i = 0; i < reflection->FieldSize(*message, field); i++) {
         switch (field->cpp_type()) {

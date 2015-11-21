@@ -18,7 +18,6 @@
 #include <string>
 #include <vector>
 
-#include <boost/foreach.hpp>
 #include <glog/logging.h>
 #include <llvm/LinkAllPasses.h>
 #include <llvm/ADT/StringRef.h>
@@ -217,7 +216,7 @@ void DoOptimizations(ExecutionEngine* engine,
   fpm.doInitialization();
 
   // For each function in the module, optimize it
-  BOOST_FOREACH(Function& f, *module) {
+  for (Function& f : *module) {
     // The bool return value here just indicates whether the passes did anything.
     // We can safely expect that many functions are too small to do any optimization.
     ignore_result(fpm.run(f));
@@ -273,7 +272,7 @@ Status ModuleBuilder::Compile(gscoped_ptr<ExecutionEngine>* out) {
   local_engine->finalizeObject();
 
   // Satisfy the promises
-  BOOST_FOREACH(JITFuture& fut, futures_) {
+  for (JITFuture& fut : futures_) {
     *fut.actual_f_ = local_engine->getPointerToFunction(fut.llvm_f_);
     if (*fut.actual_f_ == NULL) {
       return Status::NotFound(
@@ -301,7 +300,7 @@ TargetMachine* ModuleBuilder::GetTargetMachine() const {
 
 vector<const char*> ModuleBuilder::GetFunctionNames() const {
   vector<const char*> ret;
-  BOOST_FOREACH(const JITFuture& fut, futures_) {
+  for (const JITFuture& fut : futures_) {
     const char* name = CHECK_NOTNULL(fut.llvm_f_)->getName().data();
     ret.push_back(name);
   }

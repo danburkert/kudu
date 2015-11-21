@@ -14,7 +14,6 @@
 
 #include "kudu/util/rolling_log.h"
 
-#include <boost/foreach.hpp>
 #include <glog/logging.h>
 #include <glog/stl_logging.h>
 #include <string>
@@ -49,7 +48,7 @@ class RollingLogTest : public KuduTest {
     ASSERT_OK(env_->GetChildren(log_dir_, &dir_entries));
     children->clear();
 
-    BOOST_FOREACH(const string& child, dir_entries) {
+    for (const string& child : dir_entries) {
       if (child == "." || child == "..") continue;
       children->push_back(child);
       ASSERT_TRUE(HasPrefixString(child, "rolling_log-test."));

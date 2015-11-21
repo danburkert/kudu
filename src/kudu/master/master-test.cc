@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -231,7 +230,7 @@ Status MasterTest::CreateTable(const string& table_name,
   req.set_name(table_name);
   RETURN_NOT_OK(SchemaToPB(schema, req.mutable_schema()));
   RowOperationsPBEncoder encoder(req.mutable_split_rows());
-  BOOST_FOREACH(const KuduPartialRow& row, split_rows) {
+  for (const KuduPartialRow& row : split_rows) {
     encoder.Add(RowOperationsPB::SPLIT_ROW, row);
   }
 

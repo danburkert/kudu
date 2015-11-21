@@ -15,7 +15,6 @@
 #include <vector>
 
 #include <boost/bind.hpp>
-#include <boost/foreach.hpp>
 #include <boost/function.hpp>
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>

@@ -18,7 +18,6 @@
 #include <limits>
 #include <vector>
 
-#include <boost/foreach.hpp>
 
 #include "kudu/gutil/map-util.h"
 #include "kudu/gutil/strings/substitute.h"
@@ -182,7 +181,7 @@ void TransactionTracker::GetPendingTransactions(
     vector<scoped_refptr<TransactionDriver> >* pending_out) const {
   DCHECK(pending_out->empty());
   lock_guard<simple_spinlock> l(&lock_);
-  BOOST_FOREACH(const TxnMap::value_type& e, pending_txns_) {
+  for (const TxnMap::value_type& e : pending_txns_) {
     // Increments refcount of each transaction.
     pending_out->push_back(e.first);
   }
@@ -226,7 +225,7 @@ Status TransactionTracker::WaitForAllToFinish(const MonoDelta& timeout) const {
     wait_time = std::min(wait_time * 5 / 4, 1000000);
 
     LOG(INFO) << "Dumping currently running transactions: ";
-    BOOST_FOREACH(scoped_refptr<TransactionDriver> driver, txns) {
+    for (scoped_refptr<TransactionDriver> driver : txns) {
       LOG(INFO) << driver->ToString();
     }
     SleepFor(MonoDelta::FromMicroseconds(wait_time));

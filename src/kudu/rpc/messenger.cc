@@ -19,7 +19,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <boost/foreach.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <list>
@@ -139,7 +138,7 @@ void Messenger::Shutdown() {
   DCHECK(rpc_services_.empty()) << "Unregister RPC services before shutting down Messenger";
   rpc_services_.clear();
 
-  BOOST_FOREACH(const shared_ptr<AcceptorPool>& acceptor_pool, acceptor_pools_) {
+  for (const shared_ptr<AcceptorPool>& acceptor_pool : acceptor_pools_) {
     acceptor_pool->Shutdown();
   }
   acceptor_pools_.clear();
@@ -149,7 +148,7 @@ void Messenger::Shutdown() {
   // threads' blocking reads & writes.
   negotiation_pool_->Shutdown();
 
-  BOOST_FOREACH(Reactor* reactor, reactors_) {
+  for (Reactor* reactor : reactors_) {
     reactor->Shutdown();
   }
 }
@@ -255,7 +254,7 @@ Reactor* Messenger::RemoteToReactor(const Sockaddr &remote) {
 
 Status Messenger::Init() {
   Status status;
-  BOOST_FOREACH(Reactor* r, reactors_) {
+  for (Reactor* r : reactors_) {
     RETURN_NOT_OK(r->Init());
   }
 
@@ -265,7 +264,7 @@ Status Messenger::Init() {
 Status Messenger::DumpRunningRpcs(const DumpRunningRpcsRequestPB& req,
                                   DumpRunningRpcsResponsePB* resp) {
   shared_lock<rw_spinlock> guard(&lock_.get_lock());
-  BOOST_FOREACH(Reactor* reactor, reactors_) {
+  for (Reactor* reactor : reactors_) {
     RETURN_NOT_OK(reactor->DumpRunningRpcs(req, resp));
   }
   return Status::OK();
@@ -277,7 +276,7 @@ void Messenger::ScheduleOnReactor(const boost::function<void(const Status&)>& fu
 
   // If we're already running on a reactor thread, reuse it.
   Reactor* chosen = NULL;
-  BOOST_FOREACH(Reactor* r, reactors_) {
+  for (Reactor* r : reactors_) {
     if (r->IsCurrentThread()) {
       chosen = r;
     }

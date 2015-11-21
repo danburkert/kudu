@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/foreach.hpp>
 #include <cmath>
 #include <cstdlib>
 #include <gflags/gflags.h>
@@ -296,7 +295,7 @@ void FullStackInsertScanTest::DoConcurrentClientInserts() {
              strings::Substitute("concurrent inserts ($0 rows, $1 threads)",
                                  kNumRows, kNumInsertClients)) {
     start_latch.CountDown();
-    BOOST_FOREACH(const scoped_refptr<Thread>& thread, threads) {
+    for (const scoped_refptr<Thread>& thread : threads) {
       ASSERT_OK(ThreadJoiner(thread.get())
                 .warn_every_ms(15000)
                 .Join());
@@ -330,7 +329,7 @@ void FullStackInsertScanTest::FlushToDisk() {
     tserver::TSTabletManager* tm = ts->tablet_manager();
     vector<scoped_refptr<TabletPeer> > peers;
     tm->GetTabletPeers(&peers);
-    BOOST_FOREACH(const scoped_refptr<TabletPeer>& peer, peers) {
+    for (const scoped_refptr<TabletPeer>& peer : peers) {
       Tablet* tablet = peer->tablet();
       if (!tablet->MemRowSetEmpty()) {
         ASSERT_OK(tablet->Flush());

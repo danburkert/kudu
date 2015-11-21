@@ -14,7 +14,6 @@
 
 #include "kudu/integration-tests/mini_cluster.h"
 
-#include <boost/foreach.hpp>
 
 #include "kudu/client/client.h"
 #include "kudu/gutil/strings/join.h"
@@ -114,7 +113,7 @@ Status MiniCluster::StartDistributedMasters() {
     mini_masters_[i] = std::shared_ptr<MiniMaster>(mini_master.release());
   }
   int i = 0;
-  BOOST_FOREACH(const std::shared_ptr<MiniMaster>& master, mini_masters_) {
+  for (const std::shared_ptr<MiniMaster>& master : mini_masters_) {
     LOG(INFO) << "Waiting to initialize catalog manager on master " << i++;
     RETURN_NOT_OK_PREPEND(master->WaitForCatalogManagerInit(),
                           Substitute("Could not initialize catalog manager on master $0", i));
@@ -125,7 +124,7 @@ Status MiniCluster::StartDistributedMasters() {
 Status MiniCluster::StartSync() {
   RETURN_NOT_OK(Start());
   int count = 0;
-  BOOST_FOREACH(const std::shared_ptr<MiniTabletServer>& tablet_server, mini_tablet_servers_) {
+  for (const std::shared_ptr<MiniTabletServer>& tablet_server : mini_tablet_servers_) {
     RETURN_NOT_OK_PREPEND(tablet_server->WaitStarted(),
                           Substitute("TabletServer $0 failed to start.", count));
     count++;
@@ -167,7 +166,7 @@ Status MiniCluster::AddTabletServer() {
 
   // set the master addresses
   tablet_server->options()->master_addresses.clear();
-  BOOST_FOREACH(const std::shared_ptr<MiniMaster>& master, mini_masters_) {
+  for (const std::shared_ptr<MiniMaster>& master : mini_masters_) {
     tablet_server->options()->master_addresses.push_back(HostPort(master->bound_rpc_addr()));
   }
   RETURN_NOT_OK(tablet_server->Start())
@@ -197,11 +196,11 @@ MiniMaster* MiniCluster::leader_mini_master() {
 }
 
 void MiniCluster::Shutdown() {
-  BOOST_FOREACH(const std::shared_ptr<MiniTabletServer>& tablet_server, mini_tablet_servers_) {
+  for (const std::shared_ptr<MiniTabletServer>& tablet_server : mini_tablet_servers_) {
     tablet_server->Shutdown();
   }
   mini_tablet_servers_.clear();
-  BOOST_FOREACH(std::shared_ptr<MiniMaster>& master_server, mini_masters_) {
+  for (std::shared_ptr<MiniMaster>& master_server : mini_masters_) {
     master_server->Shutdown();
     master_server.reset();
   }
@@ -209,7 +208,7 @@ void MiniCluster::Shutdown() {
 }
 
 void MiniCluster::ShutdownMasters() {
-  BOOST_FOREACH(std::shared_ptr<MiniMaster>& master_server, mini_masters_) {
+  for (std::shared_ptr<MiniMaster>& master_server : mini_masters_) {
     master_server->Shutdown();
     master_server.reset();
   }
@@ -276,7 +275,7 @@ Status MiniCluster::WaitForTabletServerCount(int count,
       // Do a second step of verification to verify that the descs that we got
       // are aligned (same uuid/seqno) with the TSs that we have in the cluster.
       int match_count = 0;
-      BOOST_FOREACH(const std::shared_ptr<TSDescriptor>& desc, *descs) {
+      for (const std::shared_ptr<TSDescriptor>& desc : *descs) {
         for (int i = 0; i < mini_tablet_servers_.size(); ++i) {
           TabletServer *ts = mini_tablet_servers_[i]->server();
           if (ts->instance_pb().permanent_uuid() == desc->permanent_uuid() &&
@@ -305,7 +304,7 @@ Status MiniCluster::CreateClient(KuduClientBuilder* builder,
     builder = &default_builder;
   }
   builder->clear_master_server_addrs();
-  BOOST_FOREACH(const std::shared_ptr<MiniMaster>& master, mini_masters_) {
+  for (const std::shared_ptr<MiniMaster>& master : mini_masters_) {
     CHECK(master);
     builder->add_master_server_addr(master->bound_rpc_addr_str());
   }

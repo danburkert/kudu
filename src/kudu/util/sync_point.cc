@@ -19,7 +19,6 @@
 
 #include "kudu/util/sync_point.h"
 
-#include <boost/foreach.hpp>
 
 using std::string;
 using std::vector;
@@ -46,14 +45,14 @@ void SyncPoint::LoadDependency(const vector<Dependency>& dependencies) {
   successors_.clear();
   predecessors_.clear();
   cleared_points_.clear();
-  BOOST_FOREACH(const Dependency& dependency, dependencies) {
+  for (const Dependency& dependency : dependencies) {
     successors_[dependency.predecessor_].push_back(dependency.successor_);
     predecessors_[dependency.successor_].push_back(dependency.predecessor_);
   }
 }
 
 bool SyncPoint::PredecessorsAllCleared(const string& point) {
-  BOOST_FOREACH(const string& pred, predecessors_[point]) {
+  for (const string& pred : predecessors_[point]) {
     if (cleared_points_.count(pred) == 0) {
       return false;
     }

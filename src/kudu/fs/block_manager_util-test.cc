@@ -16,7 +16,6 @@
 #include <string>
 #include <vector>
 
-#include <boost/foreach.hpp>
 #include <google/protobuf/repeated_field.h>
 #include <gtest/gtest.h>
 
@@ -104,7 +103,7 @@ static void RunCheckIntegrityTest(Env* env,
   ElementDeleter deleter(&instances);
 
   int i = 0;
-  BOOST_FOREACH(const PathSetPB& ps, path_sets) {
+  for (const PathSetPB& ps : path_sets) {
     gscoped_ptr<PathInstanceMetadataFile> instance(
         new PathInstanceMetadataFile(env, "asdf", Substitute("$0", i)));
     gscoped_ptr<PathInstanceMetadataPB> metadata(new PathInstanceMetadataPB());
@@ -147,7 +146,7 @@ TEST_F(KuduTest, CheckIntegrity) {
   {
     // Test where the path sets have duplicate UUIDs.
     vector<PathSetPB> path_sets_copy(path_sets);
-    BOOST_FOREACH(PathSetPB& ps, path_sets_copy) {
+    for (PathSetPB& ps : path_sets_copy) {
       ps.add_all_uuids("fee");
     }
     EXPECT_NO_FATAL_FAILURE(RunCheckIntegrityTest(

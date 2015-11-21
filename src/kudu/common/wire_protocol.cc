@@ -161,7 +161,7 @@ Status HostPortFromPB(const HostPortPB& host_port_pb, HostPort* host_port) {
 
 Status AddHostPortPBs(const vector<Sockaddr>& addrs,
                       RepeatedPtrField<HostPortPB>* pbs) {
-  BOOST_FOREACH(const Sockaddr& addr, addrs) {
+  for (const Sockaddr& addr : addrs) {
     HostPortPB* pb = pbs->Add();
     if (addr.IsWildcard()) {
       RETURN_NOT_OK(GetFQDN(pb->mutable_host()));
@@ -263,7 +263,7 @@ Status ColumnPBsToSchema(const RepeatedPtrField<ColumnSchemaPB>& column_pbs,
   columns.reserve(column_pbs.size());
   int num_key_columns = 0;
   bool is_handling_key = true;
-  BOOST_FOREACH(const ColumnSchemaPB& pb, column_pbs) {
+  for (const ColumnSchemaPB& pb : column_pbs) {
     columns.push_back(ColumnSchemaFromPB(pb));
     if (pb.is_key()) {
       if (!is_handling_key) {
@@ -292,7 +292,7 @@ Status SchemaToColumnPBs(const Schema& schema,
                          int flags) {
   cols->Clear();
   int idx = 0;
-  BOOST_FOREACH(const ColumnSchema& col, schema.columns()) {
+  for (const ColumnSchema& col : schema.columns()) {
     ColumnSchemaPB* col_pb = cols->Add();
     ColumnSchemaToPB(col, col_pb);
     col_pb->set_is_key(idx < schema.num_key_columns());
@@ -400,7 +400,7 @@ Status ExtractRowsFromRowBlockPB(const Schema& schema,
 
 Status FindLeaderHostPort(const RepeatedPtrField<ServerEntryPB>& entries,
                           HostPort* leader_hostport) {
-  BOOST_FOREACH(const ServerEntryPB& entry, entries) {
+  for (const ServerEntryPB& entry : entries) {
     if (entry.has_error()) {
       LOG(WARNING) << "Error encountered for server entry " << entry.ShortDebugString()
                    << ": " << StatusFromPB(entry.error()).ToString();

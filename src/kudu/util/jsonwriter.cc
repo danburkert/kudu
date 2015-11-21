@@ -16,7 +16,6 @@
 #include <string>
 #include <vector>
 
-#include <boost/foreach.hpp>
 #include <glog/logging.h>
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/message.h>
@@ -166,7 +165,7 @@ void JsonWriter::Protobuf(const Message& pb) {
   reflection->ListFields(pb, &fields);
 
   StartObject();
-  BOOST_FOREACH(const FieldDescriptor* field, fields) {
+  for (const FieldDescriptor* field : fields) {
     String(field->name());
     if (field->is_repeated()) {
       StartArray();

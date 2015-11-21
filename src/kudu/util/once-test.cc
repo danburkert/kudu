@@ -14,7 +14,6 @@
 
 #include <vector>
 
-#include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 
 #include "kudu/gutil/bind.h"
@@ -100,7 +99,7 @@ TEST(TestOnce, KuduOnceDynamicThreadSafeTest) {
     threads.push_back(t);
   }
 
-  BOOST_FOREACH(const scoped_refptr<Thread>& t, threads) {
+  for (const scoped_refptr<Thread>& t : threads) {
     t->Join();
   }
 }

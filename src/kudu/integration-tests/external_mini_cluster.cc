@@ -14,7 +14,6 @@
 
 #include "kudu/integration-tests/external_mini_cluster.h"
 
-#include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 #include <memory>
 #include <rapidjson/document.h>
@@ -148,27 +147,27 @@ Status ExternalMiniCluster::Start() {
 
 void ExternalMiniCluster::Shutdown(NodeSelectionMode mode) {
   if (mode == ALL) {
-    BOOST_FOREACH(const scoped_refptr<ExternalMaster>& master, masters_) {
+    for (const scoped_refptr<ExternalMaster>& master : masters_) {
       if (master) {
         master->Shutdown();
       }
     }
   }
 
-  BOOST_FOREACH(const scoped_refptr<ExternalTabletServer>& ts, tablet_servers_) {
+  for (const scoped_refptr<ExternalTabletServer>& ts : tablet_servers_) {
     ts->Shutdown();
   }
 }
 
 Status ExternalMiniCluster::Restart() {
-  BOOST_FOREACH(const scoped_refptr<ExternalMaster>& master, masters_) {
+  for (const scoped_refptr<ExternalMaster>& master : masters_) {
     if (master && master->IsShutdown()) {
       RETURN_NOT_OK_PREPEND(master->Restart(), "Cannot restart master bound at: " +
                                                master->bound_rpc_hostport().ToString());
     }
   }
 
-  BOOST_FOREACH(const scoped_refptr<ExternalTabletServer>& ts, tablet_servers_) {
+  for (const scoped_refptr<ExternalTabletServer>& ts : tablet_servers_) {
     if (ts->IsShutdown()) {
       RETURN_NOT_OK_PREPEND(ts->Restart(), "Cannot restart tablet server bound at: " +
                                            ts->bound_rpc_hostport().ToString());
@@ -197,7 +196,7 @@ vector<string> SubstituteInFlags(const vector<string>& orig_flags,
                                  int index) {
   string str_index = strings::Substitute("$0", index);
   vector<string> ret;
-  BOOST_FOREACH(const string& orig, orig_flags) {
+  for (const string& orig : orig_flags) {
     ret.push_back(StringReplace(orig, "${index}", str_index, true));
   }
   return ret;
@@ -303,8 +302,8 @@ Status ExternalMiniCluster::WaitForTabletServerCount(int count, const MonoDelta&
       // Do a second step of verification to verify that the descs that we got
       // are aligned (same uuid/seqno) with the TSs that we have in the cluster.
       int match_count = 0;
-      BOOST_FOREACH(const master::ListTabletServersResponsePB_Entry& e, resp.servers()) {
-        BOOST_FOREACH(const scoped_refptr<ExternalTabletServer>& ets, tablet_servers_) {
+      for (const master::ListTabletServersResponsePB_Entry& e : resp.servers()) {
+        for (const scoped_refptr<ExternalTabletServer>& ets : tablet_servers_) {
           if (ets->instance_id().permanent_uuid() == e.instance_id().permanent_uuid() &&
               ets->instance_id().instance_seqno() == e.instance_id().instance_seqno()) {
             match_count++;
@@ -323,7 +322,7 @@ Status ExternalMiniCluster::WaitForTabletServerCount(int count, const MonoDelta&
 
 void ExternalMiniCluster::AssertNoCrashes() {
   vector<ExternalDaemon*> daemons = this->daemons();
-  BOOST_FOREACH(ExternalDaemon* d, daemons) {
+  for (ExternalDaemon* d : daemons) {
     if (d->IsShutdown()) continue;
     EXPECT_TRUE(d->IsProcessAlive()) << "At least one process crashed";
   }
@@ -346,7 +345,7 @@ Status ExternalMiniCluster::WaitForTabletsRunning(ExternalTabletServer* ts,
     }
 
     int num_not_running = 0;
-    BOOST_FOREACH(const StatusAndSchemaPB& status, resp.status_and_schema()) {
+    for (const StatusAndSchemaPB& status : resp.status_and_schema()) {
       if (status.tablet_status().state() != tablet::RUNNING) {
         num_not_running++;
       }
@@ -382,7 +381,7 @@ Status ExternalMiniCluster::GetLeaderMasterIndex(int* idx) {
   MonoTime deadline = MonoTime::Now(MonoTime::FINE);
   deadline.AddDelta(MonoDelta::FromSeconds(5));
 
-  BOOST_FOREACH(const scoped_refptr<ExternalMaster>& master, masters_) {
+  for (const scoped_refptr<ExternalMaster>& master : masters_) {
     addrs.push_back(master->bound_rpc_addr());
   }
   rpc.reset(new GetLeaderMasterRpc(Bind(&LeaderMasterCallback,
@@ -411,7 +410,7 @@ Status ExternalMiniCluster::GetLeaderMasterIndex(int* idx) {
 }
 
 ExternalTabletServer* ExternalMiniCluster::tablet_server_by_uuid(const std::string& uuid) const {
-  BOOST_FOREACH(const scoped_refptr<ExternalTabletServer>& ts, tablet_servers_) {
+  for (const scoped_refptr<ExternalTabletServer>& ts : tablet_servers_) {
     if (ts->instance_id().permanent_uuid() == uuid) {
       return ts.get();
     }
@@ -430,10 +429,10 @@ int ExternalMiniCluster::tablet_server_index_by_uuid(const std::string& uuid) co
 
 vector<ExternalDaemon*> ExternalMiniCluster::daemons() const {
   vector<ExternalDaemon*> results;
-  BOOST_FOREACH(const scoped_refptr<ExternalTabletServer>& ts, tablet_servers_) {
+  for (const scoped_refptr<ExternalTabletServer>& ts : tablet_servers_) {
     results.push_back(ts.get());
   }
-  BOOST_FOREACH(const scoped_refptr<ExternalMaster>& master, masters_) {
+  for (const scoped_refptr<ExternalMaster>& master : masters_) {
     results.push_back(master.get());
   }
   return results;
@@ -458,7 +457,7 @@ Status ExternalMiniCluster::CreateClient(client::KuduClientBuilder& builder,
                                          client::sp::shared_ptr<client::KuduClient>* client) {
   CHECK(!masters_.empty());
   builder.clear_master_server_addrs();
-  BOOST_FOREACH(const scoped_refptr<ExternalMaster>& master, masters_) {
+  for (const scoped_refptr<ExternalMaster>& master : masters_) {
     builder.add_master_server_addr(master->bound_rpc_hostport().ToString());
   }
   return builder.Build(client);
@@ -715,7 +714,7 @@ Status ExternalDaemon::GetInt64Metric(const MetricEntityPrototype* entity_proto,
   RETURN_NOT_OK(r.Init());
   vector<const Value*> entities;
   RETURN_NOT_OK(r.ExtractObjectArray(r.root(), NULL, &entities));
-  BOOST_FOREACH(const Value* entity, entities) {
+  for (const Value* entity : entities) {
     // Find the desired entity.
     string type;
     RETURN_NOT_OK(r.ExtractString(entity, "type", &type));
@@ -733,7 +732,7 @@ Status ExternalDaemon::GetInt64Metric(const MetricEntityPrototype* entity_proto,
     // Find the desired metric within the entity.
     vector<const Value*> metrics;
     RETURN_NOT_OK(r.ExtractObjectArray(entity, "metrics", &metrics));
-    BOOST_FOREACH(const Value* metric, metrics) {
+    for (const Value* metric : metrics) {
       string name;
       RETURN_NOT_OK(r.ExtractString(metric, "name", &name));
       if (name != metric_proto->name()) {

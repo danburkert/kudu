@@ -14,7 +14,6 @@
 
 #include "kudu/client/table_creator-internal.h"
 
-#include <boost/foreach.hpp>
 
 #include "kudu/gutil/stl_util.h"
 

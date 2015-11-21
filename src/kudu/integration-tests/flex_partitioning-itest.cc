@@ -16,7 +16,6 @@
 // of PK subsets, etc).
 
 #include <algorithm>
-#include <boost/foreach.hpp>
 #include <glog/stl_logging.h>
 #include <map>
 #include <memory>
@@ -218,7 +217,7 @@ void FlexPartitioningITest::CheckScanWithColumnPredicate(Slice col_name, int low
 
   // Manually evaluate the predicate against the data we think we inserted.
   vector<string> expected_rows;
-  BOOST_FOREACH(const KuduPartialRow* row, inserted_rows_) {
+  for (const KuduPartialRow* row : inserted_rows_) {
     int32_t val;
     CHECK_OK(row->GetInt32(col_name, &val));
     if (val >= lower && val <= upper) {
@@ -259,7 +258,7 @@ void FlexPartitioningITest::CheckPartitionKeyRangeScan() {
 
   vector<string> rows;
 
-  BOOST_FOREACH(const master::TabletLocationsPB& tablet_locations,
+  for (const master::TabletLocationsPB& tablet_locations :
                 table_locations.tablet_locations()) {
 
     string partition_key_start = tablet_locations.partition().partition_key_start();
@@ -274,7 +273,7 @@ void FlexPartitioningITest::CheckPartitionKeyRangeScan() {
   std::sort(rows.begin(), rows.end());
 
   vector<string> expected_rows;
-  BOOST_FOREACH(KuduPartialRow* row, inserted_rows_) {
+  for (KuduPartialRow* row : inserted_rows_) {
     expected_rows.push_back("(" + row->ToString() + ")");
   }
   std::sort(expected_rows.begin(), expected_rows.end());
@@ -292,7 +291,7 @@ void FlexPartitioningITest::CheckPartitionKeyRangeScanWithPKRange(int lower, int
 
   vector<string> rows;
 
-  BOOST_FOREACH(const master::TabletLocationsPB& tablet_locations,
+  for (const master::TabletLocationsPB& tablet_locations :
                 table_locations.tablet_locations()) {
 
     string partition_key_start = tablet_locations.partition().partition_key_start();

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 #include <string>
 #include <rapidjson/document.h>
@@ -42,7 +41,7 @@ class TraceTest : public KuduTest {
 static string XOutDigits(const string& s) {
   string ret;
   ret.reserve(s.size());
-  BOOST_FOREACH(char c, s) {
+  for (char c : s) {
     if (isdigit(c)) {
       ret.push_back('X');
     } else {

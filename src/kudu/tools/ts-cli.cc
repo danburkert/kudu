@@ -14,7 +14,6 @@
 //
 // Tool to query tablet server operational data
 
-#include <boost/foreach.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <iostream>
@@ -228,7 +227,7 @@ Status TsAdminClient::GetTabletSchema(const std::string& tablet_id,
   VLOG(1) << "Fetching schema for tablet " << tablet_id;
   vector<StatusAndSchemaPB> tablets;
   RETURN_NOT_OK(ListTablets(&tablets));
-  BOOST_FOREACH(const StatusAndSchemaPB& pair, tablets) {
+  for (const StatusAndSchemaPB& pair : tablets) {
     if (pair.tablet_status().tablet_id() == tablet_id) {
       *schema = pair.schema();
       return Status::OK();
@@ -268,7 +267,7 @@ Status TsAdminClient::DumpTablet(const std::string& tablet_id) {
 
     rows.clear();
     RETURN_NOT_OK(KuduScanner::Data::ExtractRows(rpc, &schema, &resp, &rows));
-    BOOST_FOREACH(const KuduRowResult& r, rows) {
+    for (const KuduRowResult& r : rows) {
       std::cout << r.ToString() << std::endl;
     }
 
@@ -377,7 +376,7 @@ static int TsCliMain(int argc, char** argv) {
     vector<StatusAndSchemaPB> tablets;
     RETURN_NOT_OK_PREPEND_FROM_MAIN(client.ListTablets(&tablets),
                                     "Unable to list tablets on " + addr);
-    BOOST_FOREACH(const StatusAndSchemaPB& status_and_schema, tablets) {
+    for (const StatusAndSchemaPB& status_and_schema : tablets) {
       Schema schema;
       RETURN_NOT_OK_PREPEND_FROM_MAIN(SchemaFromPB(status_and_schema.schema(), &schema),
                                       "Unable to deserialize schema from " + addr);
@@ -411,7 +410,7 @@ static int TsCliMain(int argc, char** argv) {
     RETURN_NOT_OK_PREPEND_FROM_MAIN(client.ListTablets(&tablets),
                                     "Unable to list tablets on " + addr);
     bool all_running = true;
-    BOOST_FOREACH(const StatusAndSchemaPB& status_and_schema, tablets) {
+    for (const StatusAndSchemaPB& status_and_schema : tablets) {
       TabletStatusPB ts = status_and_schema.tablet_status();
       if (ts.state() != tablet::RUNNING) {
         std::cout << "Tablet id: " << ts.tablet_id() << " is "

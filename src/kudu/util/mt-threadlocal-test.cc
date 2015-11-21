@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <boost/foreach.hpp>
 #include <boost/thread/locks.hpp>
 #include <glog/logging.h>
 #include <unordered_set>
@@ -155,7 +154,7 @@ static uint64_t Iterate(CounterRegistry* registry, int expected_counters) {
   uint64_t sum = 0;
   int seen_counters = 0;
   boost::lock_guard<RegistryLockType> l(*registry->get_lock());
-  BOOST_FOREACH(Counter* counter, *registry->GetCountersUnlocked()) {
+  for (Counter* counter : *registry->GetCountersUnlocked()) {
     uint64_t value;
     {
       boost::lock_guard<CounterLockType> l(*counter->get_lock());
@@ -208,7 +207,7 @@ static void TestThreadLocalCounters(CounterRegistry* registry, const int num_thr
   reader_done.CountDown();
 
   LOG(INFO) << "Joining & deleting threads...";
-  BOOST_FOREACH(scoped_refptr<kudu::Thread> thread, threads) {
+  for (scoped_refptr<kudu::Thread> thread : threads) {
     CHECK_OK(ThreadJoiner(thread.get()).Join());
   }
   LOG(INFO) << "Done.";
@@ -310,7 +309,7 @@ TEST_F(ThreadLocalTest, TestTLSMember) {
   }
 
   LOG(INFO) << "Joining & deleting threads...";
-  BOOST_FOREACH(scoped_refptr<kudu::Thread> thread, threads) {
+  for (scoped_refptr<kudu::Thread> thread : threads) {
     CHECK_OK(ThreadJoiner(thread.get()).Join());
   }
 }

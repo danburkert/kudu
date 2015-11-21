@@ -14,7 +14,6 @@
 
 #include "kudu/rpc/service_pool.h"
 
-#include <boost/foreach.hpp>
 #include <glog/logging.h>
 #include <memory>
 #include <string>
@@ -87,7 +86,7 @@ void ServicePool::Shutdown() {
   if (closing_) return;
   closing_ = true;
   // TODO: Use a proper thread pool implementation.
-  BOOST_FOREACH(scoped_refptr<kudu::Thread>& thread, threads_) {
+  for (scoped_refptr<kudu::Thread>& thread : threads_) {
     CHECK_OK(ThreadJoiner(thread.get()).Join());
   }
 

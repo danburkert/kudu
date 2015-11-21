@@ -14,7 +14,6 @@
 
 #include "kudu/fs/block_id.h"
 
-#include <boost/foreach.hpp>
 #include <glog/logging.h>
 #include <string>
 #include <vector>
@@ -32,7 +31,7 @@ const uint64_t BlockId::kInvalidId = 0;
 string BlockId::JoinStrings(const vector<BlockId>& blocks) {
   vector<string> strings;
   strings.reserve(blocks.size());
-  BOOST_FOREACH(const BlockId& block, blocks) {
+  for (const BlockId& block : blocks) {
     strings.push_back(block.ToString());
   }
   return ::JoinStrings(strings, ",");

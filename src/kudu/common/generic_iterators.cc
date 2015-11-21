@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/foreach.hpp>
 
 #include <algorithm>
 #include <memory>
@@ -157,7 +156,7 @@ Status MergeIterator::Init(ScanSpec *spec) {
 
   RETURN_NOT_OK(InitSubIterators(spec));
 
-  BOOST_FOREACH(shared_ptr<MergeIterState> &state, iters_) {
+  for (shared_ptr<MergeIterState> &state : iters_) {
     RETURN_NOT_OK(state->PullNextBlock());
   }
 
@@ -183,7 +182,7 @@ bool MergeIterator::HasNext() const {
 
 Status MergeIterator::InitSubIterators(ScanSpec *spec) {
   // Initialize all the sub iterators.
-  BOOST_FOREACH(shared_ptr<RowwiseIterator> &iter, orig_iters_) {
+  for (shared_ptr<RowwiseIterator> &iter : orig_iters_) {
     ScanSpec *spec_copy = spec != NULL ? scan_spec_copies_.Construct(*spec) : NULL;
     RETURN_NOT_OK(PredicateEvaluatingIterator::InitAndMaybeWrap(&iter, spec_copy));
     iters_.push_back(shared_ptr<MergeIterState>(new MergeIterState(iter)));
@@ -215,7 +214,7 @@ void MergeIterator::PrepareBatch(RowBlock* dst) {
   // We can always provide at least as many rows as are remaining
   // in the currently queued up blocks.
   size_t available = 0;
-  BOOST_FOREACH(shared_ptr<MergeIterState> &iter, iters_) {
+  for (shared_ptr<MergeIterState> &iter : iters_) {
     available += iter->remaining_in_block();
   }
 
@@ -267,7 +266,7 @@ string MergeIterator::ToString() const {
   string s;
   s.append("Merge(");
   bool first = true;
-  BOOST_FOREACH(const shared_ptr<RowwiseIterator> &iter, orig_iters_) {
+  for (const shared_ptr<RowwiseIterator> &iter : orig_iters_) {
     s.append(iter->ToString());
     if (!first) {
       s.append(", ");
@@ -286,14 +285,14 @@ const Schema& MergeIterator::schema() const {
 void MergeIterator::GetIteratorStats(vector<IteratorStats>* stats) const {
   CHECK(initted_);
   vector<vector<IteratorStats> > stats_by_iter;
-  BOOST_FOREACH(const shared_ptr<RowwiseIterator>& iter, orig_iters_) {
+  for (const shared_ptr<RowwiseIterator>& iter : orig_iters_) {
     vector<IteratorStats> stats_for_iter;
     iter->GetIteratorStats(&stats_for_iter);
     stats_by_iter.push_back(stats_for_iter);
   }
   for (size_t idx = 0; idx < schema_.num_columns(); ++idx) {
     IteratorStats stats_for_col;
-    BOOST_FOREACH(const vector<IteratorStats>& stats_for_iter, stats_by_iter) {
+    for (const vector<IteratorStats>& stats_for_iter : stats_by_iter) {
       stats_for_col.AddStats(stats_for_iter[idx]);
     }
     stats->push_back(stats_for_col);
@@ -324,7 +323,7 @@ Status UnionIterator::Init(ScanSpec *spec) {
   // sub-iterators, since they may not know their own schemas
   // until they've been initialized (in the case of a union of unions)
   schema_.reset(new Schema(iters_.front()->schema()));
-  BOOST_FOREACH(const shared_ptr<RowwiseIterator> &iter, iters_) {
+  for (const shared_ptr<RowwiseIterator> &iter : iters_) {
     if (!iter->schema().Equals(*schema_)) {
       return Status::InvalidArgument(
         string("Schemas do not match: ") + schema_->ToString()
@@ -338,7 +337,7 @@ Status UnionIterator::Init(ScanSpec *spec) {
 
 
 Status UnionIterator::InitSubIterators(ScanSpec *spec) {
-  BOOST_FOREACH(shared_ptr<RowwiseIterator> &iter, iters_) {
+  for (shared_ptr<RowwiseIterator> &iter : iters_) {
     ScanSpec *spec_copy = spec != NULL ? scan_spec_copies_.Construct(*spec) : NULL;
     RETURN_NOT_OK(PredicateEvaluatingIterator::InitAndMaybeWrap(&iter, spec_copy));
   }
@@ -352,7 +351,7 @@ Status UnionIterator::InitSubIterators(ScanSpec *spec) {
 
 bool UnionIterator::HasNext() const {
   CHECK(initted_);
-  BOOST_FOREACH(const shared_ptr<RowwiseIterator> &iter, iters_) {
+  for (const shared_ptr<RowwiseIterator> &iter : iters_) {
     if (iter->HasNext()) return true;
   }
 
@@ -392,7 +391,7 @@ string UnionIterator::ToString() const {
   string s;
   s.append("Union(");
   bool first = true;
-  BOOST_FOREACH(const shared_ptr<RowwiseIterator> &iter, iters_) {
+  for (const shared_ptr<RowwiseIterator> &iter : iters_) {
     if (!first) {
       s.append(", ");
     }
@@ -406,14 +405,14 @@ string UnionIterator::ToString() const {
 void UnionIterator::GetIteratorStats(std::vector<IteratorStats>* stats) const {
   CHECK(initted_);
   vector<vector<IteratorStats> > stats_by_iter;
-  BOOST_FOREACH(const shared_ptr<RowwiseIterator>& iter, all_iters_) {
+  for (const shared_ptr<RowwiseIterator>& iter : all_iters_) {
     vector<IteratorStats> stats_for_iter;
     iter->GetIteratorStats(&stats_for_iter);
     stats_by_iter.push_back(stats_for_iter);
   }
   for (size_t idx = 0; idx < schema_->num_columns(); ++idx) {
     IteratorStats stats_for_col;
-    BOOST_FOREACH(const vector<IteratorStats>& stats_for_iter, stats_by_iter) {
+    for (const vector<IteratorStats>& stats_for_iter : stats_by_iter) {
       stats_for_col.AddStats(stats_for_iter[idx]);
     }
     stats->push_back(stats_for_col);
@@ -502,15 +501,15 @@ Status MaterializingIterator::MaterializeBlock(RowBlock *dst) {
 
   bool short_circuit = false;
 
-  BOOST_FOREACH(size_t col_idx, materialization_order_) {
+  for (size_t col_idx : materialization_order_) {
     // Materialize the column itself into the row block.
     ColumnBlock dst_col(dst->column_block(col_idx));
     RETURN_NOT_OK(iter_->MaterializeColumn(col_idx, &dst_col));
 
     // Evaluate any predicates that apply to this column.
-    typedef std::pair<size_t, ColumnRangePredicate> MapEntry;
-    BOOST_FOREACH(const MapEntry &entry, preds_by_column_.equal_range(col_idx)) {
-      const ColumnRangePredicate &pred = entry.second;
+    auto range = preds_by_column_.equal_range(col_idx);
+    for (auto it = range.first; it != range.second; ++it) {
+      const ColumnRangePredicate &pred = it->second;
 
       pred.Evaluate(dst, dst->selection_vector());
 
@@ -577,7 +576,7 @@ bool PredicateEvaluatingIterator::HasNext() const {
 Status PredicateEvaluatingIterator::NextBlock(RowBlock *dst) {
   RETURN_NOT_OK(base_iter_->NextBlock(dst));
 
-  BOOST_FOREACH(ColumnRangePredicate &pred, predicates_) {
+  for (ColumnRangePredicate &pred : predicates_) {
     pred.Evaluate(dst, dst->selection_vector());
 
     // If after evaluating this predicate, the entire row block has now been

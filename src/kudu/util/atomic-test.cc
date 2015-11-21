@@ -14,7 +14,6 @@
 
 #include "kudu/util/atomic.h"
 
-#include <boost/foreach.hpp>
 #include <gtest/gtest.h>
 #include <limits>
 #include <vector>
@@ -51,7 +50,7 @@ typedef ::testing::Types<int32_t, int64_t, uint32_t, uint64_t> IntTypes;
 TYPED_TEST_CASE(AtomicIntTest, IntTypes);
 
 TYPED_TEST(AtomicIntTest, LoadStore) {
-  BOOST_FOREACH(const MemoryOrder mem_order, this->acquire_release_) {
+  for (const MemoryOrder mem_order : this->acquire_release_) {
     AtomicInt<TypeParam> i(0);
     EXPECT_EQ(0, i.Load(mem_order));
     i.Store(42, mem_order);
@@ -64,7 +63,7 @@ TYPED_TEST(AtomicIntTest, LoadStore) {
 }
 
 TYPED_TEST(AtomicIntTest, SetSwapExchange) {
-  BOOST_FOREACH(const MemoryOrder mem_order, this->acquire_release_) {
+  for (const MemoryOrder mem_order : this->acquire_release_) {
     AtomicInt<TypeParam> i(0);
     EXPECT_TRUE(i.CompareAndSet(0, 5, mem_order));
     EXPECT_EQ(5, i.Load(mem_order));
@@ -80,7 +79,7 @@ TYPED_TEST(AtomicIntTest, SetSwapExchange) {
 }
 
 TYPED_TEST(AtomicIntTest, MinMax) {
-  BOOST_FOREACH(const MemoryOrder mem_order, this->acquire_release_) {
+  for (const MemoryOrder mem_order : this->acquire_release_) {
     AtomicInt<TypeParam> i(0);
 
     i.StoreMax(100, mem_order);
@@ -101,7 +100,7 @@ TYPED_TEST(AtomicIntTest, MinMax) {
 }
 
 TYPED_TEST(AtomicIntTest, Increment) {
-  BOOST_FOREACH(const MemoryOrder mem_order, this->barrier_) {
+  for (const MemoryOrder mem_order : this->barrier_) {
     AtomicInt<TypeParam> i(0);
     EXPECT_EQ(1, i.Increment(mem_order));
     EXPECT_EQ(3, i.IncrementBy(2, mem_order));
@@ -111,7 +110,7 @@ TYPED_TEST(AtomicIntTest, Increment) {
 
 TEST(Atomic, AtomicBool) {
   vector<MemoryOrder> memory_orders = { kMemOrderNoBarrier, kMemOrderRelease, kMemOrderAcquire };
-  BOOST_FOREACH(const MemoryOrder mem_order, memory_orders) {
+  for (const MemoryOrder mem_order : memory_orders) {
     AtomicBool b(false);
     EXPECT_FALSE(b.Load(mem_order));
     b.Store(true, mem_order);

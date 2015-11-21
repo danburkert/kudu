@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/foreach.hpp>
 #include <boost/ptr_container/ptr_vector.hpp>
 #include <boost/thread/thread.hpp>
 #include <memory>
@@ -58,7 +57,7 @@ class TestMultiThreadedRowSet : public TestRowSet {
   }
 
   void JoinThreads(boost::ptr_vector<boost::thread> *threads) {
-    BOOST_FOREACH(boost::thread &thr, *threads) {
+    for (boost::thread &thr : *threads) {
       thr.join();
     }
   }

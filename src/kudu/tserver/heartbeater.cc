@@ -14,7 +14,6 @@
 
 #include "kudu/tserver/heartbeater.h"
 
-#include <boost/foreach.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <memory>
@@ -204,7 +203,7 @@ Status Heartbeater::Thread::FindLeaderMaster(const MonoTime& deadline,
     return Status::OK();
   }
   vector<Sockaddr> master_sock_addrs;
-  BOOST_FOREACH(const HostPort& master_addr, master_addrs_) {
+  for (const HostPort& master_addr : master_addrs_) {
     vector<Sockaddr> addrs;
     Status s = master_addr.ResolveAddresses(&addrs);
     if (!s.ok()) {

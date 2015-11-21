@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <algorithm>
-#include <boost/foreach.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
@@ -226,7 +225,7 @@ TEST_F(HybridClockTest, TestClockDoesntGoBackwardsWithUpdates) {
 
   SleepFor(MonoDelta::FromSeconds(1));
   stop.Store(true);
-  BOOST_FOREACH(const scoped_refptr<Thread> t, threads) {
+  for (const scoped_refptr<Thread> t : threads) {
     t->Join();
   }
 }

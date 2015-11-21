@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/foreach.hpp>
 
 #include <algorithm>
 #include <map>
@@ -102,7 +101,7 @@ struct RowState {
     string ret = "(";
     typedef pair<string, int32_t> entry;
     bool first = true;
-    BOOST_FOREACH(const entry& e, cols) {
+    for (const entry& e : cols) {
       if (!first) {
         ret.append(", ");
       }
@@ -176,7 +175,7 @@ struct TableState {
   void AddColumnWithDefault(const string& name, int32_t def, bool nullable) {
     col_names_.push_back(name);
     col_nullable_.push_back(nullable);
-    BOOST_FOREACH(entry& e, rows_) {
+    for (entry& e : rows_) {
       e.second->cols.push_back(make_pair(name, def));
     }
   }
@@ -186,7 +185,7 @@ struct TableState {
     int index = col_it - col_names_.begin();
     col_names_.erase(col_it);
     col_nullable_.erase(col_nullable_.begin() + index);
-    BOOST_FOREACH(entry& e, rows_) {
+    for (entry& e : rows_) {
       e.second->cols.erase(e.second->cols.begin() + index);
     }
   }
@@ -203,7 +202,7 @@ struct TableState {
 
   void ToStrings(vector<string>* strs) {
     strs->clear();
-    BOOST_FOREACH(const entry& e, rows_) {
+    for (const entry& e : rows_) {
       strs->push_back(e.second->ToString());
     }
   }

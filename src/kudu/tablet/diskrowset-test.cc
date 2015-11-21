@@ -427,7 +427,7 @@ TEST_F(TestRowSet, TestRollingDiskRowSetWriter) {
   vector<shared_ptr<RowSetMetadata> > metas;
   writer.GetWrittenRowSetMetadata(&metas);
   EXPECT_EQ(4, metas.size());
-  BOOST_FOREACH(const shared_ptr<RowSetMetadata>& meta, metas) {
+  for (const shared_ptr<RowSetMetadata>& meta : metas) {
     ASSERT_TRUE(meta->HasDataForColumnIdForTests(schema_.column_id(0)));
   }
 }
@@ -452,7 +452,7 @@ TEST_F(TestRowSet, TestMakeDeltaIteratorMergerUnlocked) {
   ASSERT_OK(DebugDumpDeltaIterator(REDO, merge_iter.get(), schema_,
                                           ITERATE_OVER_ALL_ROWS,
                                           &results));
-  BOOST_FOREACH(const string &str, results) {
+  for (const string &str : results) {
     VLOG(1) << str;
   }
   ASSERT_EQ(compacted_stores.size(), num_stores);
@@ -527,7 +527,7 @@ TEST_F(TestRowSet, TestCompactStores) {
   ASSERT_OK(DebugDumpDeltaIterator(REDO, merge_iter.get(), schema_,
                                           ITERATE_OVER_ALL_ROWS,
                                           &results));
-  BOOST_FOREACH(const string &str, results) {
+  for (const string &str : results) {
     VLOG(1) << str;
   }
   ASSERT_TRUE(is_sorted(results.begin(), results.end()));

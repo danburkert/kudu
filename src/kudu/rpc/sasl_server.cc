@@ -14,7 +14,6 @@
 
 #include "kudu/rpc/sasl_server.h"
 
-#include <boost/foreach.hpp>
 #include <glog/logging.h>
 #include <google/protobuf/message_lite.h>
 #include <limits>
@@ -286,7 +285,7 @@ Status SaslServer::SendNegotiateResponse(const set<string>& server_mechs) {
   SaslMessagePB response;
   response.set_state(SaslMessagePB::NEGOTIATE);
 
-  BOOST_FOREACH(const string& mech, server_mechs) {
+  for (const string& mech : server_mechs) {
     SaslMessagePB::SaslAuth* auth = response.add_auths();
     auth->set_method(""); // TODO: Support "method" in some meaningful way.
     auth->set_mechanism(mech);

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/foreach.hpp>
 #include <boost/ptr_container/ptr_vector.hpp>
 #include <boost/smart_ptr/detail/spinlock.hpp>
 #include <boost/smart_ptr/detail/yield_k.hpp>
@@ -217,7 +216,7 @@ void test_shared_lock(int num_threads,
   }
 
   int64_t start = CycleClock::Now();
-  BOOST_FOREACH(boost::thread &thr, threads) {
+  for (boost::thread &thr : threads) {
     thr.join();
   }
   int64_t end = CycleClock::Now();

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <gtest/gtest.h>
-#include <boost/foreach.hpp>
 #include <boost/thread/thread.hpp>
 #include <boost/thread/locks.hpp>
 #include <vector>
@@ -79,7 +78,7 @@ TEST(RWSemaphoreTest, TestBasicOperation) {
     s.done = true;
   }
 
-  BOOST_FOREACH(thread* t, threads) {
+  for (thread* t : threads) {
     t->join();
     delete t;
   }

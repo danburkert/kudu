@@ -19,7 +19,6 @@
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
-#include <boost/foreach.hpp>
 
 #include "kudu/gutil/bind.h"
 #include "kudu/gutil/strings/util.h"
@@ -165,7 +164,7 @@ class TestEnv : public KuduTest {
         if (fast || random() % 2) {
           ASSERT_OK(file->AppendVector(input[i]));
         } else {
-          BOOST_FOREACH(const Slice& slice, input[i]) {
+          for (const Slice& slice : input[i]) {
             ASSERT_OK(file->Append(slice));
           }
         }
@@ -696,7 +695,7 @@ TEST_F(TestEnv, TestRWFile) {
 
 TEST_F(TestEnv, TestCanonicalize) {
   vector<string> synonyms = { GetTestPath("."), GetTestPath("./."), GetTestPath(".//./") };
-  BOOST_FOREACH(const string& synonym, synonyms) {
+  for (const string& synonym : synonyms) {
     string result;
     ASSERT_OK(env_->Canonicalize(synonym, &result));
     ASSERT_EQ(GetTestDataDirectory(), result);

@@ -216,7 +216,7 @@ TEST_F(TestCFileSet, TestIteratePartialSchema) {
   ASSERT_OK(IterateToStringList(iter.get(), &results));
 
   VLOG(1) << "Results of iterating over sparse partial schema: ";
-  BOOST_FOREACH(const string &str, results) {
+  for (const string &str : results) {
     VLOG(1) << str;
   }
 
@@ -265,7 +265,7 @@ TEST_F(TestCFileSet, TestRangeScan) {
   ASSERT_OK(IterateToStringList(iter.get(), &results));
 
   // Ensure that we got the expected rows.
-  BOOST_FOREACH(const string &str, results) {
+  for (const string &str : results) {
     LOG(INFO) << str;
   }
   ASSERT_EQ(5, results.size());

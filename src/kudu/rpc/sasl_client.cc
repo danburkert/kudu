@@ -20,7 +20,6 @@
 #include <set>
 #include <string>
 
-#include <boost/foreach.hpp>
 #include <glog/logging.h>
 #include <sasl/sasl.h>
 
@@ -302,7 +301,7 @@ Status SaslClient::HandleNegotiateResponse(const SaslMessagePB& response) {
 
   string mech_list;
   mech_list.reserve(64);  // Avoid resizing the buffer later.
-  BOOST_FOREACH(const SaslMessagePB::SaslAuth& auth, response.auths()) {
+  for (const SaslMessagePB::SaslAuth& auth : response.auths()) {
     if (mech_list.length() > 0) mech_list.append(" ");
     string mech = auth.mechanism();
     mech_list.append(mech);

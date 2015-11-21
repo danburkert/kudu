@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <boost/thread/thread.hpp>
-#include <boost/foreach.hpp>
 #include <string>
 #include <vector>
 
@@ -131,7 +130,7 @@ TEST_F(RWCLockTest, TestCorrectBehavior) {
 
   Release_Store(&state.stop, 1);
 
-  BOOST_FOREACH(boost::thread* t, threads) {
+  for (boost::thread* t : threads) {
     t->join();
     delete t;
   }

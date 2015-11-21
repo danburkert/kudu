@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/foreach.hpp>
 
 #include "kudu/cfile/cfile_writer.h"
 #include "kudu/cfile/index_block.h"
@@ -67,7 +66,7 @@ void IndexBlockBuilder::Add(const Slice &keyptr,
 Slice IndexBlockBuilder::Finish() {
   CHECK(!finished_) << "already called Finish()";
 
-  BOOST_FOREACH(uint32_t off, entry_offsets_) {
+  for (uint32_t off : entry_offsets_) {
     InlinePutFixed32(&buffer_, off);
   }
 

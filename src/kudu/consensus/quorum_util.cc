@@ -13,7 +13,6 @@
 // limitations under the License.
 #include "kudu/consensus/quorum_util.h"
 
-#include <boost/foreach.hpp>
 #include <set>
 #include <string>
 
@@ -29,7 +28,7 @@ using std::string;
 using strings::Substitute;
 
 bool IsRaftConfigMember(const std::string& uuid, const RaftConfigPB& config) {
-  BOOST_FOREACH(const RaftPeerPB& peer, config.peers()) {
+  for (const RaftPeerPB& peer : config.peers()) {
     if (peer.permanent_uuid() == uuid) {
       return true;
     }
@@ -38,7 +37,7 @@ bool IsRaftConfigMember(const std::string& uuid, const RaftConfigPB& config) {
 }
 
 bool IsRaftConfigVoter(const std::string& uuid, const RaftConfigPB& config) {
-  BOOST_FOREACH(const RaftPeerPB& peer, config.peers()) {
+  for (const RaftPeerPB& peer : config.peers()) {
     if (peer.permanent_uuid() == uuid) {
       return peer.member_type() == RaftPeerPB::VOTER;
     }
@@ -49,7 +48,7 @@ bool IsRaftConfigVoter(const std::string& uuid, const RaftConfigPB& config) {
 Status GetRaftConfigMember(const RaftConfigPB& config,
                            const std::string& uuid,
                            RaftPeerPB* peer_pb) {
-  BOOST_FOREACH(const RaftPeerPB& peer, config.peers()) {
+  for (const RaftPeerPB& peer : config.peers()) {
     if (peer.permanent_uuid() == uuid) {
       *peer_pb = peer;
       return Status::OK();
@@ -68,7 +67,7 @@ Status GetRaftConfigLeader(const ConsensusStatePB& cstate, RaftPeerPB* peer_pb) 
 bool RemoveFromRaftConfig(RaftConfigPB* config, const string& uuid) {
   RepeatedPtrField<RaftPeerPB> modified_peers;
   bool removed = false;
-  BOOST_FOREACH(const RaftPeerPB& peer, config->peers()) {
+  for (const RaftPeerPB& peer : config->peers()) {
     if (peer.permanent_uuid() == uuid) {
       removed = true;
       continue;
@@ -82,7 +81,7 @@ bool RemoveFromRaftConfig(RaftConfigPB* config, const string& uuid) {
 
 int CountVoters(const RaftConfigPB& config) {
   int voters = 0;
-  BOOST_FOREACH(const RaftPeerPB& peer, config.peers()) {
+  for (const RaftPeerPB& peer : config.peers()) {
     if (peer.member_type() == RaftPeerPB::VOTER) {
       voters++;
     }
@@ -104,7 +103,7 @@ RaftPeerPB::Role GetConsensusRole(const std::string& permanent_uuid,
     return RaftPeerPB::NON_PARTICIPANT;
   }
 
-  BOOST_FOREACH(const RaftPeerPB& peer, cstate.config().peers()) {
+  for (const RaftPeerPB& peer : cstate.config().peers()) {
     if (peer.permanent_uuid() == permanent_uuid) {
       switch (peer.member_type()) {
         case RaftPeerPB::VOTER:
@@ -164,7 +163,7 @@ Status VerifyRaftConfig(const RaftConfigPB& config, RaftConfigState type) {
     return Status::OK();
   }
 
-  BOOST_FOREACH(const RaftPeerPB& peer, config.peers()) {
+  for (const RaftPeerPB& peer : config.peers()) {
     if (!peer.has_permanent_uuid() || peer.permanent_uuid() == "") {
       return Status::IllegalState(Substitute("One peer didn't have an uuid or had the empty"
           " string. RaftConfig: $0", config.ShortDebugString()));

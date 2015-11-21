@@ -15,7 +15,6 @@
 #ifndef KUDU_FS_BLOCK_MANAGER_H
 #define KUDU_FS_BLOCK_MANAGER_H
 
-#include <boost/foreach.hpp>
 #include <cstddef>
 #include <stdint.h>
 #include <string>
@@ -243,7 +242,7 @@ class ScopedWritableBlockCloser {
   ScopedWritableBlockCloser() {}
 
   ~ScopedWritableBlockCloser() {
-    BOOST_FOREACH(WritableBlock* block, blocks_) {
+    for (WritableBlock* block : blocks_) {
       WARN_NOT_OK(block->Abort(), strings::Substitute(
           "Failed to abort block with id $0", block->id().ToString()));
     }

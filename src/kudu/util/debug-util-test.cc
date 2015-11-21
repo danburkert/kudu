@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/foreach.hpp>
 #include <glog/stl_logging.h>
 #include <signal.h>
 #include <string>
@@ -138,7 +137,7 @@ TEST_F(DebugUtilTest, TestSignalStackTrace) {
 TEST_F(DebugUtilTest, TestDumpAllThreads) {
   vector<pid_t> tids;
   ASSERT_OK(ListThreads(&tids));
-  BOOST_FOREACH(pid_t tid, tids) {
+  for (pid_t tid : tids) {
     LOG(INFO) << DumpThreadStack(tid);
   }
 }

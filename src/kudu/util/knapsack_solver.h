@@ -14,7 +14,6 @@
 #ifndef KUDU_UTIL_KNAPSACK_SOLVER_H
 #define KUDU_UTIL_KNAPSACK_SOLVER_H
 
-#include <boost/foreach.hpp>
 #include <glog/logging.h>
 #include <algorithm>
 #include <utility>

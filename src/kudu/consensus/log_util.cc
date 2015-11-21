@@ -15,7 +15,6 @@
 #include "kudu/consensus/log_util.h"
 
 #include <algorithm>
-#include <boost/foreach.hpp>
 #include <iostream>
 #include <limits>
 #include <utility>
@@ -195,7 +194,7 @@ Status ReadableLogSegment::RebuildFooterByScanning() {
   footer_.set_num_entries(entries.size());
 
   // Rebuild the min/max replicate index (by scanning)
-  BOOST_FOREACH(const LogEntryPB* entry, entries) {
+  for (const LogEntryPB* entry : entries) {
     if (entry->has_replicate()) {
       int64_t index = entry->replicate().id().index();
       // TODO: common code with Log::UpdateFooterForBatch
@@ -565,7 +564,7 @@ Status ReadableLogSegment::MakeCorruptionStatus(int batch_number, int64_t batch_
                       batch_number, batch_offset, path_);
   err.append("Prior batch offsets:");
   std::sort(recent_offsets->begin(), recent_offsets->end());
-  BOOST_FOREACH(int64_t offset, *recent_offsets) {
+  for (int64_t offset : *recent_offsets) {
     if (offset >= 0) {
       SubstituteAndAppend(&err, " $0", offset);
     }

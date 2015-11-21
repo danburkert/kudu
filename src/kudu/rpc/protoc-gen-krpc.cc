@@ -17,7 +17,7 @@
 // protoc --plugin=protoc-gen-krpc --krpc_out . --proto_path . <file>.proto
 ////////////////////////////////////////////////////////////////////////////////
 
-#include <boost/foreach.hpp>
+#include <boost/range/adaptor/reversed.hpp>
 #include <ctype.h>
 #include <glog/logging.h>
 #include <google/protobuf/compiler/code_generator.h>
@@ -101,7 +101,7 @@ class FileSubstitutions : public Substituter {
 
   virtual void InitSubstitutionMap(map<string, string> *map) const OVERRIDE {
     typedef std::map<string, string>::value_type kv_pair;
-    BOOST_FOREACH(const kv_pair &pair, map_) {
+    for (const kv_pair &pair : map_) {
       (*map)[pair.first] = pair.second;
     }
   }
@@ -137,7 +137,7 @@ class FileSubstitutions : public Substituter {
   static string GenerateOpenNamespace(const string &str) {
     vector<string> components = strings::Split(str, ".");
     string out;
-    BOOST_FOREACH(const string &c, components) {
+    for (const string &c : components) {
       out.append("namespace ").append(c).append(" {\n");
     }
     return out;
@@ -146,7 +146,7 @@ class FileSubstitutions : public Substituter {
   static string GenerateCloseNamespace(const string &str) {
     vector<string> components = strings::Split(str, ".");
     string out;
-    BOOST_REVERSE_FOREACH(const string &c, components) {
+    for (const string &c : boost::adaptors::reverse(components)) {
       out.append("} // namespace ").append(c).append("\n");
     }
     return out;
@@ -250,7 +250,7 @@ class SubstitutionContext {
   }
 
   void InitSubstitutionMap(map<string, string> *subs) const {
-    BOOST_FOREACH(const shared_ptr<const Substituter> &sub, subs_) {
+    for (const shared_ptr<const Substituter> &sub : subs_) {
       sub->InitSubstitutionMap(subs);
     }
   }

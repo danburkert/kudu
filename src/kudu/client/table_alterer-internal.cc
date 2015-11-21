@@ -14,7 +14,6 @@
 
 #include "kudu/client/table_alterer-internal.h"
 
-#include <boost/foreach.hpp>
 #include <string>
 
 #include "kudu/client/schema.h"
@@ -38,7 +37,7 @@ KuduTableAlterer::Data::Data(
 }
 
 KuduTableAlterer::Data::~Data() {
-  BOOST_FOREACH(Step& s, steps_) {
+  for (Step& s : steps_) {
     delete s.spec;
   }
 }
@@ -59,7 +58,7 @@ Status KuduTableAlterer::Data::ToRequest(AlterTableRequestPB* req) {
     req->set_new_table_name(rename_to_.get());
   }
 
-  BOOST_FOREACH(const Step& s, steps_) {
+  for (const Step& s : steps_) {
     AlterTableRequestPB::Step* pb_step = req->add_alter_schema_steps();
     pb_step->set_type(s.step_type);
 

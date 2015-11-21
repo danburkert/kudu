@@ -36,7 +36,6 @@
 //
 // TODO Make the inserts multi-threaded. See Kudu-629 for the technique.
 #include <boost/bind.hpp>
-#include <boost/foreach.hpp>
 
 #include <glog/logging.h>
 #include <stdlib.h>
@@ -367,7 +366,7 @@ Status TpchRealWorld::Run() {
 
   stop_threads_.Store(true);
 
-  BOOST_FOREACH(scoped_refptr<kudu::Thread> thr, threads) {
+  for (scoped_refptr<kudu::Thread> thr : threads) {
     RETURN_NOT_OK(ThreadJoiner(thr.get()).Join());
   }
   return Status::OK();

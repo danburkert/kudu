@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/foreach.hpp>
 
 #include <memory>
 #include <vector>
@@ -145,7 +144,7 @@ TEST_F(ClientStressTest, TestStartScans) {
 
     go_latch.CountDown();
 
-    BOOST_FOREACH(const scoped_refptr<kudu::Thread>& thr, threads) {
+    for (const scoped_refptr<kudu::Thread>& thr : threads) {
       CHECK_OK(ThreadJoiner(thr.get()).Join());
     }
   }

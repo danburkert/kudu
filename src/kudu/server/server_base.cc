@@ -13,7 +13,6 @@
 // limitations under the License.
 #include "kudu/server/server_base.h"
 
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <gflags/gflags.h>
 #include <string>
@@ -192,7 +191,7 @@ void ServerBase::GetStatusPB(ServerStatusPB* status) const {
   {
     vector<Sockaddr> addrs;
     CHECK_OK(rpc_server_->GetBoundAddresses(&addrs));
-    BOOST_FOREACH(const Sockaddr& addr, addrs) {
+    for (const Sockaddr& addr : addrs) {
       HostPortPB* pb = status->add_bound_rpc_addresses();
       pb->set_host(addr.host());
       pb->set_port(addr.port());
@@ -203,7 +202,7 @@ void ServerBase::GetStatusPB(ServerStatusPB* status) const {
   {
     vector<Sockaddr> addrs;
     CHECK_OK(web_server_->GetBoundAddresses(&addrs));
-    BOOST_FOREACH(const Sockaddr& addr, addrs) {
+    for (const Sockaddr& addr : addrs) {
       HostPortPB* pb = status->add_bound_http_addresses();
       pb->set_host(addr.host());
       pb->set_port(addr.port());

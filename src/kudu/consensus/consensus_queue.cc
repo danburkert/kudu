@@ -14,7 +14,6 @@
 #include "kudu/consensus/consensus_queue.h"
 
 #include <algorithm>
-#include <boost/foreach.hpp>
 #include <boost/thread/locks.hpp>
 #include <gflags/gflags.h>
 #include <iostream>
@@ -147,7 +146,7 @@ void PeerMessageQueue::SetLeaderMode(const OpId& committed_index,
   // Reset last communication time with all peers to reset the clock on the
   // failure timeout.
   MonoTime now(MonoTime::Now(MonoTime::FINE));
-  BOOST_FOREACH(const PeersMap::value_type& entry, peers_map_) {
+  for (const PeersMap::value_type& entry : peers_map_) {
     entry.second->last_successful_communication_time = now;
   }
 }
@@ -200,10 +199,10 @@ void PeerMessageQueue::UntrackPeer(const string& uuid) {
 void PeerMessageQueue::CheckPeersInActiveConfigIfLeaderUnlocked() const {
   if (queue_state_.mode != LEADER) return;
   unordered_set<string> config_peer_uuids;
-  BOOST_FOREACH(const RaftPeerPB& peer_pb, queue_state_.active_config->peers()) {
+  for (const RaftPeerPB& peer_pb : queue_state_.active_config->peers()) {
     InsertOrDie(&config_peer_uuids, peer_pb.permanent_uuid());
   }
-  BOOST_FOREACH(const PeersMap::value_type& entry, peers_map_) {
+  for (const PeersMap::value_type& entry : peers_map_) {
     if (!ContainsKey(config_peer_uuids, entry.first)) {
       LOG_WITH_PREFIX_UNLOCKED(FATAL) << Substitute("Peer $0 is not in the active config. "
                                                     "Queue state: $1",
@@ -359,7 +358,7 @@ Status PeerMessageQueue::RequestForPeer(const string& uuid,
     // "all replicated" point. At some point we may want to allow partially loading
     // (and not pinning) earlier messages. At that point we'll need to do something
     // smarter here, like copy or ref-count.
-    BOOST_FOREACH(const ReplicateRefPtr& msg, messages) {
+    for (const ReplicateRefPtr& msg : messages) {
       request->mutable_ops()->AddAllocated(msg->get());
     }
     msg_refs->swap(messages);
@@ -432,7 +431,7 @@ void PeerMessageQueue::AdvanceQueueWatermark(const char* type,
   // - Find the vector.size() - 'num_peers_required' position, this
   //   will be the new 'watermark'.
   vector<const OpId*> watermarks;
-  BOOST_FOREACH(const PeersMap::value_type& peer, peers_map_) {
+  for (const PeersMap::value_type& peer : peers_map_) {
     if (peer.second->is_last_exchange_successful) {
       watermarks.push_back(&peer.second->last_received);
     }
@@ -453,11 +452,11 @@ void PeerMessageQueue::AdvanceQueueWatermark(const char* type,
       << "from " << old_watermark << " to " << new_watermark;
   if (VLOG_IS_ON(3)) {
     VLOG_WITH_PREFIX_UNLOCKED(3) << "Peers: ";
-    BOOST_FOREACH(const PeersMap::value_type& peer, peers_map_) {
+    for (const PeersMap::value_type& peer : peers_map_) {
       VLOG_WITH_PREFIX_UNLOCKED(3) << "Peer: " << peer.second->ToString();
     }
     VLOG_WITH_PREFIX_UNLOCKED(3) << "Sorted watermarks:";
-    BOOST_FOREACH(const OpId* watermark, watermarks) {
+    for (const OpId* watermark : watermarks) {
       VLOG_WITH_PREFIX_UNLOCKED(3) << "Watermark: " << watermark->ShortDebugString();
     }
   }
@@ -683,7 +682,7 @@ void PeerMessageQueue::DumpToStrings(vector<string>* lines) const {
 
 void PeerMessageQueue::DumpToStringsUnlocked(vector<string>* lines) const {
   lines->push_back("Watermarks:");
-  BOOST_FOREACH(const PeersMap::value_type& entry, peers_map_) {
+  for (const PeersMap::value_type& entry : peers_map_) {
     lines->push_back(
         Substitute("Peer: $0 Watermark: $1", entry.first, entry.second->ToString()));
   }
@@ -698,7 +697,7 @@ void PeerMessageQueue::DumpToHtml(std::ostream& out) const {
   out << "<h3>Watermarks</h3>" << endl;
   out << "<table>" << endl;;
   out << "  <tr><th>Peer</th><th>Watermark</th></tr>" << endl;
-  BOOST_FOREACH(const PeersMap::value_type& entry, peers_map_) {
+  for (const PeersMap::value_type& entry : peers_map_) {
     out << Substitute("  <tr><td>$0</td><td>$1</td></tr>",
                       EscapeForHtmlToString(entry.first),
                       EscapeForHtmlToString(entry.second->ToString())) << endl;
@@ -797,7 +796,7 @@ void PeerMessageQueue::NotifyObserversOfMajorityReplOpChangeTask(
   // TODO move commit index advancement here so that the queue is not dependent on
   // consensus at all, but that requires a bit more work.
   OpId new_committed_index;
-  BOOST_FOREACH(PeerMessageQueueObserver* observer, copy) {
+  for (PeerMessageQueueObserver* observer : copy) {
     observer->UpdateMajorityReplicated(new_majority_replicated_op, &new_committed_index);
   }
 
@@ -818,7 +817,7 @@ void PeerMessageQueue::NotifyObserversOfTermChangeTask(int64_t term) {
     copy = observers_;
   }
   OpId new_committed_index;
-  BOOST_FOREACH(PeerMessageQueueObserver* observer, copy) {
+  for (PeerMessageQueueObserver* observer : copy) {
     observer->NotifyTermChange(term);
   }
 }
@@ -842,7 +841,7 @@ void PeerMessageQueue::NotifyObserversOfFailedFollowerTask(const string& uuid,
     observers_copy = observers_;
   }
   OpId new_committed_index;
-  BOOST_FOREACH(PeerMessageQueueObserver* observer, observers_copy) {
+  for (PeerMessageQueueObserver* observer : observers_copy) {
     observer->NotifyFailedFollower(uuid, term, reason);
   }
 }

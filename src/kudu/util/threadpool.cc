@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/foreach.hpp>
 #include <boost/function.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -131,7 +130,7 @@ Status ThreadPool::Init() {
 }
 
 void ThreadPool::ClearQueue() {
-  BOOST_FOREACH(QueueEntry& e, queue_) {
+  for (QueueEntry& e : queue_) {
     if (e.trace) {
       e.trace->Release();
     }

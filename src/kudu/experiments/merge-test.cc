@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -51,7 +50,7 @@ void HeapMerge(
   vector<MergeTypeIter> iters;
   vector<size_t> indexes;
   size_t i = 0;
-  BOOST_FOREACH(const vector<MergeType> &list, in_lists) {
+  for (const vector<MergeType> &list : in_lists) {
     iters.push_back(list.begin());
     indexes.push_back(i++);
   }
@@ -79,7 +78,7 @@ void SimpleMerge(const vector<vector<MergeType> > &in_lists,
                  vector<MergeType> *out) {
   typedef vector<MergeType>::const_iterator MergeTypeIter;
   vector<MergeTypeIter> iters;
-  BOOST_FOREACH(const vector<MergeType> &list, in_lists) {
+  for (const vector<MergeType> &list : in_lists) {
     iters.push_back(list.begin());
   }
 

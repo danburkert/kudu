@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <boost/foreach.hpp>
 #include <boost/ptr_container/ptr_vector.hpp>
 #include <boost/thread/thread.hpp>
 #include <boost/thread/barrier.hpp>
@@ -313,7 +312,7 @@ TEST_F(TestCBTree, TestInsertAndVerifyRandom) {
   InsertRandomKeys(&t, n_keys, &inserted);
 
 
-  BOOST_FOREACH(int key, inserted) {
+  for (int key : inserted) {
     memcpy(kbuf, &key, sizeof(key));
 
     // Do a Get() and check that the real value is still accessible.
@@ -383,7 +382,7 @@ TEST_F(TestCBTree, TestVersionLockConcurrent) {
                         LockCycleThread, &v, split_per_thread, insert_per_thread));
   }
 
-  BOOST_FOREACH(boost::thread &thr, threads) {
+  for (boost::thread &thr : threads) {
     thr.join();
   }
 
@@ -444,7 +443,7 @@ TEST_F(TestCBTree, TestConcurrentInsert) {
   tree.reset(NULL);
   go_barrier.wait();
 
-  BOOST_FOREACH(boost::thread &thr, threads) {
+  for (boost::thread &thr : threads) {
     thr.join();
   }
 }
@@ -711,7 +710,7 @@ TEST_F(TestCBTree, TestConcurrentIterateAndInsert) {
   tree.reset(NULL);
   go_barrier.wait();
 
-  BOOST_FOREACH(boost::thread &thr, threads) {
+  for (boost::thread &thr : threads) {
     thr.join();
   }
 }

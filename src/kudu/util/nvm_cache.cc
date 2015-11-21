@@ -32,7 +32,6 @@
 
 #include "kudu/util/nvm_cache.h"
 
-#include <boost/foreach.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <iostream>
@@ -543,7 +542,7 @@ class ShardedLRUCache : public Cache {
   }
   virtual void SetMetrics(const scoped_refptr<MetricEntity>& entity) OVERRIDE {
     metrics_.reset(new CacheMetrics(entity));
-    BOOST_FOREACH(NvmLRUCache* cache, shards_) {
+    for (NvmLRUCache* cache : shards_) {
       cache->SetMetrics(metrics_.get());
     }
   }
@@ -551,7 +550,7 @@ class ShardedLRUCache : public Cache {
     // Try allocating from each of the shards -- if vmem is tight,
     // this can cause eviction, so we might have better luck in different
     // shards.
-    BOOST_FOREACH(NvmLRUCache* cache, shards_) {
+    for (NvmLRUCache* cache : shards_) {
       uint8_t* ptr = reinterpret_cast<uint8_t*>(cache->AllocateAndRetry(size));
       if (ptr) return ptr;
     }

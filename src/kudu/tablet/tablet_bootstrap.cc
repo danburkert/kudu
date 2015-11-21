@@ -14,7 +14,6 @@
 
 #include "kudu/tablet/tablet_bootstrap.h"
 
-#include <boost/foreach.hpp>
 #include <gflags/gflags.h>
 #include <map>
 #include <string>
@@ -567,7 +566,7 @@ Status TabletBootstrap::PrepareRecoveryDir(bool* needs_recovery) {
   vector<string> children;
   RETURN_NOT_OK_PREPEND(fs_manager->ListDir(log_dir, &children),
                         "Couldn't list log segments.");
-  BOOST_FOREACH(const string& child, children) {
+  for (const string& child : children) {
     if (!log::IsLogFileName(child)) {
       continue;
     }
@@ -704,7 +703,7 @@ struct ReplayState {
   }
 
   void AddEntriesToStrings(const OpIndexToEntryMap& entries, vector<string>* strings) const {
-    BOOST_FOREACH(const OpIndexToEntryMap::value_type& map_entry, entries) {
+    for (const OpIndexToEntryMap::value_type& map_entry : entries) {
       LogEntryPB* entry = DCHECK_NOTNULL(map_entry.second);
       strings->push_back(Substitute("   $0", entry->ShortDebugString()));
     }
@@ -856,8 +855,8 @@ Status TabletBootstrap::HandleCommitMessage(ReplayState* state, LogEntryPB* comm
 }
 
 bool TabletBootstrap::AreAllStoresAlreadyFlushed(const CommitMsg& commit) {
-  BOOST_FOREACH(const OperationResultPB& op_result, commit.result().ops()) {
-    BOOST_FOREACH(const MemStoreTargetPB& mutated_store, op_result.mutated_stores()) {
+  for (const OperationResultPB& op_result : commit.result().ops()) {
+    for (const MemStoreTargetPB& mutated_store : op_result.mutated_stores()) {
       if (!flushed_stores_.WasStoreAlreadyFlushed(mutated_store)) {
         return false;
       }
@@ -867,8 +866,8 @@ bool TabletBootstrap::AreAllStoresAlreadyFlushed(const CommitMsg& commit) {
 }
 
 bool TabletBootstrap::AreAnyStoresAlreadyFlushed(const CommitMsg& commit) {
-  BOOST_FOREACH(const OperationResultPB& op_result, commit.result().ops()) {
-    BOOST_FOREACH(const MemStoreTargetPB& mutated_store, op_result.mutated_stores()) {
+  for (const OperationResultPB& op_result : commit.result().ops()) {
+    for (const MemStoreTargetPB& mutated_store : op_result.mutated_stores()) {
       if (flushed_stores_.WasStoreAlreadyFlushed(mutated_store)) {
         return true;
       }
@@ -996,7 +995,7 @@ void TabletBootstrap::DumpReplayStateToLog(const ReplayState& state) {
   // which might be useful for debugging.
   vector<string> state_dump;
   state.DumpReplayStateToStrings(&state_dump);
-  BOOST_FOREACH(const string& string, state_dump) {
+  for (const string& string : state_dump) {
     LOG_WITH_PREFIX(INFO) << string;
   }
 }
@@ -1026,7 +1025,7 @@ Status TabletBootstrap::PlaySegments(ConsensusBootstrapInfo* consensus_info) {
   RETURN_NOT_OK_PREPEND(OpenNewLog(), "Failed to open new log");
 
   int segment_count = 0;
-  BOOST_FOREACH(const scoped_refptr<ReadableLogSegment>& segment, segments) {
+  for (const scoped_refptr<ReadableLogSegment>& segment : segments) {
     vector<LogEntryPB*> entries;
     ElementDeleter deleter(&entries);
     // TODO: Optimize this to not read the whole thing into memory?
@@ -1078,7 +1077,7 @@ Status TabletBootstrap::PlaySegments(ConsensusBootstrapInfo* consensus_info) {
   // If we have non-applied commits they all must belong to pending operations and
   // they should only pertain to unflushed stores.
   if (!state.pending_commits.empty()) {
-    BOOST_FOREACH(const OpIndexToEntryMap::value_type& entry, state.pending_commits) {
+    for (const OpIndexToEntryMap::value_type& entry : state.pending_commits) {
       if (!ContainsKey(state.pending_replicates, entry.first)) {
         DumpReplayStateToLog(state);
         return Status::Corruption("Had orphaned commits at the end of replay.");
@@ -1136,7 +1135,7 @@ Status TabletBootstrap::PlaySegments(ConsensusBootstrapInfo* consensus_info) {
   DumpReplayStateToLog(state);
 
   // Set up the ConsensusBootstrapInfo structure for the caller.
-  BOOST_FOREACH(OpIndexToEntryMap::value_type& e, state.pending_replicates) {
+  for (OpIndexToEntryMap::value_type& e : state.pending_replicates) {
     consensus_info->orphaned_replicates.push_back(e.second->release_replicate());
   }
   consensus_info->last_id = state.prev_op_id;
@@ -1271,7 +1270,7 @@ Status TabletBootstrap::PlayRowOperations(WriteTransactionState* tx_state,
 Status TabletBootstrap::FilterAndApplyOperations(WriteTransactionState* tx_state,
                                                  const TxResultPB& orig_result) {
   int32_t op_idx = 0;
-  BOOST_FOREACH(RowOp* op, tx_state->row_ops()) {
+  for (RowOp* op : tx_state->row_ops()) {
     const OperationResultPB& orig_op_result = orig_result.ops(op_idx++);
 
     // check if the operation failed in the original transaction
@@ -1379,7 +1378,7 @@ Status TabletBootstrap::FilterMutate(WriteTransactionState* tx_state,
   // The mutation may have been duplicated, so we'll check whether any of the
   // output targets was "unflushed".
   int num_unflushed_stores = 0;
-  BOOST_FOREACH(const MemStoreTargetPB& mutated_store, op_result.mutated_stores()) {
+  for (const MemStoreTargetPB& mutated_store : op_result.mutated_stores()) {
     if (!flushed_stores_.WasStoreAlreadyFlushed(mutated_store)) {
       num_unflushed_stores++;
     } else {
@@ -1427,7 +1426,7 @@ string TabletBootstrap::LogPrefix() const {
 Status FlushedStoresSnapshot::InitFrom(const TabletMetadata& meta) {
   CHECK(flushed_dms_by_drs_id_.empty()) << "already initted";
   last_durable_mrs_id_ = meta.last_durable_mrs_id();
-  BOOST_FOREACH(const shared_ptr<RowSetMetadata>& rsmd, meta.rowsets()) {
+  for (const shared_ptr<RowSetMetadata>& rsmd : meta.rowsets()) {
     if (!InsertIfNotPresent(&flushed_dms_by_drs_id_, rsmd->id(),
                             rsmd->last_durable_redo_dms_id())) {
       return Status::Corruption(Substitute(

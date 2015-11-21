@@ -14,7 +14,6 @@
 
 #include <gtest/gtest.h>
 
-#include <boost/foreach.hpp>
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -37,7 +36,7 @@ class NetUtilTest : public KuduTest {
     std::sort(addrs.begin(), addrs.end());
 
     vector<string> addr_strs;
-    BOOST_FOREACH(const Sockaddr& addr, addrs) {
+    for (const Sockaddr& addr : addrs) {
       addr_strs.push_back(addr.ToString());
     }
     *result = JoinStrings(addr_strs, ",");
@@ -80,7 +79,7 @@ TEST_F(NetUtilTest, TestResolveAddresses) {
   vector<Sockaddr> addrs;
   ASSERT_OK(hp.ResolveAddresses(&addrs));
   ASSERT_TRUE(!addrs.empty());
-  BOOST_FOREACH(const Sockaddr& addr, addrs) {
+  for (const Sockaddr& addr : addrs) {
     LOG(INFO) << "Address: " << addr.ToString();
     EXPECT_TRUE(HasPrefixString(addr.ToString(), "127."));
     EXPECT_TRUE(HasSuffixString(addr.ToString(), ":12345"));
