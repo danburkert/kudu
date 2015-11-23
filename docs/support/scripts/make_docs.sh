@@ -111,8 +111,8 @@ done
 
 # Add the includes to the configuration reference files, replacing the template lines
 cp $ROOT/docs/configuration_reference* $GEN_DOC_DIR/
-sed -i "s#@@CONFIGURATION_REFERENCE@@#${INCLUSIONS_SUPPORTED}#" ${GEN_DOC_DIR}/configuration_reference.adoc
-sed -i "s#@@CONFIGURATION_REFERENCE@@#${INCLUSIONS_UNSUPPORTED}#" ${GEN_DOC_DIR}/configuration_reference_unsupported.adoc
+sed -i '' "s#@@CONFIGURATION_REFERENCE@@#${INCLUSIONS_SUPPORTED}#" ${GEN_DOC_DIR}/configuration_reference.adoc
+sed -i '' "s#@@CONFIGURATION_REFERENCE@@#${INCLUSIONS_UNSUPPORTED}#" ${GEN_DOC_DIR}/configuration_reference_unsupported.adoc
 
 # If we're generating the web site, pass the template which causes us
 # to generate Jekyll templates instead of full HTML.
@@ -141,7 +141,8 @@ if [ -n "$SITE" ] && ! [ -n "$NO_JEKYLL" ]; then
   # We need to generate a config file which fakes the "github.url" property
   # so that relative links within the site work.
   BASE_URL="file://$SITE/_site/"
-  TMP_CONFIG=$(mktemp --suffix=.yml)
+  TMPDIR=${TMPDIR:-/tmp}
+  TMP_CONFIG="$(mktemp $TMPDIR/tmp.XXXXXXX.yml)"
   trap "rm $TMP_CONFIG" EXIT
   printf "github:\n  url: %s" "$BASE_URL" > $TMP_CONFIG
 
