@@ -173,7 +173,7 @@ static inline void CollectRowsForSnapshots(Tablet* tablet,
                                             Tablet::UNORDERED,
                                             &iter));
     ASSERT_OK(iter->Init(NULL));
-    vector<string>* collector = new vector<string>();
+    auto collector = new vector<string>();
     ASSERT_OK(IterateToStringList(iter.get(), collector));
     for (auto& elem : *collector) {
       DVLOG(1) << "Got from MRS: " << elem;
