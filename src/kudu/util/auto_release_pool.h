@@ -33,9 +33,8 @@ class AutoReleasePool {
   AutoReleasePool(): objects_() { }
 
   ~AutoReleasePool() {
-    for (ElementVector::iterator i = objects_.begin();
-         i != objects_.end(); ++i) {
-      delete *i;
+    for (auto& elem : objects_) {
+      delete elem;
     }
   }
 

@@ -1092,8 +1092,8 @@ StringPiece FindEol(StringPiece s) {
 //  return true if string s contains only whitespace characters
 //------------------------------------------------------------------------
 bool OnlyWhitespace(const StringPiece& s) {
-  for ( int i = 0; i < s.size(); ++i ) {
-    if ( !ascii_isspace(s[i]) ) return false;
+  for (auto& elem : s) {
+    if ( !ascii_isspace(elem) ) return false;
   }
   return true;
 }

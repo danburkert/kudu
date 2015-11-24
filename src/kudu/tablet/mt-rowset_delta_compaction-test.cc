@@ -129,17 +129,17 @@ class TestMultiThreadedRowSetDeltaCompaction : public TestRowSet {
   }
 
   void JoinThreads() {
-    for (int i = 0; i < update_threads_.size(); i++) {
-      ASSERT_OK(ThreadJoiner(update_threads_[i].get()).Join());
+    for (auto& elem : update_threads_) {
+      ASSERT_OK(ThreadJoiner(elem.get()).Join());
     }
-    for (int i = 0; i < flush_threads_.size(); i++) {
-      ASSERT_OK(ThreadJoiner(flush_threads_[i].get()).Join());
+    for (auto& elem : flush_threads_) {
+      ASSERT_OK(ThreadJoiner(elem.get()).Join());
     }
-    for (int i = 0; i < compaction_threads_.size(); i++) {
-      ASSERT_OK(ThreadJoiner(compaction_threads_[i].get()).Join());
+    for (auto& elem : compaction_threads_) {
+      ASSERT_OK(ThreadJoiner(elem.get()).Join());
     }
-    for (int i = 0; i < alter_schema_threads_.size(); i++) {
-      ASSERT_OK(ThreadJoiner(alter_schema_threads_[i].get()).Join());
+    for (auto& elem : alter_schema_threads_) {
+      ASSERT_OK(ThreadJoiner(elem.get()).Join());
     }
   }
 

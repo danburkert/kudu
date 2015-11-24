@@ -215,16 +215,16 @@ TEST_F(MultiThreadedRpcTest, TestBlowOutServiceQueue) {
   service_pool_->Shutdown();
   server_messenger_->Shutdown();
 
-  for (int i = 0; i < 3; i++) {
-    ASSERT_OK(ThreadJoiner(threads[i].get()).warn_every_ms(500).Join());
+  for (auto& thread : threads) {
+    ASSERT_OK(ThreadJoiner(thread.get()).warn_every_ms(500).Join());
   }
 
   // Verify that one error was due to backpressure.
   int errors_backpressure = 0;
   int errors_shutdown = 0;
 
-  for (int i = 0; i < 3; i++) {
-    IncrementBackpressureOrShutdown(&status[i], &errors_backpressure, &errors_shutdown);
+  for (auto& statu : status) {
+    IncrementBackpressureOrShutdown(&statu, &errors_backpressure, &errors_shutdown);
   }
 
   ASSERT_EQ(1, errors_backpressure);

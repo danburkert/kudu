@@ -180,9 +180,8 @@ class MultiThreadTest {
     threads_.push_back(shared_ptr<boost::thread>(
             new boost::thread(boost::bind(
               &MultiThreadTest::RemoverThread, this))));
-    for (thread_vec_t::iterator t = threads_.begin();
-         t != threads_.end(); ++t) {
-      (*t)->join();
+    for (auto& elem : threads_) {
+      elem->join();
     }
     // Let's check to make sure we got what we should have.
     MutexLock guard(lock_);

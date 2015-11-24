@@ -503,8 +503,8 @@ TraceEvent::TraceEvent()
       thread_id_(0),
       phase_(TRACE_EVENT_PHASE_BEGIN),
       flags_(0) {
-  for (int i = 0; i < kTraceMaxNumArgs; ++i)
-    arg_names_[i] = NULL;
+  for (auto& elem : arg_names_)
+    elem = NULL;
   memset(arg_values_, 0, sizeof(arg_values_));
 }
 
@@ -967,8 +967,8 @@ void TraceSamplingThread::DefaultSamplingCallback(
 }
 
 void TraceSamplingThread::GetSamples() {
-  for (size_t i = 0; i < sample_buckets_.size(); ++i) {
-    TraceBucketData* bucket_data = &sample_buckets_[i];
+  for (auto& elem : sample_buckets_) {
+    TraceBucketData* bucket_data = &elem;
     bucket_data->callback.Run(bucket_data);
   }
 }
@@ -1356,8 +1356,8 @@ void TraceLog::SetEnabled(const CategoryFilter& category_filter,
     observer_list = enabled_state_observer_list_;
   }
   // Notify observers outside the lock in case they trigger trace events.
-  for (size_t i = 0; i < observer_list.size(); ++i)
-    observer_list[i]->OnTraceLogEnabled();
+  for (auto& elem : observer_list)
+    elem->OnTraceLogEnabled();
 
   {
     SpinLockHolder lock(&lock_);
@@ -1413,8 +1413,8 @@ void TraceLog::SetDisabledWhileLocked() {
     // Dispatch to observers outside the lock in case the observer triggers a
     // trace event.
     lock_.Unlock();
-    for (size_t i = 0; i < observer_list.size(); ++i)
-      observer_list[i]->OnTraceLogDisabled();
+    for (auto& elem : observer_list)
+      elem->OnTraceLogDisabled();
     lock_.Lock();
   }
   dispatching_to_observer_list_ = false;
@@ -2080,10 +2080,8 @@ void TraceLog::AddMetadataEventsWhileLocked() {
 
   if (process_labels_.size() > 0) {
     std::vector<std::string> labels;
-    for(std::unordered_map<int, std::string>::iterator it = process_labels_.begin();
-        it != process_labels_.end();
-        it++) {
-      labels.push_back(it->second);
+    for(auto& elem : process_labels_) {
+      labels.push_back(elem.second);
     }
     InitializeMetadataEvent(AddEventToThreadSharedChunkWhileLocked(NULL, false),
                             current_thread_id,
@@ -2092,28 +2090,24 @@ void TraceLog::AddMetadataEventsWhileLocked() {
   }
 
   // Thread sort indices.
-  for(std::unordered_map<int, int>::iterator it = thread_sort_indices_.begin();
-      it != thread_sort_indices_.end();
-      it++) {
-    if (it->second == 0)
+  for(auto& elem : thread_sort_indices_) {
+    if (elem.second == 0)
       continue;
     InitializeMetadataEvent(AddEventToThreadSharedChunkWhileLocked(NULL, false),
-                            it->first,
+                            elem.first,
                             "thread_sort_index", "sort_index",
-                            it->second);
+                            elem.second);
   }
 
   // Thread names.
   SpinLockHolder thread_info_lock(&thread_info_lock_);
-  for(std::unordered_map<int, std::string>::iterator it = thread_names_.begin();
-      it != thread_names_.end();
-      it++) {
-    if (it->second.empty())
+  for(auto& elem : thread_names_) {
+    if (elem.second.empty())
       continue;
     InitializeMetadataEvent(AddEventToThreadSharedChunkWhileLocked(NULL, false),
-                            it->first,
+                            elem.first,
                             "thread_name", "name",
-                            it->second);
+                            elem.second);
   }
 }
 
@@ -2300,11 +2294,10 @@ void CategoryFilter::WriteString(const StringList& values,
                                  bool included) const {
   bool prepend_comma = !out->empty();
   int token_cnt = 0;
-  for (StringList::const_iterator ci = values.begin();
-       ci != values.end(); ++ci) {
+  for (const auto& value : values) {
     if (token_cnt > 0 || prepend_comma)
       StringAppendF(out, ",");
-    StringAppendF(out, "%s%s", (included ? "" : "-"), ci->c_str());
+    StringAppendF(out, "%s%s", (included ? "" : "-"), value.c_str());
     ++token_cnt;
   }
 }
@@ -2313,12 +2306,11 @@ void CategoryFilter::WriteString(const StringList& delays,
                                  std::string* out) const {
   bool prepend_comma = !out->empty();
   int token_cnt = 0;
-  for (StringList::const_iterator ci = delays.begin();
-       ci != delays.end(); ++ci) {
+  for (const auto& delay : delays) {
     if (token_cnt > 0 || prepend_comma)
       StringAppendF(out, ",");
     StringAppendF(out, "%s%s)", kSyntheticDelayCategoryFilterPrefix,
-                  ci->c_str());
+                  delay.c_str());
     ++token_cnt;
   }
 }

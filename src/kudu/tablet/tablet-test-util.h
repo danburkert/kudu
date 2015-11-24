@@ -175,8 +175,8 @@ static inline void CollectRowsForSnapshots(Tablet* tablet,
     ASSERT_OK(iter->Init(NULL));
     vector<string>* collector = new vector<string>();
     ASSERT_OK(IterateToStringList(iter.get(), collector));
-    for (int i = 0; i < collector->size(); i++) {
-      DVLOG(1) << "Got from MRS: " << (*collector)[i];
+    for (auto& elem : *collector) {
+      DVLOG(1) << "Got from MRS: " << elem;
     }
     collected_rows->push_back(collector);
   }

@@ -391,8 +391,7 @@ class MergeCompactionInput : public CompactionInput {
   // Postcondition: every input has a non-empty pending list.
   Status ProcessEmptyInputs() {
     int j = 0;
-    for (int i = 0; i < states_.size(); i++) {
-      MergeState *state = states_[i];
+    for (auto state : states_) {
       states_[j++] = state;
 
       if (!state->empty()) {
