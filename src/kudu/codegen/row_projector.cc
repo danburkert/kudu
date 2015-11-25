@@ -55,8 +55,9 @@ using llvm::Module;
 using llvm::PointerType;
 using llvm::Type;
 using llvm::Value;
-using std::string;
 using std::ostream;
+using std::string;
+using std::unique_ptr;
 using std::vector;
 
 DECLARE_bool(codegen_dump_functions);
@@ -253,8 +254,8 @@ RowProjectorFunctions::RowProjectorFunctions(const Schema& base_schema,
                                              const Schema& projection,
                                              ProjectionFunction read_f,
                                              ProjectionFunction write_f,
-                                             gscoped_ptr<JITCodeOwner> owner)
-  : JITWrapper(owner.Pass()),
+                                             unique_ptr<JITCodeOwner> owner)
+  : JITWrapper(std::move(owner)),
     base_schema_(base_schema),
     projection_(projection),
     read_f_(read_f),
@@ -288,14 +289,14 @@ Status RowProjectorFunctions::Create(const Schema& base_schema,
   builder.AddJITPromise(read, &read_f);
   builder.AddJITPromise(write, &write_f);
 
-  gscoped_ptr<JITCodeOwner> owner;
+  unique_ptr<JITCodeOwner> owner;
   RETURN_NOT_OK(builder.Compile(&owner));
 
   if (tm) {
     *tm = builder.GetTargetMachine();
   }
   out->reset(new RowProjectorFunctions(base_schema, projection, read_f,
-                                       write_f, owner.Pass()));
+                                       write_f, std::move(owner)));
   return Status::OK();
 }
 
