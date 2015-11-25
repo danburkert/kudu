@@ -45,7 +45,7 @@ add_definitions(-DLLVM_SUPPORT_VALGRIND_H)
 if (${LLVM_PACKAGE_VERSION} VERSION_LESS 3.5)
   llvm_map_components_to_libraries(llvm_LIBRARIES "${LLVM_REQ_COMPONENTS}")
 else()
-  llvm_map_components_to_libnames(llvm_LIBRARIES "${LLVM_REQ_COMPONENETS}")
+  llvm_map_components_to_libnames(llvm_LIBRARIES "${LLVM_REQ_COMPONENTS}")
 endif()
 
 #######################################

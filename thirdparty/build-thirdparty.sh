@@ -281,6 +281,18 @@ fi
 
 # build llvm
 if [ -n "$F_ALL" -o -n "$F_LLVM" ]; then
+
+  # Install Python if necessary.
+  if [[ $(python -V 2>&1) =~ "Python 2.7." ]]; then
+    PYTHON_EXECUTABLE=$(which python)
+  else
+    cd $PYTHON_DIR
+    ./configure --prefix=$PREFIX
+    make -j$PARALLEL
+    make install
+    PYTHON_EXECUTABLE=$PREFIX/bin/python
+  fi
+
   mkdir -p $LLVM_BUILD
   cd $LLVM_BUILD
 
@@ -291,7 +303,9 @@ if [ -n "$F_ALL" -o -n "$F_LLVM" ]; then
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=$PREFIX \
     -DLLVM_TARGETS_TO_BUILD=X86 \
+    -DLLVM_ENABLE_RTTI=ON \
     -DCMAKE_CXX_FLAGS="$EXTRA_CXXFLAGS" \
+    -DPYTHON_EXECUTABLE=$PYTHON_EXECUTABLE \
     $LLVM_DIR
 
   if [ -n "$old_cc" ]; then
@@ -306,6 +320,13 @@ if [ -n "$F_ALL" -o -n "$F_LLVM" ]; then
   fi
 
   make -j$PARALLEL install
+
+  # Create a link from Clang to thirdparty/clang-toolchain. This path is used
+  # for compiling Kudu with sanitizers. The link can't point to the Clang
+  # installed in the prefix directory, since this confuses CMake into believing
+  # the thirdparty prefix directory is the system-wide prefix, and it omits the
+  # thirdparty prefix directory from the rpath of built binaries.
+  ln -sf $LLVM_BUILD $TP_DIR/clang-toolchain
 fi
 
 # Build trace-viewer (by copying it into www/)
