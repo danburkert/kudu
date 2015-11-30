@@ -282,19 +282,6 @@ if [ -n "$F_ALL" -o -n "$F_LLVM" ]; then
   mkdir -p $LLVM_BUILD
   cd $LLVM_BUILD
 
-  if [ -n "$OS_LINUX" ]; then
-    # Build LLVM with the toolchain version of clang.
-    #
-    # We always use our own clang to build LLVM because gcc 4.4 and earlier
-    # are unable to build compiler-rt:
-    # - http://llvm.org/bugs/show_bug.cgi?id=16532
-    # - http://code.google.com/p/address-sanitizer/issues/detail?id=146
-    old_cc=$CC
-    old_cxx=$CXX
-    export CC=$TP_DIR/clang-toolchain/bin/clang
-    export CXX=${CC}++
-  fi
-
   # Rebuild the CMake cache every time.
   rm -Rf CMakeCache.txt CMakeFiles/
 
