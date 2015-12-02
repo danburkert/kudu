@@ -40,6 +40,7 @@
 #include "kudu/util/thread_restrictions.h"
 
 #if defined(__APPLE__)
+#include <mach-o/dyld.h>
 #include <sys/sysctl.h>
 #else
 #include <linux/falloc.h>
