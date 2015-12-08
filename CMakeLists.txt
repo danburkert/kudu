@@ -690,6 +690,12 @@ find_package(Lz4 REQUIRED)
 include_directories(SYSTEM ${LZ4_INCLUDE_DIR})
 ADD_THIRDPARTY_LIB(lz4 STATIC_LIB "${LZ4_STATIC_LIB}")
 
+## OpenSSL
+find_package(OpenSSL REQUIRED)
+include_directories(SYSTEM ${OPENSSL_INCLUDE_DIR})
+ADD_THIRDPARTY_LIB(ssl SHARED_LIB "${OPENSSL_SSL_LIBRARY}")
+ADD_THIRDPARTY_LIB(crypto SHARED_LIB "${OPENSSL_CRYPTO_LIBRARY}")
+
 ## Bitshuffle
 find_package(Bitshuffle REQUIRED)
 include_directories(SYSTEM ${BITSHUFFLE_INCLUDE_DIR})
