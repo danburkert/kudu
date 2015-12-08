@@ -131,6 +131,13 @@ Status KuduScanBatch::RowPtr::GetUnixTimeMicros(const Slice& col_name, int64_t* 
   return Get<TypeTraits<UNIXTIME_MICROS> >(col_name, val);
 }
 
+Status KuduScanBatch::RowPtr::GetS2Cell(const Slice& col_name, S2CellId* cell_id) const {
+  uint64_t id;
+  RETURN_NOT_OK(Get<TypeTraits<S2CELL>>(col_name, &id));
+  *cell_id = S2CellId(id);
+  return Status::OK();
+}
+
 Status KuduScanBatch::RowPtr::GetFloat(const Slice& col_name, float* val) const {
   return Get<TypeTraits<FLOAT> >(col_name, val);
 }
@@ -169,6 +176,13 @@ Status KuduScanBatch::RowPtr::GetInt64(int col_idx, int64_t* val) const {
 
 Status KuduScanBatch::RowPtr::GetUnixTimeMicros(int col_idx, int64_t* val) const {
   return Get<TypeTraits<UNIXTIME_MICROS> >(col_idx, val);
+}
+
+Status KuduScanBatch::RowPtr::GetS2Cell(int col_idx, S2CellId* cell_id) const {
+  uint64_t id;
+  RETURN_NOT_OK(Get<TypeTraits<S2CELL>>(col_idx, &id));
+  *cell_id = S2CellId(id);
+  return Status::OK();
 }
 
 Status KuduScanBatch::RowPtr::GetFloat(int col_idx, float* val) const {
@@ -271,6 +285,9 @@ Status KuduScanBatch::RowPtr::Get<TypeTraits<INT64> >(int col_idx, int64_t* val)
 
 template
 Status KuduScanBatch::RowPtr::Get<TypeTraits<UNIXTIME_MICROS> >(int col_idx, int64_t* val) const;
+
+template
+Status KuduScanBatch::RowPtr::Get<TypeTraits<S2CELL> >(int col_idx, uint64_t* val) const;
 
 template
 Status KuduScanBatch::RowPtr::Get<TypeTraits<FLOAT> >(int col_idx, float* val) const;

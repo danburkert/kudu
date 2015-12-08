@@ -22,12 +22,13 @@
 #include <utility>
 #include <vector>
 
-#include "kudu/common/types.h"
 #include "kudu/common/schema.h"
+#include "kudu/common/types.h"
+#include "kudu/gutil/geometry/s2cellid.h"
 #include "kudu/gutil/macros.h"
 #include "kudu/gutil/map-util.h"
-#include "kudu/util/memory/arena.h"
 #include "kudu/util/bitmap.h"
+#include "kudu/util/memory/arena.h"
 
 namespace kudu {
 
@@ -629,6 +630,12 @@ class RowBuilder {
   void AddTimestamp(int64_t micros_utc_since_epoch) {
     CheckNextType(UNIXTIME_MICROS);
     *reinterpret_cast<int64_t *>(&buf_[byte_idx_]) = micros_utc_since_epoch;
+    Advance();
+  }
+
+  void AddS2Cell(S2CellId cell_id) {
+    CheckNextType(S2CELL);
+    *reinterpret_cast<uint64_t *>(&buf_[byte_idx_]) = cell_id.id();
     Advance();
   }
 

@@ -129,7 +129,8 @@ class KUDU_EXPORT KuduColumnSchema {
     DOUBLE = 7,
     BINARY = 8,
     UNIXTIME_MICROS = 9,
-    TIMESTAMP = UNIXTIME_MICROS //!< deprecated, use UNIXTIME_MICROS
+    TIMESTAMP = UNIXTIME_MICROS, //!< deprecated, use UNIXTIME_MICROS
+    S2CELL = 10,
   };
 
   /// @param [in] type

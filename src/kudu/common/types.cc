@@ -76,6 +76,7 @@ class TypeInfoResolver {
     AddMapping<FLOAT>();
     AddMapping<DOUBLE>();
     AddMapping<BINARY>();
+    AddMapping<S2CELL>();
   }
 
   template<DataType type> void AddMapping() {

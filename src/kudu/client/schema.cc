@@ -107,6 +107,7 @@ kudu::DataType ToInternalDataType(KuduColumnSchema::DataType type) {
     case KuduColumnSchema::STRING: return kudu::STRING;
     case KuduColumnSchema::BINARY: return kudu::BINARY;
     case KuduColumnSchema::BOOL: return kudu::BOOL;
+    case KuduColumnSchema::S2CELL: return kudu::S2CELL;
     default: LOG(FATAL) << "Unexpected data type: " << type;
   }
 }
@@ -123,6 +124,7 @@ KuduColumnSchema::DataType FromInternalDataType(kudu::DataType type) {
     case kudu::STRING: return KuduColumnSchema::STRING;
     case kudu::BINARY: return KuduColumnSchema::BINARY;
     case kudu::BOOL: return KuduColumnSchema::BOOL;
+    case kudu::S2CELL: return KuduColumnSchema::S2CELL;
     default: LOG(FATAL) << "Unexpected internal data type: " << type;
   }
 }

@@ -18,13 +18,14 @@
 #ifndef KUDU_COMMON_TYPES_H
 #define KUDU_COMMON_TYPES_H
 
-#include <glog/logging.h>
-
 #include <cmath>
+#include <cstring>
+#include <glog/logging.h>
 #include <stdint.h>
 #include <string>
 
 #include "kudu/common/common.pb.h"
+#include "kudu/gutil/geometry/s2cellid.h"
 #include "kudu/gutil/mathlimits.h"
 #include "kudu/gutil/strings/escaping.h"
 #include "kudu/gutil/strings/numbers.h"
@@ -444,6 +445,18 @@ struct DataTypeTraits<UNIXTIME_MICROS> : public DerivedTypeTraits<INT64>{
     char time[34];
     snprintf(time, sizeof(time), kDateMicrosAndTzFormat, time_up_to_secs, remaining_micros);
     str->append(time);
+  }
+};
+
+template<>
+struct DataTypeTraits<S2CELL> : public DerivedTypeTraits<UINT64>{
+  static const char* name() {
+    return "S2 Cell";
+  }
+
+  static void AppendDebugStringForValue(const void* val, string* str) {
+    S2CellId id(*reinterpret_cast<const uint64_t*>(val));
+    str->append(id.ToString());
   }
 };
 
