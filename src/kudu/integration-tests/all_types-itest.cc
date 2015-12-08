@@ -203,6 +203,7 @@ class AllTypesItest : public KuduTest {
     builder.AddColumn("float_val")->Type(KuduColumnSchema::FLOAT);
     builder.AddColumn("double_val")->Type(KuduColumnSchema::DOUBLE);
     builder.AddColumn("binary_val")->Type(KuduColumnSchema::BINARY);
+    builder.AddColumn("s2cell_val")->Type(KuduColumnSchema::S2CELL);
     CHECK_OK(builder.Build(&schema_));
   }
 
@@ -253,6 +254,7 @@ class AllTypesItest : public KuduTest {
     RETURN_NOT_OK(row->SetInt32("int32_val", int_val));
     RETURN_NOT_OK(row->SetInt64("int64_val", int_val));
     RETURN_NOT_OK(row->SetTimestamp("timestamp_val", int_val));
+    RETURN_NOT_OK(row->SetS2Cell("s2cell_val", S2CellId(int_val)));
     string content = strings::Substitute("hello $0", int_val);
     Slice slice_val(content);
     RETURN_NOT_OK(row->SetStringCopy("string_val", slice_val));
@@ -295,6 +297,7 @@ class AllTypesItest : public KuduTest {
     projection->push_back("int32_val");
     projection->push_back("int64_val");
     projection->push_back("timestamp_val");
+    projection->push_back("s2cell_val");
     projection->push_back("string_val");
     projection->push_back("binary_val");
     projection->push_back("double_val");
@@ -321,6 +324,9 @@ class AllTypesItest : public KuduTest {
     int64_t timestamp_val;
     ASSERT_OK(row.GetTimestamp("timestamp_val", &timestamp_val));
     ASSERT_EQ(timestamp_val, expected_int_val);
+    S2CellId cell_id;
+    ASSERT_OK(row.GetS2Cell("s2cell_val", &cell_id));
+    ASSERT_EQ(cell_id.id(), expected_int_val);
 
     string content = strings::Substitute("hello $0", expected_int_val);
     Slice expected_slice_val(content);
@@ -431,6 +437,7 @@ typedef ::testing::Types<IntKeysTestSetup<KeyTypeWrapper<INT8> >,
                          IntKeysTestSetup<KeyTypeWrapper<INT32> >,
                          IntKeysTestSetup<KeyTypeWrapper<INT64> >,
                          IntKeysTestSetup<KeyTypeWrapper<TIMESTAMP> >,
+                         IntKeysTestSetup<KeyTypeWrapper<S2CELL> >,
                          SliceKeysTestSetup<KeyTypeWrapper<STRING> >,
                          SliceKeysTestSetup<KeyTypeWrapper<BINARY> >
                          > KeyTypes;

@@ -99,6 +99,13 @@ Status KuduRowResult::GetTimestamp(const Slice& col_name, int64_t* val) const {
   return Get<TypeTraits<TIMESTAMP> >(col_name, val);
 }
 
+Status KuduRowResult::GetS2Cell(const Slice& col_name, S2CellId* val) const {
+  uint64_t id;
+  RETURN_NOT_OK(Get<TypeTraits<S2CELL> >(col_name, &id));
+  *val = S2CellId(id);
+  return Status::OK();
+}
+
 Status KuduRowResult::GetFloat(const Slice& col_name, float* val) const {
   return Get<TypeTraits<FLOAT> >(col_name, val);
 }
@@ -137,6 +144,13 @@ Status KuduRowResult::GetInt64(int col_idx, int64_t* val) const {
 
 Status KuduRowResult::GetTimestamp(int col_idx, int64_t* val) const {
   return Get<TypeTraits<TIMESTAMP> >(col_idx, val);
+}
+
+Status KuduRowResult::GetS2Cell(int col_idx, S2CellId* val) const {
+  uint64_t id;
+  RETURN_NOT_OK(Get<TypeTraits<S2CELL> >(col_idx, &id));
+  *val = S2CellId(id);
+  return Status::OK();
 }
 
 Status KuduRowResult::GetFloat(int col_idx, float* val) const {
@@ -210,6 +224,9 @@ template
 Status KuduRowResult::Get<TypeTraits<TIMESTAMP> >(const Slice& col_name, int64_t* val) const;
 
 template
+Status KuduRowResult::Get<TypeTraits<S2CELL> >(const Slice& col_name, uint64_t* val) const;
+
+template
 Status KuduRowResult::Get<TypeTraits<FLOAT> >(const Slice& col_name, float* val) const;
 
 template
@@ -238,6 +255,9 @@ Status KuduRowResult::Get<TypeTraits<INT64> >(int col_idx, int64_t* val) const;
 
 template
 Status KuduRowResult::Get<TypeTraits<TIMESTAMP> >(int col_idx, int64_t* val) const;
+
+template
+Status KuduRowResult::Get<TypeTraits<S2CELL> >(int col_idx, uint64_t* val) const;
 
 template
 Status KuduRowResult::Get<TypeTraits<FLOAT> >(int col_idx, float* val) const;

@@ -187,6 +187,11 @@ Status KuduPartialRow::Set(int32_t column_idx, const uint8_t* val) {
       RETURN_NOT_OK(SetTimestamp(column_idx, *reinterpret_cast<const int64_t*>(val)));
       break;
     };
+    case S2CELL: {
+      S2CellId id(*reinterpret_cast<const uint64_t*>(val));
+      RETURN_NOT_OK(SetS2Cell(column_idx, id));
+      break;
+    };
     default: {
       return Status::InvalidArgument("Unknown column type in schema",
                                      column_schema.ToString());
@@ -238,6 +243,9 @@ Status KuduPartialRow::SetInt64(const Slice& col_name, int64_t val) {
 Status KuduPartialRow::SetTimestamp(const Slice& col_name, int64_t val) {
   return Set<TypeTraits<TIMESTAMP> >(col_name, val);
 }
+Status KuduPartialRow::SetS2Cell(const Slice& col_name, S2CellId val) {
+  return Set<TypeTraits<S2CELL> >(col_name, val.id());
+}
 Status KuduPartialRow::SetFloat(const Slice& col_name, float val) {
   return Set<TypeTraits<FLOAT> >(col_name, val);
 }
@@ -267,6 +275,9 @@ Status KuduPartialRow::SetInt64(int col_idx, int64_t val) {
 }
 Status KuduPartialRow::SetTimestamp(int col_idx, int64_t val) {
   return Set<TypeTraits<TIMESTAMP> >(col_idx, val);
+}
+Status KuduPartialRow::SetS2Cell(int col_idx, S2CellId val) {
+  return Set<TypeTraits<S2CELL> >(col_idx, val.id());
 }
 Status KuduPartialRow::SetString(int col_idx, const Slice& val) {
   return Set<TypeTraits<STRING> >(col_idx, val, false);
@@ -398,6 +409,12 @@ Status KuduPartialRow::Set<TypeTraits<TIMESTAMP> >(
     bool owned);
 
 template
+Status KuduPartialRow::Set<TypeTraits<S2CELL> >(
+    int col_idx,
+    const TypeTraits<S2CELL>::cpp_type& val,
+    bool owned);
+
+template
 Status KuduPartialRow::Set<TypeTraits<STRING> >(int col_idx,
                                                 const TypeTraits<STRING>::cpp_type& val,
                                                 bool owned);
@@ -446,6 +463,12 @@ template
 Status KuduPartialRow::Set<TypeTraits<TIMESTAMP> >(
     const Slice& col_name,
     const TypeTraits<TIMESTAMP>::cpp_type& val,
+    bool owned);
+
+template
+Status KuduPartialRow::Set<TypeTraits<S2CELL> >(
+    const Slice& col_name,
+    const TypeTraits<S2CELL>::cpp_type& val,
     bool owned);
 
 template
@@ -524,6 +547,12 @@ Status KuduPartialRow::GetInt64(const Slice& col_name, int64_t* val) const {
 Status KuduPartialRow::GetTimestamp(const Slice& col_name, int64_t* micros_since_utc_epoch) const {
   return Get<TypeTraits<TIMESTAMP> >(col_name, micros_since_utc_epoch);
 }
+Status KuduPartialRow::GetS2Cell(const Slice& col_name, S2CellId* cell_id) const {
+  uint64_t id;
+  RETURN_NOT_OK(Get<TypeTraits<S2CELL> >(col_name, &id));
+  *cell_id = S2CellId(id);
+  return Status::OK();
+}
 Status KuduPartialRow::GetFloat(const Slice& col_name, float* val) const {
   return Get<TypeTraits<FLOAT> >(col_name, val);
 }
@@ -554,6 +583,12 @@ Status KuduPartialRow::GetInt64(int col_idx, int64_t* val) const {
 }
 Status KuduPartialRow::GetTimestamp(int col_idx, int64_t* micros_since_utc_epoch) const {
   return Get<TypeTraits<TIMESTAMP> >(col_idx, micros_since_utc_epoch);
+}
+Status KuduPartialRow::GetS2Cell(int col_idx, S2CellId* cell_id) const {
+  uint64_t id;
+  RETURN_NOT_OK(Get<TypeTraits<S2CELL> >(col_idx, &id));
+  *cell_id = S2CellId(id);
+  return Status::OK();
 }
 Status KuduPartialRow::GetFloat(int col_idx, float* val) const {
   return Get<TypeTraits<FLOAT> >(col_idx, val);

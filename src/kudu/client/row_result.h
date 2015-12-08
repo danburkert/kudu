@@ -22,6 +22,7 @@
 #else
 #include "kudu/client/stubs.h"
 #endif
+#include "kudu/gutil/geometry/s2cellid.h"
 #include "kudu/util/kudu_export.h"
 #include "kudu/util/slice.h"
 #include "kudu/util/status.h"
@@ -51,6 +52,7 @@ class KUDU_EXPORT KuduRowResult {
   Status GetInt64(const Slice& col_name, int64_t* val) const WARN_UNUSED_RESULT;
   Status GetTimestamp(const Slice& col_name, int64_t* micros_since_utc_epoch)
     const WARN_UNUSED_RESULT;
+  Status GetS2Cell(const Slice& col_name, S2CellId* val) const WARN_UNUSED_RESULT;
 
   Status GetFloat(const Slice& col_name, float* val) const WARN_UNUSED_RESULT;
   Status GetDouble(const Slice& col_name, double* val) const WARN_UNUSED_RESULT;
@@ -65,6 +67,7 @@ class KUDU_EXPORT KuduRowResult {
   Status GetInt32(int col_idx, int32_t* val) const WARN_UNUSED_RESULT;
   Status GetInt64(int col_idx, int64_t* val) const WARN_UNUSED_RESULT;
   Status GetTimestamp(int col_idx, int64_t* micros_since_utc_epoch) const WARN_UNUSED_RESULT;
+  Status GetS2Cell(int col_idx, S2CellId* val) const WARN_UNUSED_RESULT;
 
   Status GetFloat(int col_idx, float* val) const WARN_UNUSED_RESULT;
   Status GetDouble(int col_idx, double* val) const WARN_UNUSED_RESULT;

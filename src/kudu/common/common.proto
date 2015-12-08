@@ -43,6 +43,7 @@ enum DataType {
   DOUBLE = 11;
   BINARY = 12;
   TIMESTAMP = 13;
+  S2CELL = 14;
 }
 
 enum EncodingType {

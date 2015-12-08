@@ -16,11 +16,12 @@
 #define KUDU_COMMON_TYPES_H
 
 #include <glog/logging.h>
-
 #include <stdint.h>
-#include <string>
 #include <string.h>
+#include <string>
+
 #include "kudu/common/common.pb.h"
+#include "kudu/gutil/geometry/s2cellid.h"
 #include "kudu/gutil/mathlimits.h"
 #include "kudu/gutil/strings/escaping.h"
 #include "kudu/gutil/strings/numbers.h"
@@ -355,6 +356,18 @@ struct DataTypeTraits<TIMESTAMP> : public DerivedTypeTraits<INT64>{
     char time_as_string[kFastToBufferSize];
     FastTimeToBuffer(time, &time_as_string[0]);
     str->append(time_as_string);
+  }
+};
+
+template<>
+struct DataTypeTraits<S2CELL> : public DerivedTypeTraits<UINT64>{
+  static const char* name() {
+    return "S2 Cell";
+  }
+
+  static void AppendDebugStringForValue(const void* val, string* str) {
+    S2CellId id(*reinterpret_cast<const uint64_t*>(val));
+    str->append(id.ToString());
   }
 };
 

@@ -99,7 +99,8 @@ class KUDU_EXPORT KuduColumnSchema {
     FLOAT = 6,
     DOUBLE = 7,
     BINARY = 8,
-    TIMESTAMP = 9
+    TIMESTAMP = 9,
+    S2CELL = 10,
   };
 
   static std::string DataTypeToString(DataType type);

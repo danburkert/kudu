@@ -29,6 +29,7 @@
 
 #include "kudu/util/kudu_export.h"
 #include "kudu/util/slice.h"
+#include "kudu/gutil/geometry/s2cellid.h"
 
 namespace kudu {
 class ColumnSchema;
@@ -67,6 +68,7 @@ class KUDU_EXPORT KuduPartialRow {
   Status SetInt32(const Slice& col_name, int32_t val) WARN_UNUSED_RESULT;
   Status SetInt64(const Slice& col_name, int64_t val) WARN_UNUSED_RESULT;
   Status SetTimestamp(const Slice& col_name, int64_t micros_since_utc_epoch) WARN_UNUSED_RESULT;
+  Status SetS2Cell(const Slice& col_name, S2CellId cell_id) WARN_UNUSED_RESULT;
 
   Status SetFloat(const Slice& col_name, float val) WARN_UNUSED_RESULT;
   Status SetDouble(const Slice& col_name, double val) WARN_UNUSED_RESULT;
@@ -81,6 +83,7 @@ class KUDU_EXPORT KuduPartialRow {
   Status SetInt32(int col_idx, int32_t val) WARN_UNUSED_RESULT;
   Status SetInt64(int col_idx, int64_t val) WARN_UNUSED_RESULT;
   Status SetTimestamp(int col_idx, int64_t micros_since_utc_epoch) WARN_UNUSED_RESULT;
+  Status SetS2Cell(int col_idx, S2CellId cell_id) WARN_UNUSED_RESULT;
 
   Status SetFloat(int col_idx, float val) WARN_UNUSED_RESULT;
   Status SetDouble(int col_idx, double val) WARN_UNUSED_RESULT;
@@ -130,6 +133,7 @@ class KUDU_EXPORT KuduPartialRow {
   Status GetInt64(const Slice& col_name, int64_t* val) const WARN_UNUSED_RESULT;
   Status GetTimestamp(const Slice& col_name,
                       int64_t* micros_since_utc_epoch) const WARN_UNUSED_RESULT;
+  Status GetS2Cell(const Slice& col_name, S2CellId* cell_id) const WARN_UNUSED_RESULT;
 
   Status GetFloat(const Slice& col_name, float* val) const WARN_UNUSED_RESULT;
   Status GetDouble(const Slice& col_name, double* val) const WARN_UNUSED_RESULT;
@@ -144,6 +148,7 @@ class KUDU_EXPORT KuduPartialRow {
   Status GetInt32(int col_idx, int32_t* val) const WARN_UNUSED_RESULT;
   Status GetInt64(int col_idx, int64_t* val) const WARN_UNUSED_RESULT;
   Status GetTimestamp(int col_idx, int64_t* micros_since_utc_epoch) const WARN_UNUSED_RESULT;
+  Status GetS2Cell(int col_idx, S2CellId* cell_id) const WARN_UNUSED_RESULT;
 
   Status GetFloat(int col_idx, float* val) const WARN_UNUSED_RESULT;
   Status GetDouble(int col_idx, double* val) const WARN_UNUSED_RESULT;
