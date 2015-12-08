@@ -953,6 +953,15 @@ Status KuduScanner::AddConjunctPredicate(KuduPredicate* pred) {
   return pred->data_->AddToScanSpec(&data_->spec_);
 }
 
+Status KuduScanner::AddConjunctPredicate(KuduS2Predicate* pred) {
+  // Take ownership even if we return a bad status.
+  data_->pool_.Add(pred);
+  if (data_->open_) {
+    return Status::IllegalState("Predicate must be set before Open()");
+  }
+  return pred->data_->AddToScanSpec(&data_->spec_);
+}
+
 Status KuduScanner::AddLowerBound(const KuduPartialRow& key) {
   gscoped_ptr<string> enc(new string());
   RETURN_NOT_OK(key.EncodeRowKey(enc.get()));

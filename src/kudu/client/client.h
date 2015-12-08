@@ -423,6 +423,8 @@ class KUDU_EXPORT KuduTable : public sp::enable_shared_from_this<KuduTable> {
                                         KuduPredicate::ComparisonOp op,
                                         KuduValue* value);
 
+  KuduS2Predicate* NewS2Predicate(const Slice& col_name, S2CellId region);
+
   KuduClient* client() const;
 
   const PartitionSchema& partition_schema() const;
@@ -889,6 +891,8 @@ class KUDU_EXPORT KuduScanner {
   //
   // The Scanner takes ownership of 'pred', even if a bad Status is returned.
   Status AddConjunctPredicate(KuduPredicate* pred) WARN_UNUSED_RESULT;
+
+  Status AddConjunctPredicate(KuduS2Predicate* pred) WARN_UNUSED_RESULT;
 
   // Add a lower bound (inclusive) primary key for the scan.
   // If any bound is already added, this bound is intersected with that one.

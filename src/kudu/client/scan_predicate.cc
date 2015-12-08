@@ -45,6 +45,18 @@ KuduPredicate* KuduPredicate::Clone() const {
   return new KuduPredicate(data_->Clone());
 }
 
+KuduS2Predicate::KuduS2Predicate(Data* d)
+  : data_(d) {
+}
+
+KuduS2Predicate::~KuduS2Predicate() {
+  delete data_;
+}
+
+KuduS2Predicate* KuduS2Predicate::Clone() const {
+  return new KuduS2Predicate(data_->Clone());
+}
+
 ComparisonPredicateData::ComparisonPredicateData(const ColumnSchema& col,
                                                  KuduPredicate::ComparisonOp op,
                                                  KuduValue* val) :

@@ -86,6 +86,33 @@ class ComparisonPredicateData : public KuduPredicate::Data {
   ColumnRangePredicate* pred_;
 };
 
+class KuduS2Predicate::Data {
+ public:
+  Data(const ColumnSchema& col, S2CellId region)
+      : col_(col),
+        region_(region) {
+  }
+
+  virtual ~Data() {
+  }
+
+  virtual Status AddToScanSpec(ScanSpec* spec) {
+    spec->AddS2Predicate(S2Predicate(col_, region_));
+
+    return Status::OK();
+  }
+
+  virtual Data* Clone() const {
+      return new KuduS2Predicate::Data(col_, region_);
+  }
+
+ private:
+  friend class KuduScanner;
+
+  ColumnSchema col_;
+  S2CellId region_;
+};
+
 } // namespace client
 } // namespace kudu
 #endif /* KUDU_CLIENT_SCAN_PREDICATE_INTERNAL_H */

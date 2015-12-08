@@ -180,6 +180,12 @@ message ColumnRangePredicatePB {
   optional bytes upper_bound = 3;
 }
 
+message S2PredicatePB {
+  optional ColumnSchemaPB column = 1;
+
+  optional uint64 cell_id = 2;
+}
+
 // List of predicates used by the Java client. Will rapidly evolve into something more reusable
 // as a way to pass scanner configurations.
 message ColumnRangePredicateListPB {
@@ -197,6 +203,8 @@ message NewScanRequestPB {
 
   // Any column range predicates to enforce.
   repeated ColumnRangePredicatePB range_predicates = 3;
+
+  repeated S2PredicatePB s2_predicates = 13;
 
   // Encoded primary key to begin scanning at (inclusive).
   optional bytes start_primary_key = 8;

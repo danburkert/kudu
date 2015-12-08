@@ -55,6 +55,23 @@ class KUDU_EXPORT KuduPredicate {
   DISALLOW_COPY_AND_ASSIGN(KuduPredicate);
 };
 
+class KUDU_EXPORT KuduS2Predicate {
+ public:
+  ~KuduS2Predicate();
+  KuduS2Predicate* Clone() const;
+  class KUDU_NO_EXPORT Data;
+ private:
+  friend class KuduScanner;
+  friend class KuduTable;
+  friend class ComparisonPredicateData;
+  friend class ErrorPredicateData;
+
+  explicit KuduS2Predicate(Data* d);
+
+  Data* data_;
+  DISALLOW_COPY_AND_ASSIGN(KuduS2Predicate);
+};
+
 } // namespace client
 } // namespace kudu
 #endif // KUDU_CLIENT_SCAN_PREDICATE_H

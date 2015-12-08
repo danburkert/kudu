@@ -38,6 +38,8 @@ class ScanSpec {
 
   void AddPredicate(const ColumnRangePredicate &pred);
 
+  void AddS2Predicate(S2Predicate pred);
+
   // Set the lower bound (inclusive) primary key for the scan.
   // Does not take ownership of 'key', which must remain valid.
   // If called multiple times, the most restrictive key will be used.
@@ -66,6 +68,10 @@ class ScanSpec {
     return predicates_;
   }
 
+  const vector<S2Predicate>& s2_predicates() const {
+    return s2_predicates_;
+  }
+
   // Return a pointer to the list of predicates in this scan spec.
   //
   // Callers may use this during predicate pushdown to remove predicates
@@ -73,6 +79,10 @@ class ScanSpec {
   // iterator tree.
   vector<ColumnRangePredicate> *mutable_predicates() {
     return &predicates_;
+  }
+
+  vector<S2Predicate> *mutable_s2_predicates() {
+    return &s2_predicates_;
   }
 
   const EncodedKey* lower_bound_key() const {
@@ -104,7 +114,8 @@ class ScanSpec {
   // Helper for the ToString*() methods. 's' may be NULL.
   std::string ToStringWithOptionalSchema(const Schema* s) const;
 
-  vector<ColumnRangePredicate> predicates_;
+  std::vector<ColumnRangePredicate> predicates_;
+  std::vector<S2Predicate> s2_predicates_;
   const EncodedKey* lower_bound_key_;
   const EncodedKey* exclusive_upper_bound_key_;
   std::string lower_bound_partition_key_;

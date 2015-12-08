@@ -21,6 +21,7 @@
 #include "kudu/common/schema.h"
 #include "kudu/util/bitmap.h"
 #include "kudu/util/faststring.h"
+#include "kudu/gutil/geometry/s2cellid.h"
 
 namespace kudu {
 
@@ -124,6 +125,44 @@ class ColumnRangePredicate {
 
   ColumnSchema col_;
   ValueRange range_;
+};
+
+class S2Predicate {
+ public:
+
+   S2Predicate(ColumnSchema column,
+               S2CellId region)
+      : col_(std::move(column)),
+        region_(std::move(region)) {
+   }
+
+  // Return the value range for which this predicate passes.
+  const S2CellId& region() const { return region_; }
+
+ private:
+  // For Evaluate.
+  friend class MaterializingIterator;
+  friend class PredicateEvaluatingIterator;
+  //FRIEND_TEST(TestS2Predicate, TestColumnRange);
+  //FRIEND_TEST(TestS2Predicate, TestDontEvalauteOnUnselectedRows);
+
+  // Evaluate the predicate on every row in the rowblock.
+  //
+  // This is evaluated as an 'AND' with the current contents of *sel:
+  // - wherever the predicate evaluates false, set the appropriate bit in the selection
+  //   vector to 0.
+  // - If the predicate evalutes true, does not make any change to the
+  //   selection vector.
+  //
+  // On any rows where the current value of *sel is false, the predicate evaluation
+  // may be skipped.
+  //
+  // NOTE: the evaluation result is stored into '*sel' which may or may not be the
+  // same vector as block->selection_vector().
+  void Evaluate(RowBlock *block, SelectionVector *sel) const;
+
+  ColumnSchema col_;
+  S2CellId region_;
 };
 
 } // namespace kudu
