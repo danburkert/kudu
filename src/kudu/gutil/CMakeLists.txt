@@ -21,6 +21,30 @@ set(GUTIL_SRCS
   callback_internal.cc
   cpu.cc
   dynamic_annotations.c
+  geometry/s1angle.cc
+  geometry/s1interval.cc
+  geometry/s2.cc
+  geometry/s2cap.cc
+  geometry/s2cell.cc
+  geometry/s2cellid.cc
+  geometry/s2cellunion.cc
+  geometry/s2edgeindex.cc
+  geometry/s2edgeutil.cc
+  geometry/s2latlng.cc
+  geometry/s2latlngrect.cc
+  geometry/s2loop.cc
+  geometry/s2pointregion.cc
+  geometry/s2polygon.cc
+  geometry/s2polygonbuilder.cc
+  geometry/s2polyline.cc
+  geometry/s2r2rect.cc
+  geometry/s2region.cc
+  geometry/s2regioncoverer.cc
+  geometry/s2regionintersection.cc
+  geometry/s2regionunion.cc
+  geometry/util/math/exactfloat/exactfloat.cc
+  geometry/util/coding/coder.cc
+  geometry/util/coding/varint.cc
   hash/city.cc
   hash/hash.cc
   hash/jenkins.cc
@@ -54,7 +78,10 @@ set(GUTIL_SRCS
 
 set(GUTIL_LIBS
   glog
-  protobuf)
+  gflags
+  protobuf
+  openssl_crypto
+  openssl_ssl)
 
 if (NOT APPLE)
   set(GUTIL_LIBS
