@@ -95,6 +95,15 @@ class ScanSpec {
     return predicates_;
   }
 
+  // Return a pointer to the list of predicates in this scan spec.
+  //
+  // Callers may use this during predicate pushdown to remove predicates
+  // from their caller if they're able to apply them lower down the
+  // iterator tree.
+  vector<ColumnRangePredicate> *mutable_predicates() {
+    return &predicates_;
+  }
+
   const EncodedKey* lower_bound_key() const {
     return lower_bound_key_;
   }

@@ -67,6 +67,10 @@ bool ScanSpec::CanShortCircuit() const {
                 });
 }
 
+void ScanSpec::AddS2Predicate(S2Predicate pred) {
+  s2_predicates_.push_back(std::move(pred));
+}
+
 void ScanSpec::SetLowerBoundKey(const EncodedKey* key) {
   if (lower_bound_key_ == nullptr ||
       key->encoded_key().compare(lower_bound_key_->encoded_key()) > 0) {

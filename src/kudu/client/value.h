@@ -23,8 +23,9 @@
 #else
 #include "kudu/client/stubs.h"
 #endif
-#include "kudu/util/slice.h"
+#include "kudu/gutil/geometry/s2cellid.h"
 #include "kudu/util/kudu_export.h"
+#include "kudu/util/slice.h"
 
 namespace kudu {
 namespace client {
@@ -48,6 +49,7 @@ class KUDU_EXPORT KuduValue {
   static KuduValue* FromFloat(float f);
   static KuduValue* FromDouble(double d);
   static KuduValue* FromBool(bool b);
+  static KuduValue* FromS2Cell(S2CellId cell_id)
   ///@}
 
   /// Construct a KuduValue by copying the value of the given Slice.

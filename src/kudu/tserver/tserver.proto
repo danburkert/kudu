@@ -200,6 +200,12 @@ message ColumnRangePredicatePB {
   optional bytes inclusive_upper_bound = 3;
 }
 
+message S2PredicatePB {
+  optional ColumnSchemaPB column = 1;
+
+  optional uint64 cell_id = 2;
+}
+
 // List of predicates used by the Java client. Will rapidly evolve into something more reusable
 // as a way to pass scanner configurations.
 message ColumnRangePredicateListPB {
