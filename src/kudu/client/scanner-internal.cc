@@ -36,6 +36,7 @@ namespace kudu {
 
 using rpc::RpcController;
 using tserver::ColumnRangePredicatePB;
+using tserver::S2PredicatePB;
 using tserver::NewScanRequestPB;
 using tserver::ScanResponsePB;
 
@@ -231,6 +232,14 @@ Status KuduScanner::Data::OpenTablet(const string& partition_key,
                          pb->mutable_upper_bound());
     }
     ColumnSchemaToPB(col, pb->mutable_column());
+  }
+
+  scan->clear_s2_predicates();
+  BOOST_FOREACH(const S2Predicate& pred, spec_.s2_predicates()) {
+    S2PredicatePB* pb = scan->add_s2_predicates();
+    const ColumnSchema& col = pred.column();
+    ColumnSchemaToPB(col, pb->mutable_column());
+    pb->set_cell_id(pred.region().id());
   }
 
   if (spec_.lower_bound_key()) {

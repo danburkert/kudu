@@ -435,8 +435,7 @@ Status MaterializingIterator::Init(ScanSpec *spec) {
   if (spec != NULL && !disallow_pushdown_for_tests_) {
     // Gather any single-column predicates.
     ScanSpec::PredicateList *preds = spec->mutable_predicates();
-    for (ScanSpec::PredicateList::iterator iter = preds->begin();
-         iter != preds->end();) {
+    for (ScanSpec::PredicateList::iterator iter = preds->begin(); iter != preds->end();) {
       const ColumnRangePredicate &pred = *iter;
       const string &col_name = pred.column().name();
       int idx = schema().find_column(col_name);
@@ -451,6 +450,23 @@ Status MaterializingIterator::Init(ScanSpec *spec) {
       // so higher layers don't repeat our work.
       iter = preds->erase(iter);
     }
+
+    for (auto pred : spec->s2_predicates()) {
+      const string& col_name = pred.column().name();
+      int idx = schema().find_column(col_name);
+      if (idx == Schema::kColumnNotFound) {
+        return Status::InvalidArgument("No such column", col_name);
+      }
+
+      if (schema().column(idx).type_info()->type() != DataType::S2CELL) {
+        return Status::InvalidArgument("S2 Predicates may only be applied to an S2CELL column");
+      }
+
+      VLOG(1) << "Pushing down S2 predicate " << pred.ToString();
+      s2_preds_by_column_.insert(std::make_pair(idx, pred));
+    }
+
+    spec->mutable_s2_predicates()->clear();
   }
 
   // Determine a materialization order such that columns with predicates
@@ -461,7 +477,7 @@ Status MaterializingIterator::Init(ScanSpec *spec) {
   vector<size_t> with_preds, without_preds;
 
   for (size_t i = 0; i < schema().num_columns(); i++) {
-    int num_preds = preds_by_column_.count(i);
+    int num_preds = preds_by_column_.count(i) + s2_preds_by_column_.count(i);
     if (num_preds > 0) {
       with_preds.push_back(i);
     } else {
@@ -521,9 +537,22 @@ Status MaterializingIterator::MaterializeBlock(RowBlock *dst) {
         break;
       }
     }
-    if (short_circuit) {
-      break;
+
+    if (short_circuit) break;
+
+    typedef std::pair<size_t, S2Predicate> S2MapEntry;
+    BOOST_FOREACH(const S2MapEntry& entry, s2_preds_by_column_.equal_range(col_idx)) {
+      const S2Predicate &pred = entry.second;
+      pred.Evaluate(dst, dst->selection_vector());
+      // If after evaluating this predicate, the entire row block has now been
+      // filtered out, we don't need to materialize other columns at all.
+      if (!dst->selection_vector()->AnySelected()) {
+        short_circuit = true;
+        break;
+      }
     }
+
+    if (short_circuit) break;
   }
   DVLOG(1) << dst->selection_vector()->CountSelected() << "/"
            << dst->nrows() << " passed predicate";

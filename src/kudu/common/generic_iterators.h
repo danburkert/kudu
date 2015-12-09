@@ -165,6 +165,8 @@ class MaterializingIterator : public RowwiseIterator {
 
   std::unordered_multimap<size_t, ColumnRangePredicate> preds_by_column_;
 
+  std::unordered_multimap<size_t, S2Predicate> s2_preds_by_column_;
+
   // The order in which the columns will be materialized.
   std::vector<size_t> materialization_order_;
 

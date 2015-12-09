@@ -130,11 +130,20 @@ class ColumnRangePredicate {
 class S2Predicate {
  public:
 
-   S2Predicate(ColumnSchema column,
-               S2CellId region)
-      : col_(std::move(column)),
-        region_(std::move(region)) {
-   }
+  S2Predicate(ColumnSchema column,
+              S2CellId region)
+     : col_(std::move(column)),
+       region_(std::move(region)) {
+  }
+
+  const ColumnSchema& column() const {
+    return col_;
+  }
+
+  string ToString() const {
+    return strings::Substitute("S2Predicate { column: $1, S2CellId: $2 }",
+                               col_.name(), region_.ToString());
+  }
 
   // Return the value range for which this predicate passes.
   const S2CellId& region() const { return region_; }

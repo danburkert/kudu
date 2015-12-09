@@ -582,6 +582,15 @@ KuduPredicate* KuduTable::NewComparisonPredicate(const Slice& col_name,
   return new KuduPredicate(new ComparisonPredicateData(s->column(col_idx), op, value));
 }
 
+KuduS2Predicate* KuduTable::NewS2Predicate(const Slice& col_name,
+                                           S2CellId region) {
+  int col_idx = data_->schema_.schema_->find_column(col_name.ToString());
+  CHECK(col_idx != Schema::kColumnNotFound);
+
+
+  return new KuduS2Predicate(new KuduS2Predicate::Data(data_->schema_.schema_->column(col_idx), region));
+}
+
 ////////////////////////////////////////////////////////////
 // Error
 ////////////////////////////////////////////////////////////

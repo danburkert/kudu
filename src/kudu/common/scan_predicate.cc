@@ -107,4 +107,35 @@ string ColumnRangePredicate::ToString() const {
   }
 }
 
+////////////////////////////////////////////////////////////
+
+void S2Predicate::Evaluate(RowBlock* block, SelectionVector* vec) const {
+  int col_idx = block->schema().find_column(col_.name());
+  CHECK_GE(col_idx, 0) << "bad col: " << col_.ToString();
+  CHECK_EQ(block->schema().column(col_idx).type_info()->type(), DataType::S2CELL);
+
+  ColumnBlock cblock(block->column_block(col_idx, block->nrows()));
+
+  // TODO: this is all rather slow, could probably push down all the way
+  // to the TypeInfo so we only make one virtual call, or use codegen.
+  // Not concerned for now -- plan of record is to eventually embed Impala
+  // expression evaluation somewhere here, so this is just a stub.
+  if (cblock.is_nullable()) {
+    for (size_t i = 0; i < block->nrows(); i++) {
+      if (!vec->IsRowSelected(i)) continue;
+      const uint64_t* cell = reinterpret_cast<const uint64_t*>(cblock.nullable_cell_ptr(i));
+      if (cell == NULL || !region_.contains(S2CellId(*cell))) {
+        BitmapClear(vec->mutable_bitmap(), i);
+      }
+    }
+  } else {
+    for (size_t i = 0; i < block->nrows(); i++) {
+      if (!vec->IsRowSelected(i)) continue;
+      if (!region_.contains(S2CellId(*reinterpret_cast<const uint64_t*>(cblock.cell_ptr(i))))) {
+        BitmapClear(vec->mutable_bitmap(), i);
+      }
+    }
+  }
+}
+
 } // namespace kudu

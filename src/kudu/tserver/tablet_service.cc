@@ -1276,6 +1276,15 @@ static Status SetupScanSpec(const NewScanRequestPB& scan_pb,
     ret->AddPredicate(pred);
   }
 
+
+  LOG(INFO) << "Number of s2 predicates: " << scan_pb.s2_predicates_size();
+
+  BOOST_FOREACH(const S2PredicatePB& pred_pb, scan_pb.s2_predicates()) {
+    ColumnSchema col(ColumnSchemaFromPB(pred_pb.column()));
+
+    ret->AddS2Predicate(S2Predicate(col, S2CellId(pred_pb.cell_id())));
+  }
+
   // When doing an ordered scan, we need to include the key columns to be able to encode
   // the last row key for the scan response.
   if (scan_pb.order_mode() == kudu::ORDERED &&
