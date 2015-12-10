@@ -19,8 +19,9 @@ PREFIX=$TP_DIR/installed
 # http://cloudera-thirdparty-libs.s3.amazonaws.com/
 CLOUDFRONT_URL_PREFIX=http://d3dr9sfxru4sde.cloudfront.net
 
-GFLAGS_VERSION=1.5
+GFLAGS_VERSION=2.1.2
 GFLAGS_DIR=$TP_DIR/gflags-$GFLAGS_VERSION
+GFLAGS_BUILD=$GFLAGS_DIR.build
 
 GLOG_VERSION=0.3.4
 GLOG_DIR=$TP_DIR/glog-$GLOG_VERSION

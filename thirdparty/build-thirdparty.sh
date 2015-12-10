@@ -103,8 +103,21 @@ fi
 
 # build gflags
 if [ -n "$F_ALL" -o -n "$F_GFLAGS" ]; then
-  cd $GFLAGS_DIR
-  CXXFLAGS=$EXTRA_CXXFLAGS ./configure --with-pic --prefix=$PREFIX
+  mkdir -p $GFLAGS_BUILD
+  cd $GFLAGS_BUILD
+  rm -rf CMakeCache.txt CMakeFiles/
+
+  CXXFLAGS="${EXTRA_CXXFLAGS}" \
+    $PREFIX/bin/cmake \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=$PREFIX \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=On \
+    -DBUILD_SHARED_LIBS=ON \
+    -DBUILD_STATIC_LIBS=ON \
+    -DGFLAGS_NAMESPACE=google \
+    -DGFLAGS_INCLUDE_DIR=gflags \
+    $GFLAGS_DIR
+
   make -j$PARALLEL install
 fi
 
