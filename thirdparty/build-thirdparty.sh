@@ -103,13 +103,89 @@ if [ -n "$F_ALL" -o -n "$F_CMAKE" ]; then
   make install
 fi
 
+# build llvm
+if [ -n "$F_ALL" -o -n "$F_LLVM" ]; then
+
+  # Install Python if necessary.
+  if [[ $(python -V 2>&1) =~ "Python 2.7." ]]; then
+    PYTHON_EXECUTABLE=$(which python)
+  else
+    cd $PYTHON_DIR
+    ./configure --prefix=$PREFIX
+    make -j$PARALLEL
+    make install
+    PYTHON_EXECUTABLE=$PREFIX/bin/python
+  fi
+
+  mkdir -p $LLVM_BUILD
+  cd $LLVM_BUILD
+
+  # Rebuild the CMake cache every time.
+  rm -Rf CMakeCache.txt CMakeFiles/
+
+  $PREFIX/bin/cmake \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=$PREFIX \
+    -DLLVM_TARGETS_TO_BUILD=X86 \
+    -DLLVM_ENABLE_RTTI=ON \
+    -DCMAKE_CXX_FLAGS="$DEBUG_CFLAGS" \
+    -DPYTHON_EXECUTABLE=$PYTHON_EXECUTABLE \
+    $LLVM_DIR
+
+  make -j$PARALLEL install
+
+  # Create a link from Clang to thirdparty/clang-toolchain. This path is used
+  # for compiling Kudu with sanitizers. The link can't point to the Clang
+  # installed in the prefix directory, since this confuses CMake into believing
+  # the thirdparty prefix directory is the system-wide prefix, and it omits the
+  # thirdparty prefix directory from the rpath of built binaries.
+  ln -sf $LLVM_BUILD $TP_DIR/clang-toolchain
+
+  # When using TSAN, install an instrumented libc++.
+  # Building an instrumented libc++ is documented by
+  # https://github.com/google/sanitizers/wiki/MemorySanitizerLibcxxHowTo
+  # Building only libc++ (out-of-tree build) is documented by
+  # http://libcxx.llvm.org/.
+  if [[ "${KUDU_USE_TSAN}" ]]; then
+
+    mkdir -p $LLVM_BUILD.tsan
+    cd $LLVM_BUILD.tsan
+
+    # Rebuild the CMake cache every time.
+    rm -Rf CMakeCache.txt CMakeFiles/
+
+    CC=$PREFIX/bin/clang \
+    CXX=$PREFIX/bin/clang++ \
+    $PREFIX/bin/cmake \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=$LLVM_BUILD \
+      -DLLVM_USE_SANITIZER=Thread \
+      -DLLVM_PATH=$LLVM_DIR \
+      -DLIBCXX_CXX_ABI=libcxxabi \
+      -DLIBCXX_CXX_ABI_INCLUDE_PATHS=$LLVM_DIR/projects/libcxxabi/include \
+      $LLVM_DIR/projects/libcxx
+
+    make -j$PARALLEL install
+  fi
+fi
+
+if [[ "${KUDU_USE_LIBCXX}" ]]; then
+  echo "TSAN thirdparty build enabled"
+  export CC=$TP_DIR/clang-toolchain/bin/clang
+  export CXX=$TP_DIR/clang-toolchain/bin/clang++
+  export LD_LIBRARY_PATH="$TP_DIR/clang-toolchain/lib:$LD_LIBRARY_PATH"
+  EXTRA_CXXFLAGS="${EXTRA_CXXFLAGS} -stdlib=libc++"
+  #EXTRA_LDFLAGS="-lc++abi -Wl,-rpath,${TP_DIR}/clang-toolchain/lib"
+  EXTRA_LIBS="-lc++abi"
+fi
+
 # build gflags
 if [ -n "$F_ALL" -o -n "$F_GFLAGS" ]; then
   mkdir -p $GFLAGS_BUILD
   cd $GFLAGS_BUILD
   rm -rf CMakeCache.txt CMakeFiles/
 
-  CXXFLAGS="${EXTRA_CXXFLAGS}" \
+  CXXFLAGS="${EXTRA_CXXFLAGS} ${EXTRA_LIBS}" \
     $PREFIX/bin/cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=$PREFIX \
@@ -130,7 +206,7 @@ if [ "$OS_LINUX" ]; then
     cd $LIBUNWIND_DIR
     # Disable minidebuginfo, which depends on liblzma, until/unless we decide to
     # add liblzma to thirdparty.
-    ./configure --disable-minidebuginfo --with-pic --prefix=$PREFIX
+    ./configure --disable-minidebuginfo --with-pic --prefix="${PREFIX}"
     make -j$PARALLEL install
   fi
 fi
@@ -140,10 +216,10 @@ if [ -n "$F_ALL" -o -n "$F_GLOG" ]; then
   cd $GLOG_DIR
   # We need to set "-g -O2" because glog only provides those flags when CXXFLAGS is unset.
   # Help glog find libunwind.
-  CXXFLAGS="$EXTRA_CXXFLAGS" \
-    CPPFLAGS=-I$PREFIX/include \
-    LDFLAGS=-L$PREFIX/lib \
-    ./configure --with-pic --prefix=$PREFIX --with-gflags=$PREFIX
+  CXXFLAGS="${EXTRA_CXXFLAGS}" \
+    CPPFLAGS="-I${PREFIX}/include" \
+    LDFLAGS="-L${PREFIX}/lib ${EXTRA_LDFLAGS}" \
+    ./configure --with-pic --prefix="${PREFIX}" --with-gflags="${PREFIX}"
   make -j$PARALLEL install
 fi
 
@@ -290,56 +366,6 @@ fi
 # Copy gcovr tool into bin directory
 if [ -n "$F_ALL" -o -n "$F_GCOVR" ]; then
   cp -a $GCOVR_DIR/scripts/gcovr $PREFIX/bin/gcovr
-fi
-
-# build llvm
-if [ -n "$F_ALL" -o -n "$F_LLVM" ]; then
-
-  # Install Python if necessary.
-  if [[ $(python -V 2>&1) =~ "Python 2.7." ]]; then
-    PYTHON_EXECUTABLE=$(which python)
-  else
-    cd $PYTHON_DIR
-    ./configure --prefix=$PREFIX
-    make -j$PARALLEL
-    make install
-    PYTHON_EXECUTABLE=$PREFIX/bin/python
-  fi
-
-  mkdir -p $LLVM_BUILD
-  cd $LLVM_BUILD
-
-  # Rebuild the CMake cache every time.
-  rm -Rf CMakeCache.txt CMakeFiles/
-
-  $PREFIX/bin/cmake \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    -DLLVM_TARGETS_TO_BUILD=X86 \
-    -DLLVM_ENABLE_RTTI=ON \
-    -DCMAKE_CXX_FLAGS="$EXTRA_CXXFLAGS" \
-    -DPYTHON_EXECUTABLE=$PYTHON_EXECUTABLE \
-    $LLVM_DIR
-
-  if [ -n "$old_cc" ]; then
-    export CC=$old_cc
-  else
-    unset CC
-  fi
-  if [ -n "$old_cxx" ]; then
-    export CXX=$old_cxx
-  else
-    unset CXX
-  fi
-
-  make -j$PARALLEL install
-
-  # Create a link from Clang to thirdparty/clang-toolchain. This path is used
-  # for compiling Kudu with sanitizers. The link can't point to the Clang
-  # installed in the prefix directory, since this confuses CMake into believing
-  # the thirdparty prefix directory is the system-wide prefix, and it omits the
-  # thirdparty prefix directory from the rpath of built binaries.
-  ln -sf $LLVM_BUILD $TP_DIR/clang-toolchain
 fi
 
 # Build trace-viewer (by copying it into www/)
