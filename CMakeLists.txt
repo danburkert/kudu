@@ -230,10 +230,13 @@ endif ()
 
 # Flag to enable thread sanitizer (clang or gcc 4.8)
 if (${KUDU_USE_TSAN})
-  if(NOT (("${COMPILER_FAMILY}" STREQUAL "clang") OR
-          ("${COMPILER_FAMILY}" STREQUAL "gcc" AND "${COMPILER_VERSION}" VERSION_GREATER "4.8")))
-    message(SEND_ERROR "Cannot use TSAN without clang or gcc >= 4.8")
+  if(NOT ("${COMPILER_FAMILY}" STREQUAL "clang"))
+    message(SEND_ERROR "Cannot use TSAN without clang")
   endif()
+
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++ -lc++ -lc++abi")
+#include_directories(SYSTEM "/data1/kudu/thirdparty/installed/include/c++/v1/")
 
   add_definitions("-fsanitize=thread")
 

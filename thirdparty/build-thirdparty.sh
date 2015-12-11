@@ -171,12 +171,12 @@ fi
 
 if [[ "${KUDU_USE_LIBCXX}" ]]; then
   echo "TSAN thirdparty build enabled"
-  export CC=$TP_DIR/clang-toolchain/bin/clang
-  export CXX=$TP_DIR/clang-toolchain/bin/clang++
-  export LD_LIBRARY_PATH="$TP_DIR/clang-toolchain/lib:$LD_LIBRARY_PATH"
-  EXTRA_CXXFLAGS="${EXTRA_CXXFLAGS} -stdlib=libc++"
-  #EXTRA_LDFLAGS="-lc++abi -Wl,-rpath,${TP_DIR}/clang-toolchain/lib"
-  EXTRA_LIBS="-lc++abi"
+  export CC=$PREFIX/bin/clang
+  export CXX=$PREFIX/bin/clang++
+  export LD_LIBRARY_PATH="${PREFIX}/lib:${LD_LIBRARY_PATH}"
+  EXTRA_CXXFLAGS="-stdlib=libc++ ${EXTRA_CXXFLAGS}"
+  EXTRA_LDFLAGS="-stdlib=libc++ ${EXTRA_LDFLAGS}"
+  EXTRA_LIBS="-lc++ -lc++abi"
 fi
 
 # build gflags
@@ -217,8 +217,9 @@ if [ -n "$F_ALL" -o -n "$F_GLOG" ]; then
   # We need to set "-g -O2" because glog only provides those flags when CXXFLAGS is unset.
   # Help glog find libunwind.
   CXXFLAGS="${EXTRA_CXXFLAGS}" \
-    CPPFLAGS="-I${PREFIX}/include" \
     LDFLAGS="-L${PREFIX}/lib ${EXTRA_LDFLAGS}" \
+    LIBS="${EXTRA_LIBS}" \
+    CPPFLAGS="-I${PREFIX}/include" \
     ./configure --with-pic --prefix="${PREFIX}" --with-gflags="${PREFIX}"
   make -j$PARALLEL install
 fi
@@ -226,8 +227,10 @@ fi
 # build gperftools
 if [ -n "$F_ALL" -o -n "$F_GPERFTOOLS" ]; then
   cd $GPERFTOOLS_DIR
-  CXXFLAGS=$EXTRA_CXXFLAGS ./configure \
-    --enable-frame-pointers --enable-heap-checker --with-pic --prefix=$PREFIX
+  CXXFLAGS="${EXTRA_CXXFLAGS}" \
+    LDFLAGS="${EXTRA_LDFLAGS}" \
+    LIBS="${EXTRA_LIBS}" \
+    ./configure --enable-frame-pointers --enable-heap-checker --with-pic --prefix=$PREFIX
   make -j$PARALLEL install
 fi
 
@@ -237,8 +240,11 @@ if [ -n "$F_ALL" -o -n "$F_GMOCK" ]; then
   # Run the static library build, then the shared library build.
   for SHARED in OFF ON; do
     rm -rf CMakeCache.txt CMakeFiles/
-    CXXFLAGS="-fPIC -g $EXTRA_CXXFLAGS" \
-      $PREFIX/bin/cmake -DBUILD_SHARED_LIBS=$SHARED .
+    CXXFLAGS="${EXTRA_CXXFLAGS}" \
+      $PREFIX/bin/cmake \
+      -DCMAKE_BUILD_TYPE=Debug \
+      -DCMAKE_POSITION_INDEPENDENT_CODE=On \
+      -DBUILD_SHARED_LIBS=$SHARED .
     make -j$PARALLEL
   done
   echo Installing gmock...
@@ -250,7 +256,10 @@ fi
 # build protobuf
 if [ -n "$F_ALL" -o -n "$F_PROTOBUF" ]; then
   cd $PROTOBUF_DIR
-  CXXFLAGS="$EXTRA_CXXFLAGS" LDFLAGS="${EXTRA_LDFLAGS}" LIBS="${EXTRA_LIBS}" ./configure \
+  CXXFLAGS="${EXTRA_CXXFLAGS}" \
+    LDFLAGS="${EXTRA_LDFLAGS}" \
+    LIBS="${EXTRA_LIBS}" \
+    ./configure \
     --with-pic \
     --enable-shared \
     --enable-static \
@@ -261,7 +270,9 @@ fi
 # build snappy
 if [ -n "$F_ALL" -o -n "$F_SNAPPY" ]; then
   cd $SNAPPY_DIR
-  CXXFLAGS=$EXTRA_CXXFLAGS \
+  CXXFLAGS="${EXTRA_CXXFLAGS}" \
+    LDFLAGS="${EXTRA_LDFLAGS}" \
+    LIBS="${EXTRA_LIBS}" \
     ./configure --with-pic --prefix=$PREFIX
   make -j$PARALLEL install
 fi
@@ -269,7 +280,8 @@ fi
 # build zlib
 if [ -n "$F_ALL" -o -n "$F_ZLIB" ]; then
   cd $ZLIB_DIR
-  CFLAGS="$EXTRA_CXXFLAGS -fPIC" ./configure --prefix=$PREFIX
+  CFLAGS="$EXTRA_CXXFLAGS -fPIC"
+  ./configure --prefix=$PREFIX
   make -j$PARALLEL install
 fi
 
@@ -348,6 +360,8 @@ if [ -n "$F_ALL" -o -n "$F_CRCUTIL" ]; then
   cd $CRCUTIL_DIR
   ./autogen.sh
   CXXFLAGS=$EXTRA_CXXFLAGS \
+    LDFLAGS="${EXTRA_LDFLAGS}" \
+    LIBS="${EXTRA_LIBS}" \
     ./configure --prefix=$PREFIX
   make -j$PARALLEL install
 fi

@@ -18,7 +18,7 @@
 #include <boost/thread/barrier.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
-#include <boost/unordered_set.hpp>
+#include <unordered_set>
 
 #include "kudu/gutil/gscoped_ptr.h"
 #include "kudu/tablet/concurrent_btree.h"
@@ -32,7 +32,7 @@ namespace kudu {
 namespace tablet {
 namespace btree {
 
-using boost::unordered_set;
+using std::unordered_set;
 
 class TestCBTree : public KuduTest {
  protected:
