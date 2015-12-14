@@ -255,14 +255,20 @@ fi
 
 # build protobuf
 if [ -n "$F_ALL" -o -n "$F_PROTOBUF" ]; then
+  echo "CXX_FLAGS: ${EXTRA_CXXFLAGS}"
+  echo "LD_FLAGS: ${EXTRA_LDFLAGS}"
+  echo "LIBS: ${EXTRA_LIBS}"
+  echo "$LD_LIBRARY_PATH: ${LD_LIBRARY_PATH}"
+
   cd $PROTOBUF_DIR
-  CXXFLAGS="${EXTRA_CXXFLAGS}" \
-    LDFLAGS="${EXTRA_LDFLAGS}" \
-    LIBS="${EXTRA_LIBS}" \
-    ./configure \
-    --with-pic \
-    --enable-shared \
-    --enable-static \
+  LD_LIBRARY_PATH="/data1/kudu/thirdparty/installed/lib" \
+  ./configure \
+    CC="${CC}" \
+    CXX="${CXX}" \
+    LD_LIBRARY_PATH="/data1/kudu/thirdparty/installed/lib" \
+    CXXFLAGS="-stdlib=libc++" \
+    LDFLAGS="-stdlib=libc++" \
+    LIBS="-lstdc++ -lstdc++abi" \
     --prefix=$PREFIX
   make -j$PARALLEL install
 fi
