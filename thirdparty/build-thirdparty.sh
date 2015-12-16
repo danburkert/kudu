@@ -148,8 +148,7 @@ if [ -n "$F_ALL" -o -n "$F_LLVM" ]; then
   # http://libcxx.llvm.org/.
   if [[ "${KUDU_USE_TSAN}" ]]; then
 
-    mkdir -p $LLVM_BUILD.tsan
-    cd $LLVM_BUILD.tsan
+    cd $LLVM_BUILD
 
     # Rebuild the CMake cache every time.
     rm -Rf CMakeCache.txt CMakeFiles/
@@ -158,7 +157,7 @@ if [ -n "$F_ALL" -o -n "$F_LLVM" ]; then
     CXX=$PREFIX/bin/clang++ \
     $PREFIX/bin/cmake \
       -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=$LLVM_BUILD \
+      -DCMAKE_INSTALL_PREFIX=$PREFIX \
       -DLLVM_USE_SANITIZER=Thread \
       -DLLVM_PATH=$LLVM_DIR \
       -DLIBCXX_CXX_ABI=libcxxabi \
@@ -169,12 +168,13 @@ if [ -n "$F_ALL" -o -n "$F_LLVM" ]; then
   fi
 fi
 
-if [[ "${KUDU_USE_LIBCXX}" ]]; then
+if [[ "${KUDU_USE_TSAN}" ]]; then
   echo "TSAN thirdparty build enabled"
   export CC=$PREFIX/bin/clang
   export CXX=$PREFIX/bin/clang++
   export LD_LIBRARY_PATH="${PREFIX}/lib:${LD_LIBRARY_PATH}"
-  EXTRA_CXXFLAGS="-stdlib=libc++ ${EXTRA_CXXFLAGS}"
+  EXTRA_CFLAGS="-fsanitize=thread ${EXTRA_CFLAGS}"
+  EXTRA_CXXFLAGS="-stdlib=libc++ -fsanitize=thread ${EXTRA_CXXFLAGS}"
   EXTRA_LDFLAGS="-stdlib=libc++ ${EXTRA_LDFLAGS}"
   EXTRA_LIBS="-lc++ -lc++abi"
 fi
@@ -216,7 +216,8 @@ if [ -n "$F_ALL" -o -n "$F_GLOG" ]; then
   cd $GLOG_DIR
   # We need to set "-g -O2" because glog only provides those flags when CXXFLAGS is unset.
   # Help glog find libunwind.
-  CXXFLAGS="${EXTRA_CXXFLAGS}" \
+  CFLAGS="${EXTRA_CFLAGS}" \
+    CXXFLAGS="${EXTRA_CXXFLAGS}" \
     LDFLAGS="-L${PREFIX}/lib ${EXTRA_LDFLAGS}" \
     LIBS="${EXTRA_LIBS}" \
     CPPFLAGS="-I${PREFIX}/include" \
@@ -227,6 +228,7 @@ fi
 # build gperftools
 if [ -n "$F_ALL" -o -n "$F_GPERFTOOLS" ]; then
   cd $GPERFTOOLS_DIR
+  CFLAGS="${EXTRA_CFLAGS}" \
   CXXFLAGS="${EXTRA_CXXFLAGS}" \
     LDFLAGS="${EXTRA_LDFLAGS}" \
     LIBS="${EXTRA_LIBS}" \
@@ -240,7 +242,7 @@ if [ -n "$F_ALL" -o -n "$F_GMOCK" ]; then
   # Run the static library build, then the shared library build.
   for SHARED in OFF ON; do
     rm -rf CMakeCache.txt CMakeFiles/
-    CXXFLAGS="${EXTRA_CXXFLAGS}" \
+    CXXFLAGS="${EXTRA_CXXFLAGS} ${EXTRA_LIBS}" \
       $PREFIX/bin/cmake \
       -DCMAKE_BUILD_TYPE=Debug \
       -DCMAKE_POSITION_INDEPENDENT_CODE=On \
@@ -255,20 +257,15 @@ fi
 
 # build protobuf
 if [ -n "$F_ALL" -o -n "$F_PROTOBUF" ]; then
-  echo "CXX_FLAGS: ${EXTRA_CXXFLAGS}"
-  echo "LD_FLAGS: ${EXTRA_LDFLAGS}"
-  echo "LIBS: ${EXTRA_LIBS}"
-  echo "$LD_LIBRARY_PATH: ${LD_LIBRARY_PATH}"
-
   cd $PROTOBUF_DIR
-  LD_LIBRARY_PATH="/data1/kudu/thirdparty/installed/lib" \
   ./configure \
-    CC="${CC}" \
-    CXX="${CXX}" \
-    LD_LIBRARY_PATH="/data1/kudu/thirdparty/installed/lib" \
-    CXXFLAGS="-stdlib=libc++" \
-    LDFLAGS="-stdlib=libc++" \
-    LIBS="-lstdc++ -lstdc++abi" \
+    CFLAGS="${EXTRA_CFLAGS}" \
+    CXXFLAGS="${EXTRA_CXXFLAGS}" \
+    LDFLAGS="${EXTRA_LDFLAGS}" \
+    LIBS="${EXTRA_LIBS}" \
+    --with-pic \
+    --enable-shared \
+    --enable-static \
     --prefix=$PREFIX
   make -j$PARALLEL install
 fi
@@ -276,7 +273,8 @@ fi
 # build snappy
 if [ -n "$F_ALL" -o -n "$F_SNAPPY" ]; then
   cd $SNAPPY_DIR
-  CXXFLAGS="${EXTRA_CXXFLAGS}" \
+  CFLAGS="${EXTRA_CFLAGS}" \
+    CXXFLAGS="${EXTRA_CXXFLAGS}" \
     LDFLAGS="${EXTRA_LDFLAGS}" \
     LIBS="${EXTRA_LIBS}" \
     ./configure --with-pic --prefix=$PREFIX
@@ -294,7 +292,7 @@ fi
 # build lz4
 if [ -n "$F_ALL" -o -n "$F_LZ4" ]; then
   cd $LZ4_DIR
-  CFLAGS=-fno-omit-frame-pointer cmake -DCMAKE_BUILD_TYPE=release \
+  CFLAGS="${EXTRA_CFLAGS} -fno-omit-frame-pointer" cmake -DCMAKE_BUILD_TYPE=release \
     -DBUILD_TOOLS=0 -DCMAKE_INSTALL_PREFIX:PATH=$PREFIX cmake_unofficial/
   make -j$PARALLEL install
 fi
@@ -303,7 +301,7 @@ fi
 if [ -n "$F_ALL" -o -n "$F_BITSHUFFLE" ]; then
   cd $BITSHUFFLE_DIR
   # bitshuffle depends on lz4, therefore set the flag I$PREFIX/include
-  ${CC:-gcc} -fno-omit-frame-pointer -std=c99 -I$PREFIX/include -O3 -DNDEBUG -fPIC -c bitshuffle.c
+  ${CC:-gcc} ${EXTRA_CFLAGS} -fno-omit-frame-pointer -std=c99 -I$PREFIX/include -O3 -DNDEBUG -fPIC -c bitshuffle.c
   ar rs bitshuffle.a bitshuffle.o
   cp bitshuffle.a $PREFIX/lib/
   cp bitshuffle.h $PREFIX/include/
@@ -312,7 +310,9 @@ fi
 # build libev
 if [ -n "$F_ALL" -o -n "$F_LIBEV" ]; then
   cd $LIBEV_DIR
-  ./configure --with-pic --prefix=$PREFIX
+  CFLAGS="${EXTRA_CFLAGS}" \
+    CXXFLAGS="${EXTRA_CXXFLAGS}" \
+    ./configure --with-pic --prefix=$PREFIX
   make -j$PARALLEL install
 fi
 
@@ -329,7 +329,7 @@ if [ -n "$F_ALL" -o -n "$F_SQUEASEL" ]; then
   # Mongoose's Makefile builds a standalone web server, whereas we just want
   # a static lib
   cd $SQUEASEL_DIR
-  ${CC:-gcc} -fno-omit-frame-pointer -std=c99 -O3 -DNDEBUG -DNO_SSL_DL -fPIC -c squeasel.c
+  ${CC:-gcc} ${EXTRA_CFLAGS} -fno-omit-frame-pointer -std=c99 -O3 -DNDEBUG -DNO_SSL_DL -fPIC -c squeasel.c
   ar rs libsqueasel.a squeasel.o
   cp libsqueasel.a $PREFIX/lib/
   cp squeasel.h $PREFIX/include/
@@ -341,6 +341,7 @@ if [ -n "$F_ALL" -o -n "$F_CURL" ]; then
   # since we only use this for testing our own HTTP endpoints
   # at this point in time.
   cd $CURL_DIR
+  CFLAGS="${EXTRA_CFLAGS}" \
   ./configure --prefix=$PREFIX \
     --disable-ftp \
     --disable-file \
@@ -365,7 +366,8 @@ fi
 if [ -n "$F_ALL" -o -n "$F_CRCUTIL" ]; then
   cd $CRCUTIL_DIR
   ./autogen.sh
-  CXXFLAGS=$EXTRA_CXXFLAGS \
+  CFLAGS="${EXTRA_CFLAGS}" \
+    CXXFLAGS=$EXTRA_CXXFLAGS \
     LDFLAGS="${EXTRA_LDFLAGS}" \
     LIBS="${EXTRA_LIBS}" \
     ./configure --prefix=$PREFIX

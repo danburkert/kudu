@@ -15,7 +15,6 @@
 #include <algorithm>
 #include <string>
 #include <vector>
-#include <boost/functional/hash.hpp>
 #include <gflags/gflags.h>
 
 #include "kudu/gutil/strings/substitute.h"
@@ -338,16 +337,25 @@ string UserCredentials::ToString() const {
   return StringPrintf("{real_user=%s, eff_user=%s}", real_user_.c_str(), eff_user_.c_str());
 }
 
+
+namespace {
+  template <class T>
+    inline void hash_combine(std::size_t & seed, const T & v) {
+      std::hash<T> hasher;
+      seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+}
+
 size_t UserCredentials::HashCode() const {
   size_t seed = 0;
   if (has_effective_user()) {
-    boost::hash_combine(seed, effective_user());
+    hash_combine(seed, effective_user());
   }
   if (has_real_user()) {
-    boost::hash_combine(seed, real_user());
+    hash_combine(seed, real_user());
   }
   if (has_password()) {
-    boost::hash_combine(seed, password());
+    hash_combine(seed, password());
   }
   return seed;
 }
@@ -399,8 +407,8 @@ void ConnectionId::DoCopyFrom(const ConnectionId& other) {
 
 size_t ConnectionId::HashCode() const {
   size_t seed = 0;
-  boost::hash_combine(seed, remote_.HashCode());
-  boost::hash_combine(seed, user_credentials_.HashCode());
+  hash_combine(seed, remote_.HashCode());
+  hash_combine(seed, user_credentials_.HashCode());
   return seed;
 }
 

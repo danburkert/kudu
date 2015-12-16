@@ -234,7 +234,7 @@ if (${KUDU_USE_TSAN})
     message(SEND_ERROR "Cannot use TSAN without clang")
   endif()
 
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++ -I /data2/kudu/thirdparty/installed/include/c++/v1/")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++ -lc++ -lc++abi")
 #include_directories(SYSTEM "/data1/kudu/thirdparty/installed/include/c++/v1/")
 

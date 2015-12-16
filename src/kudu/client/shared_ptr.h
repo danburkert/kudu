@@ -29,7 +29,6 @@
 // and std::shared_ptr on OS X. Clients are encouraged to use these typedefs in
 // order to ensure that applications will compile on both Linux and OS X.
 
-#if defined(__APPLE__)
 #include <memory>
 
 namespace kudu {
@@ -41,19 +40,5 @@ namespace sp {
 }
 }
 }
-
-#else
-#include <tr1/memory>
-
-namespace kudu {
-namespace client {
-namespace sp {
-  using std::tr1::shared_ptr;
-  using std::tr1::weak_ptr;
-  using std::tr1::enable_shared_from_this;
-}
-}
-}
-#endif
 
 #endif // define KUDU_CLIENT_SHARED_PTR_H

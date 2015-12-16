@@ -109,7 +109,7 @@ list(REMOVE_ITEM IR_FLAGS "-fsanitize=address")
 # Protobuf 2.6.1's atomicops-internals-tsan.h relies on
 # <sanitizer/tsan_interface_atomic.h>, which is not provided by the LLVM version
 # we use for codegen.
-list(REMOVE_ITEM IR_FLAGS "-fsanitize=thread" "-DTHREAD_SANITIZER")
+#list(REMOVE_ITEM IR_FLAGS "-fsanitize=thread" "-DTHREAD_SANITIZER")
 
 # Remove any optimization flags from the generated IR.
 # Optimizing during the precompilation limits the ability to optimize
