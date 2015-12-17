@@ -18,10 +18,10 @@
 #ifndef KUDU_RPC_PROXY_H
 #define KUDU_RPC_PROXY_H
 
+#include <atomic>
 #include <memory>
 #include <string>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/rpc/outbound_call.h"
 #include "kudu/rpc/response_callback.h"
 #include "kudu/rpc/rpc_controller.h"
@@ -108,7 +108,11 @@ class Proxy {
   const std::string service_name_;
   std::shared_ptr<Messenger> messenger_;
   ConnectionId conn_id_;
-  mutable Atomic32 is_started_;
+
+  // Tracks the status of the proxy object. Once the proxy is started it may not
+  // be modified. Consequently, no ordering or visibility constraints are
+  // required, and relaxed atomic operations are used.
+  mutable std::atomic<bool> is_started_;
 
   DISALLOW_COPY_AND_ASSIGN(Proxy);
 };

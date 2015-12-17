@@ -18,6 +18,7 @@
 #ifndef KUDU_SERVER_LOGICAL_CLOCK_H_
 #define KUDU_SERVER_LOGICAL_CLOCK_H_
 
+#include <atomic>
 #include <string>
 
 #include "kudu/server/clock.h"
@@ -79,7 +80,7 @@ class LogicalClock : public Clock {
   // Used to get the timestamp for metrics.
   uint64_t NowForMetrics();
 
-  base::subtle::Atomic64 now_;
+  std::atomic<uint64_t> now_;
 
   FunctionGaugeDetacher metric_detacher_;
 };

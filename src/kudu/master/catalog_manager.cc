@@ -53,7 +53,6 @@
 #include "kudu/common/wire_protocol.h"
 #include "kudu/consensus/consensus.proxy.h"
 #include "kudu/consensus/quorum_util.h"
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/macros.h"
 #include "kudu/gutil/map-util.h"
 #include "kudu/gutil/mathlimits.h"
@@ -143,6 +142,8 @@ DEFINE_bool(catalog_manager_check_ts_count_for_create_table, true,
             "a table to be created.");
 TAG_FLAG(catalog_manager_check_ts_count_for_create_table, hidden);
 
+using std::atomic;
+using std::memory_order_relaxed;
 using std::shared_ptr;
 using std::string;
 using std::vector;
@@ -298,7 +299,7 @@ class CatalogManagerBgTasks {
 
   void Wait(int msec) {
     boost::unique_lock<boost::mutex> lock(lock_);
-    if (closing_) return;
+    if (closing_.load(memory_order_relaxed)) return;
     if (!pending_updates_) {
       boost::system_time wtime = boost::get_system_time() + boost::posix_time::milliseconds(msec);
       cond_.timed_wait(lock, wtime);
@@ -317,7 +318,9 @@ class CatalogManagerBgTasks {
   void Run();
 
  private:
-  Atomic32 closing_;
+  // Signals the catalog manager background task to shutdown. No ordering or
+  // visibility is implied through this variable, so relaxed ops are used.
+  atomic<bool> closing_;
   bool pending_updates_;
   mutable boost::mutex lock_;
   boost::condition_variable cond_;
@@ -332,7 +335,7 @@ Status CatalogManagerBgTasks::Init() {
 }
 
 void CatalogManagerBgTasks::Shutdown() {
-  if (Acquire_CompareAndSwap(&closing_, false, true) != false) {
+  if (closing_.exchange(true, memory_order_relaxed)) {
     VLOG(2) << "CatalogManagerBgTasks already shut down";
     return;
   }
@@ -344,7 +347,7 @@ void CatalogManagerBgTasks::Shutdown() {
 }
 
 void CatalogManagerBgTasks::Run() {
-  while (!NoBarrier_Load(&closing_)) {
+  while (!closing_.load(memory_order_relaxed)) {
     if (!catalog_manager_->IsInitialized()) {
       LOG(WARNING) << "Catalog manager is not initialized!";
     } else if (catalog_manager_->CheckIsLeaderAndReady().ok()) {
@@ -1816,7 +1819,7 @@ class RetryingTSRpcTask : public MonitoredTask {
   }
 
   virtual State state() const OVERRIDE {
-    return static_cast<State>(NoBarrier_Load(&state_));
+    return state_.load(memory_order_relaxed);
   }
 
   virtual MonoTime start_timestamp() const OVERRIDE { return start_ts_; }
@@ -1844,17 +1847,23 @@ class RetryingTSRpcTask : public MonitoredTask {
 
   // Transition from running -> complete.
   void MarkComplete() {
-    NoBarrier_CompareAndSwap(&state_, kStateRunning, kStateComplete);
+    State expected = kStateRunning;
+    CHECK(state_.compare_exchange_strong(expected, kStateComplete, memory_order_relaxed))
+      << "Can not complete non-running task";
   }
 
   // Transition from running -> aborted.
   void MarkAborted() {
-    NoBarrier_CompareAndSwap(&state_, kStateRunning, kStateAborted);
+    State expected = kStateRunning;
+    CHECK(state_.compare_exchange_strong(expected, kStateComplete, memory_order_relaxed))
+      << "Can not abort non-running task";
   }
 
   // Transition from running -> failed.
   void MarkFailed() {
-    NoBarrier_CompareAndSwap(&state_, kStateRunning, kStateFailed);
+    State expected = kStateRunning;
+    CHECK(state_.compare_exchange_strong(expected, kStateFailed, memory_order_relaxed))
+      << "Can not fail non-running task";
   }
 
   // Callback meant to be invoked from asynchronous RPC service proxy calls.
@@ -1984,8 +1993,12 @@ class RetryingTSRpcTask : public MonitoredTask {
     return Status::OK();
   }
 
-  // Use state() and MarkX() accessors.
-  AtomicWord state_;
+  // Tracks the state of the task. Use state() and MarkX() for access and
+  // modifiation.
+  //
+  // No ordering or visibility guarantees are necessary when accessing or
+  // modifying the state, so relaxed atomic operations are used.
+  atomic<State> state_;
 };
 
 // RetryingTSRpcTask subclass which always retries the same tablet server,

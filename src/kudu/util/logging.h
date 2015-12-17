@@ -29,10 +29,10 @@
 #ifndef KUDU_UTIL_LOGGING_H
 #define KUDU_UTIL_LOGGING_H
 
-#include <string>
+#include <atomic>
 #include <glog/logging.h>
+#include <string>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/dynamic_annotations.h"
 #include "kudu/gutil/walltime.h"
 #include "kudu/util/logging_callback.h"
@@ -202,15 +202,15 @@ class LogThrottler {
   bool ShouldLog(int n_secs, int* num_suppressed) {
     MicrosecondsInt64 ts = GetMonoTimeMicros();
     if (ts - last_ts_ < n_secs * 1e6) {
-      *num_suppressed = base::subtle::NoBarrier_AtomicIncrement(&num_suppressed_, 1);
+      *num_suppressed = num_suppressed_.fetch_add(1, std::memory_order_relaxed) + 1;
       return false;
     }
     last_ts_ = ts;
-    *num_suppressed = base::subtle::NoBarrier_AtomicExchange(&num_suppressed_, 0);
+    *num_suppressed = num_suppressed_.exchange(0, std::memory_order_relaxed);
     return true;
   }
  private:
-  Atomic32 num_suppressed_;
+  std::atomic<uint32_t> num_suppressed_;
   uint64_t last_ts_;
 };
 } // namespace logging_internal

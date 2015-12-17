@@ -32,6 +32,7 @@ namespace kudu {
 namespace tablet {
 
 using log::LogAnchorRegistry;
+using std::memory_order_relaxed;
 using std::shared_ptr;
 using strings::Substitute;
 
@@ -49,7 +50,7 @@ DeltaMemStore::DeltaMemStore(int64_t id,
   : id_(id),
     rs_id_(rs_id),
     anchorer_(log_anchor_registry, Substitute("Rowset-$0/DeltaMemStore-$1", rs_id_, id_)),
-    disambiguator_sequence_number_(0) {
+    disambiguator_sequence_number_(1) {
   if (parent_tracker) {
     CHECK(MemTracker::FindTracker(Tablet::kDMSMemTrackerId,
                                   &mem_tracker_,
@@ -84,7 +85,7 @@ Status DeltaMemStore::Update(Timestamp timestamp,
   if (PREDICT_FALSE(mutation.exists())) {
     // We already have a delta for this row at the same timestamp.
     // Try again with a disambiguating sequence number appended to the key.
-    int seq = disambiguator_sequence_number_.Increment();
+    int seq = disambiguator_sequence_number_.fetch_add(1, memory_order_relaxed);
     PutMemcmpableVarint64(&buf, seq);
     key_slice = Slice(buf);
     mutation.Reset(key_slice);

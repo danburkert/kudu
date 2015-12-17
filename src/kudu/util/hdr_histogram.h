@@ -41,9 +41,9 @@
 // tracked value (1 hour), it would still maintain a resolution of 3.6 seconds
 // (or better).
 
+#include <atomic>
 #include <stdint.h>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/gscoped_ptr.h"
 
 namespace kudu {
@@ -97,10 +97,10 @@ class HdrHistogram {
   int SubBucketIndex(uint64_t value, int bucket_index) const;
 
   // Count of all events recorded.
-  uint64_t TotalCount() const { return base::subtle::NoBarrier_Load(&total_count_); }
+  uint64_t TotalCount() const { return total_count_.load(std::memory_order_relaxed); }
 
   // Sum of all events recorded.
-  uint64_t TotalSum() const { return base::subtle::NoBarrier_Load(&total_sum_); }
+  uint64_t TotalSum() const { return total_sum_.load(std::memory_order_relaxed); }
 
   // Return number of items at index.
   uint64_t CountAt(int bucket_index, int sub_bucket_index) const;
@@ -182,11 +182,14 @@ class HdrHistogram {
   uint32_t sub_bucket_mask_;
 
   // Also hot.
-  base::subtle::Atomic64 total_count_;
-  base::subtle::Atomic64 total_sum_;
-  base::subtle::Atomic64 min_value_;
-  base::subtle::Atomic64 max_value_;
-  gscoped_array<base::subtle::Atomic64> counts_;
+  //
+  // Ordering among counter updates is not required, so relaxed atomic
+  // operations are used.
+  std::atomic<uint64_t> total_count_;
+  std::atomic<uint64_t> total_sum_;
+  std::atomic<uint64_t> min_value_;
+  std::atomic<uint64_t> max_value_;
+  gscoped_array<std::atomic<uint64_t>> counts_;
 
   HdrHistogram& operator=(const HdrHistogram& other); // Disable assignment operator.
 };

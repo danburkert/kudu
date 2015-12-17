@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+#include <atomic>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -21,7 +22,6 @@
 #include <unistd.h>
 #include <vector>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/bind.h"
 #include "kudu/gutil/callback.h"
 #include "kudu/gutil/map-util.h"
@@ -81,13 +81,12 @@ DEFINE_bool(never_fsync, false,
 TAG_FLAG(never_fsync, advanced);
 TAG_FLAG(never_fsync, unsafe);
 
-using base::subtle::Atomic64;
-using base::subtle::Barrier_AtomicIncrement;
+using std::atomic;
 using std::vector;
 using strings::Substitute;
 
 static __thread uint64_t thread_local_id;
-static Atomic64 cur_thread_local_id_;
+static atomic<uint64_t> cur_thread_local_id_ = { 1 };
 
 namespace kudu {
 
@@ -925,7 +924,7 @@ class PosixEnv : public Env {
     // because that function returns a totally opaque ID, which can't be
     // compared via normal means.
     if (thread_local_id == 0) {
-      thread_local_id = Barrier_AtomicIncrement(&cur_thread_local_id_, 1);
+      thread_local_id = cur_thread_local_id_.fetch_add(1);
     }
     return thread_local_id;
   }

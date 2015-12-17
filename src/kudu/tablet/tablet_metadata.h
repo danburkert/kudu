@@ -17,6 +17,7 @@
 #ifndef KUDU_TABLET_TABLET_METADATA_H
 #define KUDU_TABLET_TABLET_METADATA_H
 
+#include <atomic>
 #include <boost/optional/optional_fwd.hpp>
 #include <memory>
 #include <string>
@@ -120,9 +121,7 @@ class TabletMetadata : public RefCountedThreadSafe<TabletMetadata> {
   // This pointer will be valid until the TabletMetadata is destructed,
   // even if the schema is changed.
   const Schema& schema() const {
-    const Schema* s = reinterpret_cast<const Schema*>(
-        base::subtle::Acquire_Load(reinterpret_cast<const AtomicWord*>(&schema_)));
-    return *s;
+    return *schema_.load();
   }
 
   // Returns the partition schema of the tablet's table.
@@ -299,13 +298,13 @@ class TabletMetadata : public RefCountedThreadSafe<TabletMetadata> {
   FsManager* const fs_manager_;
   RowSetMetadataVector rowsets_;
 
-  base::subtle::Atomic64 next_rowset_idx_;
+  std::atomic<int64_t> next_rowset_idx_;
 
   int64_t last_durable_mrs_id_;
 
   // The current schema version. This is owned by this class.
   // We don't use gscoped_ptr so that we can do an atomic swap.
-  Schema* schema_;
+  std::atomic<Schema*> schema_;
   uint32_t schema_version_;
   std::string table_name_;
   PartitionSchema partition_schema_;

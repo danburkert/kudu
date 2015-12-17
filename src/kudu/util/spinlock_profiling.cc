@@ -17,10 +17,10 @@
 
 #include "kudu/util/spinlock_profiling.h"
 
+#include <atomic>
 #include <glog/logging.h>
 #include <gflags/gflags.h>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/basictypes.h"
 #include "kudu/gutil/macros.h"
 #include "kudu/gutil/spinlock.h"
@@ -48,6 +48,8 @@ METRIC_DEFINE_gauge_uint64(server, spinlock_contention_time,
 
 using base::SpinLock;
 using base::SpinLockHolder;
+using std::atomic;
+using std::memory_order_relaxed;
 
 namespace kudu {
 
@@ -126,11 +128,12 @@ class ContentionStacks {
   Entry entries_[kNumEntries];
 
   // The number of samples which were dropped due to contention on this structure or
-  // due to the hashtable being too full.
-  AtomicInt<int64_t> dropped_samples_;
+  // due to the hashtable being too full. No ordering so relaxed atomic ops are
+  // used.
+  atomic<int64_t> dropped_samples_;
 };
 
-Atomic32 g_profiling_enabled = 0;
+atomic<int32_t> g_profiling_enabled(0);
 ContentionStacks* g_contention_stacks = nullptr;
 
 void ContentionStacks::AddStack(const StackTrace& s, int64_t cycles) {
@@ -165,7 +168,7 @@ void ContentionStacks::AddStack(const StackTrace& s, int64_t cycles) {
 
   // If we failed to find a matching hashtable slot, or we hit lock contention
   // trying to record our sample, add it to the dropped sample count.
-  dropped_samples_.Increment();
+  dropped_samples_.fetch_add(1, memory_order_relaxed);
 }
 
 void ContentionStacks::Flush(std::stringstream* out, int64_t* dropped) {
@@ -179,7 +182,7 @@ void ContentionStacks::Flush(std::stringstream* out, int64_t* dropped) {
          << std::endl;
   }
 
-  *dropped += dropped_samples_.Exchange(0);
+  *dropped += dropped_samples_.exchange(0, memory_order_relaxed);
 }
 
 bool ContentionStacks::CollectSample(uint64_t* iterator, StackTrace* s, int64_t* trip_count,
@@ -204,7 +207,7 @@ bool ContentionStacks::CollectSample(uint64_t* iterator, StackTrace* s, int64_t*
 
 
 void SubmitSpinLockProfileData(const void *contendedlock, int64 wait_cycles) {
-  bool profiling_enabled = base::subtle::Acquire_Load(&g_profiling_enabled);
+  bool profiling_enabled = g_profiling_enabled.load();
   bool long_wait_time = wait_cycles > FLAGS_lock_contention_trace_threshold_cycles;
   // Short circuit this function quickly in the common case.
   if (PREDICT_TRUE(!profiling_enabled && !long_wait_time)) {
@@ -275,7 +278,7 @@ uint64_t GetSpinLockContentionMicros() {
 
 void StartSynchronizationProfiling() {
   InitSpinLockContentionProfiling();
-  base::subtle::Barrier_AtomicIncrement(&g_profiling_enabled, 1);
+  g_profiling_enabled.fetch_add(1);
 }
 
 void FlushSynchronizationProfile(std::stringstream* out,
@@ -285,7 +288,7 @@ void FlushSynchronizationProfile(std::stringstream* out,
 
 void StopSynchronizationProfiling() {
   InitSpinLockContentionProfiling();
-  CHECK_GE(base::subtle::Barrier_AtomicIncrement(&g_profiling_enabled, -1), 0);
+  CHECK_GT(g_profiling_enabled.fetch_add(-1), 0);
 }
 
 } // namespace kudu

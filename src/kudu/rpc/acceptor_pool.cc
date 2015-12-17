@@ -86,9 +86,8 @@ Status AcceptorPool::Start(int num_threads) {
 }
 
 void AcceptorPool::Shutdown() {
-  if (Acquire_CompareAndSwap(&closing_, false, true) != false) {
-    VLOG(2) << "Acceptor Pool on " << bind_address_.ToString()
-            << " already shut down";
+  if (closing_.exchange(true)) {
+    VLOG(2) << "Acceptor Pool on " << bind_address_.ToString() << " already shut down";
     return;
   }
 
@@ -129,7 +128,7 @@ void AcceptorPool::RunThread() {
             << " listening on " << bind_address_.ToString();
     Status s = socket_.Accept(&new_sock, &remote, Socket::FLAG_NONBLOCKING);
     if (!s.ok()) {
-      if (Release_Load(&closing_)) {
+      if (closing_) {
         break;
       }
       LOG(WARNING) << "AcceptorPool: accept failed: " << s.ToString();

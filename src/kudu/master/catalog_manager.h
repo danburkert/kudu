@@ -17,6 +17,7 @@
 #ifndef KUDU_MASTER_CATALOG_MANAGER_H
 #define KUDU_MASTER_CATALOG_MANAGER_H
 
+#include <atomic>
 #include <boost/optional/optional_fwd.hpp>
 #include <boost/thread/mutex.hpp>
 #include <map>
@@ -608,7 +609,7 @@ class CatalogManager : public tserver::TabletPeerLookupIf {
   TabletInfoMap tablet_map_;
 
   Master *master_;
-  Atomic32 closing_;
+  std::atomic<bool> closing_;
   ObjectIdGenerator oid_generator_;
 
   gscoped_ptr<SysCatalogTable> sys_catalog_;

@@ -20,16 +20,12 @@
 #include <cmath>
 #include <limits>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/bits.h"
 #include "kudu/gutil/strings/substitute.h"
 #include "kudu/util/status.h"
 
-using base::subtle::Atomic64;
-using base::subtle::NoBarrier_AtomicIncrement;
-using base::subtle::NoBarrier_Store;
-using base::subtle::NoBarrier_Load;
-using base::subtle::NoBarrier_CompareAndSwap;
+using std::atomic;
+using std::memory_order_relaxed;
 using strings::Substitute;
 
 namespace kudu {
@@ -45,7 +41,7 @@ HdrHistogram::HdrHistogram(uint64_t highest_trackable_value, int num_significant
     sub_bucket_mask_(0),
     total_count_(0),
     total_sum_(0),
-    min_value_(std::numeric_limits<Atomic64>::max()),
+    min_value_(std::numeric_limits<uint64_t>::max()),
     max_value_(0),
     counts_(nullptr) {
   Init();
@@ -62,27 +58,27 @@ HdrHistogram::HdrHistogram(const HdrHistogram& other)
     sub_bucket_mask_(0),
     total_count_(0),
     total_sum_(0),
-    min_value_(std::numeric_limits<Atomic64>::max()),
+    min_value_(std::numeric_limits<uint64_t>::max()),
     max_value_(0),
     counts_(nullptr) {
   Init();
 
   // Not a consistent snapshot but we try to roughly keep it close.
   // Copy the sum and min first.
-  NoBarrier_Store(&total_sum_, NoBarrier_Load(&other.total_sum_));
-  NoBarrier_Store(&min_value_, NoBarrier_Load(&other.min_value_));
+  total_sum_.store(other.total_sum_.load(memory_order_relaxed), memory_order_relaxed);
+  min_value_.store(other.min_value_.load(memory_order_relaxed), memory_order_relaxed);
 
   uint64_t total_copied_count = 0;
   // Copy the counts in order of ascending magnitude.
   for (int i = 0; i < counts_array_length_; i++) {
-    uint64_t count = NoBarrier_Load(&other.counts_[i]);
-    NoBarrier_Store(&counts_[i], count);
+    uint64_t count = other.counts_[i].load(memory_order_relaxed);
+    counts_[i].store(count, memory_order_relaxed);
     total_copied_count += count;
   }
   // Copy the max observed value last.
-  NoBarrier_Store(&max_value_, NoBarrier_Load(&other.max_value_));
+  max_value_.store(other.max_value_.load(memory_order_relaxed), memory_order_relaxed);
   // We must ensure the total is consistent with the copied counts.
-  NoBarrier_Store(&total_count_, total_copied_count);
+  total_count_.store(total_copied_count, memory_order_relaxed);
 }
 
 bool HdrHistogram::IsValidHighestTrackableValue(uint64_t highest_trackable_value) {
@@ -136,7 +132,7 @@ void HdrHistogram::Init() {
   bucket_count_ = buckets_needed;
 
   counts_array_length_ = (bucket_count_ + 1) * sub_bucket_half_count_;
-  counts_.reset(new Atomic64[counts_array_length_]());  // value-initialized
+  counts_.reset(new atomic<uint64_t>[counts_array_length_]());  // value-initialized
 }
 
 void HdrHistogram::Increment(int64_t value) {
@@ -154,25 +150,25 @@ void HdrHistogram::IncrementBy(int64_t value, int64_t count) {
   int counts_index = CountsArrayIndex(bucket_index, sub_bucket_index);
 
   // Increment bucket, total, and sum.
-  NoBarrier_AtomicIncrement(&counts_[counts_index], count);
-  NoBarrier_AtomicIncrement(&total_count_, count);
-  NoBarrier_AtomicIncrement(&total_sum_, value * count);
+  counts_[counts_index].fetch_add(count, memory_order_relaxed);
+  total_count_.fetch_add(count, memory_order_relaxed);
+  total_sum_.fetch_add(value * count, memory_order_relaxed);
+
+  uint64_t current_val;
 
   // Update min, if needed.
-  {
-    Atomic64 min_val;
-    while (PREDICT_FALSE(value < (min_val = MinValue()))) {
-      Atomic64 old_val = NoBarrier_CompareAndSwap(&min_value_, min_val, value);
-      if (PREDICT_TRUE(old_val == min_val)) break; // CAS success.
+  current_val = MinValue();
+  while (PREDICT_FALSE(value < current_val)) {
+    if (PREDICT_TRUE(min_value_.compare_exchange_weak(current_val, value, memory_order_relaxed))) {
+      break; // CAS success
     }
   }
 
   // Update max, if needed.
-  {
-    Atomic64 max_val;
-    while (PREDICT_FALSE(value > (max_val = MaxValue()))) {
-      Atomic64 old_val = NoBarrier_CompareAndSwap(&max_value_, max_val, value);
-      if (PREDICT_TRUE(old_val == max_val)) break; // CAS success.
+  current_val = MaxValue();
+  while (PREDICT_FALSE(value > current_val)) {
+    if (PREDICT_TRUE(max_value_.compare_exchange_weak(current_val, value, memory_order_relaxed))) {
+      break; // CAS success
     }
   }
 }
@@ -273,12 +269,12 @@ bool HdrHistogram::ValuesAreEquivalent(uint64_t value1, uint64_t value2) const {
 
 uint64_t HdrHistogram::MinValue() const {
   if (PREDICT_FALSE(TotalCount() == 0)) return 0;
-  return NoBarrier_Load(&min_value_);
+  return min_value_.load(memory_order_relaxed);
 }
 
 uint64_t HdrHistogram::MaxValue() const {
   if (PREDICT_FALSE(TotalCount() == 0)) return 0;
-  return NoBarrier_Load(&max_value_);
+  return max_value_.load(memory_order_relaxed);
 }
 
 double HdrHistogram::MeanValue() const {

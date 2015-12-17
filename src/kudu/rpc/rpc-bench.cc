@@ -15,17 +15,18 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#include <atomic>
 #include <boost/ptr_container/ptr_vector.hpp>
 #include <boost/thread/thread.hpp>
 #include <gtest/gtest.h>
 #include <string>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/rpc/rpc-test-base.h"
 #include "kudu/rpc/rtest.proxy.h"
 #include "kudu/util/countdown_latch.h"
 #include "kudu/util/test_util.h"
 
+using std::atomic;
 using std::string;
 using std::shared_ptr;
 
@@ -43,7 +44,7 @@ class RpcBench : public RpcTestBase {
 
   Sockaddr server_addr_;
   shared_ptr<Messenger> client_messenger_;
-  Atomic32 should_run_;
+  atomic<bool> should_run_;
 };
 
 class ClientThread {
@@ -68,7 +69,7 @@ class ClientThread {
 
     AddRequestPB req;
     AddResponsePB resp;
-    while (Acquire_Load(&bench_->should_run_)) {
+    while (bench_->should_run_.load()) {
       req.set_x(request_count_);
       req.set_y(request_count_);
       RpcController controller;
@@ -107,7 +108,7 @@ TEST_F(RpcBench, BenchmarkCalls) {
   }
 
   SleepFor(MonoDelta::FromSeconds(AllowSlowTests() ? 10 : 1));
-  Release_Store(&should_run_, false);
+  should_run_ = false;
 
   int total_reqs = 0;
 

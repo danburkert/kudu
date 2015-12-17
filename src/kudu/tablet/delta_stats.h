@@ -25,7 +25,6 @@
 #include <string>
 #include <unordered_map>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/map-util.h"
 #include "kudu/common/row_changelist.h"
 #include "kudu/tablet/mvcc.h"
