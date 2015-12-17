@@ -22,7 +22,6 @@
 
 #include <gflags/gflags.h>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/casts.h"
 #include "kudu/gutil/map-util.h"
 #include "kudu/gutil/singleton.h"

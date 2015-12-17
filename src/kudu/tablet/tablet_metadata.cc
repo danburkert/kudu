@@ -26,7 +26,6 @@
 #include "kudu/common/wire_protocol.h"
 #include "kudu/consensus/opid.pb.h"
 #include "kudu/consensus/opid_util.h"
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/bind.h"
 #include "kudu/gutil/dynamic_annotations.h"
 #include "kudu/gutil/map-util.h"
@@ -50,12 +49,10 @@ TAG_FLAG(enable_tablet_orphaned_block_deletion, runtime);
 
 using std::shared_ptr;
 
-using base::subtle::Barrier_AtomicIncrement;
-using strings::Substitute;
-
 using kudu::consensus::MinimumOpId;
 using kudu::consensus::OpId;
 using kudu::consensus::RaftConfigPB;
+using strings::Substitute;
 
 namespace kudu {
 namespace tablet {
@@ -226,13 +223,13 @@ TabletMetadata::TabletMetadata(FsManager* fs_manager, string tablet_id,
       num_flush_pins_(0),
       needs_flush_(false),
       pre_flush_callback_(Bind(DoNothingStatusClosure)) {
-  CHECK(schema_->has_column_ids());
-  CHECK_GT(schema_->num_key_columns(), 0);
+  CHECK(schema_.load(memory_order_relaxed)->has_column_ids());
+  CHECK_GT(schema_.load(memory_order_relaxed)->num_key_columns(), 0);
 }
 
 TabletMetadata::~TabletMetadata() {
   STLDeleteElements(&old_schemas_);
-  delete schema_;
+  delete schema_.load(memory_order_relaxed);
 }
 
 TabletMetadata::TabletMetadata(FsManager* fs_manager, string tablet_id)
@@ -315,7 +312,13 @@ Status TabletMetadata::LoadFromSuperBlock(const TabletSuperBlockPB& superblock) 
     for (const RowSetDataPB& rowset_pb : superblock.rowsets()) {
       gscoped_ptr<RowSetMetadata> rowset_meta;
       RETURN_NOT_OK(RowSetMetadata::Load(this, rowset_pb, &rowset_meta));
-      next_rowset_idx_ = std::max(next_rowset_idx_, rowset_meta->id() + 1);
+      int64_t current_rowset_idx = next_rowset_idx_.load();
+      int64_t rowset_meta_idx = rowset_meta->id() + 1;
+      while (current_rowset_idx < rowset_meta_idx) {
+        if (next_rowset_idx_.compare_exchange_weak(current_rowset_idx, rowset_meta_idx)) {
+          break;
+        }
+      }
       rowsets_.push_back(shared_ptr<RowSetMetadata>(rowset_meta.release()));
     }
 
@@ -536,7 +539,7 @@ Status TabletMetadata::ToSuperBlockUnlocked(TabletSuperBlockPB* super_block,
     meta->ToProtobuf(pb.add_rowsets());
   }
 
-  DCHECK(schema_->has_column_ids());
+  DCHECK(schema_.load()->has_column_ids());
   RETURN_NOT_OK_PREPEND(SchemaToPB(*schema_, pb.mutable_schema()),
                         "Couldn't serialize schema into superblock");
 
@@ -555,7 +558,7 @@ Status TabletMetadata::ToSuperBlockUnlocked(TabletSuperBlockPB* super_block,
 
 Status TabletMetadata::CreateRowSet(shared_ptr<RowSetMetadata> *rowset,
                                     const Schema& schema) {
-  AtomicWord rowset_idx = Barrier_AtomicIncrement(&next_rowset_idx_, 1) - 1;
+  int64_t rowset_idx = next_rowset_idx_.fetch_add(1);
   gscoped_ptr<RowSetMetadata> scoped_rsm;
   RETURN_NOT_OK(RowSetMetadata::CreateNew(this, rowset_idx, &scoped_rsm));
   rowset->reset(DCHECK_NOTNULL(scoped_rsm.release()));
@@ -590,11 +593,10 @@ void TabletMetadata::SetSchema(const Schema& schema, uint32_t version) {
 void TabletMetadata::SetSchemaUnlocked(gscoped_ptr<Schema> new_schema, uint32_t version) {
   DCHECK(new_schema->has_column_ids());
 
-  Schema* old_schema = schema_;
-  // "Release" barrier ensures that, when we publish the new Schema object,
-  // all of its initialization is also visible.
-  base::subtle::Release_Store(reinterpret_cast<AtomicWord*>(&schema_),
-                              reinterpret_cast<AtomicWord>(new_schema.release()));
+  // "memory_order_seq_cst" ensures that, when we publish the new Schema object,
+  // all of its initialization is also visible, when coupled with the
+  // "memory_order_seq_cst" load in TabletMetadata::schema().
+  Schema* old_schema = schema_.exchange(new_schema.release());
   if (PREDICT_TRUE(old_schema)) {
     old_schemas_.push_back(old_schema);
   }

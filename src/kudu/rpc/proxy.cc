@@ -39,8 +39,9 @@
 #include "kudu/util/user.h"
 
 using google::protobuf::Message;
-using std::string;
+using std::memory_order_relaxed;
 using std::shared_ptr;
+using std::string;
 
 namespace kudu {
 namespace rpc {
@@ -75,7 +76,7 @@ void Proxy::AsyncRequest(const string& method,
                          RpcController* controller,
                          const ResponseCallback& callback) const {
   CHECK(controller->call_.get() == nullptr) << "Controller should be reset";
-  base::subtle::NoBarrier_Store(&is_started_, true);
+  is_started_.store(true, memory_order_relaxed);
   RemoteMethod remote_method(service_name_, method);
   OutboundCall* call = new OutboundCall(conn_id_, remote_method, response, controller, callback);
   controller->call_.reset(call);
@@ -106,7 +107,7 @@ Status Proxy::SyncRequest(const string& method,
 }
 
 void Proxy::set_user_credentials(const UserCredentials& user_credentials) {
-  CHECK(base::subtle::NoBarrier_Load(&is_started_) == false)
+  CHECK(!is_started_.load(memory_order_relaxed))
     << "It is illegal to call set_user_credentials() after request processing has started";
   conn_id_.set_user_credentials(user_credentials);
 }

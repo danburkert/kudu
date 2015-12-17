@@ -17,12 +17,12 @@
 #ifndef KUDU_TSERVER_TABLET_SERVER_H
 #define KUDU_TSERVER_TABLET_SERVER_H
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "kudu/consensus/metadata.pb.h"
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/gscoped_ptr.h"
 #include "kudu/gutil/macros.h"
 #include "kudu/server/server_base.h"
@@ -76,11 +76,11 @@ class TabletServer : public server::ServerBase {
   Heartbeater* heartbeater() { return heartbeater_.get(); }
 
   void set_fail_heartbeats_for_tests(bool fail_heartbeats_for_tests) {
-    base::subtle::NoBarrier_Store(&fail_heartbeats_for_tests_, 1);
+    fail_heartbeats_for_tests_.store(fail_heartbeats_for_tests, std::memory_order_relaxed);
   }
 
   bool fail_heartbeats_for_tests() const {
-    return base::subtle::NoBarrier_Load(&fail_heartbeats_for_tests_);
+    return fail_heartbeats_for_tests_.load(std::memory_order_relaxed);
   }
 
   MaintenanceManager* maintenance_manager() {
@@ -95,7 +95,10 @@ class TabletServer : public server::ServerBase {
   bool initted_;
 
   // If true, all heartbeats will be seen as failed.
-  Atomic32 fail_heartbeats_for_tests_;
+  //
+  // No ordering or visibility is required, so relaxed atomic ops are
+  // used.
+  std::atomic<bool> fail_heartbeats_for_tests_;
 
   // The options passed at construction time.
   const TabletServerOptions opts_;

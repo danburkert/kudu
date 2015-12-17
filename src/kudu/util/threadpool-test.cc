@@ -15,12 +15,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#include <atomic>
 #include <boost/bind.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <memory>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/bind.h"
 #include "kudu/util/countdown_latch.h"
 #include "kudu/util/metrics.h"
@@ -29,6 +29,8 @@
 #include "kudu/util/test_macros.h"
 #include "kudu/util/trace.h"
 
+using std::atomic;
+using std::memory_order_relaxed;
 using std::shared_ptr;
 
 namespace kudu {
@@ -47,16 +49,16 @@ TEST(TestThreadPool, TestNoTaskOpenClose) {
   thread_pool->Shutdown();
 }
 
-static void SimpleTaskMethod(int n, Atomic32 *counter) {
+static void SimpleTaskMethod(int n, atomic<int32_t> *counter) {
   while (n--) {
-    base::subtle::NoBarrier_AtomicIncrement(counter, 1);
+    counter->fetch_add(1, memory_order_relaxed);
     boost::detail::yield(n);
   }
 }
 
 class SimpleTask : public Runnable {
  public:
-  SimpleTask(int n, Atomic32 *counter)
+  SimpleTask(int n, atomic<int32_t> *counter)
     : n_(n), counter_(counter) {
   }
 
@@ -66,14 +68,14 @@ class SimpleTask : public Runnable {
 
  private:
   int n_;
-  Atomic32 *counter_;
+  atomic<int32_t> *counter_;
 };
 
 TEST(TestThreadPool, TestSimpleTasks) {
   gscoped_ptr<ThreadPool> thread_pool;
   ASSERT_OK(BuildMinMaxTestPool(4, 4, &thread_pool));
 
-  Atomic32 counter(0);
+  atomic<int32_t> counter(0);
   std::shared_ptr<Runnable> task(new SimpleTask(15, &counter));
 
   ASSERT_OK(thread_pool->SubmitFunc(boost::bind(&SimpleTaskMethod, 10, &counter)));
@@ -82,7 +84,7 @@ TEST(TestThreadPool, TestSimpleTasks) {
   ASSERT_OK(thread_pool->Submit(task));
   ASSERT_OK(thread_pool->SubmitClosure(Bind(&SimpleTaskMethod, 123, &counter)));
   thread_pool->Wait();
-  ASSERT_EQ(10 + 15 + 20 + 15 + 123, base::subtle::NoBarrier_Load(&counter));
+  ASSERT_EQ(10 + 15 + 20 + 15 + 123, counter.load(memory_order_relaxed));
   thread_pool->Shutdown();
 }
 

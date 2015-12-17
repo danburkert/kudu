@@ -18,11 +18,13 @@
 #include <boost/thread/thread.hpp>
 #include <string>
 #include <vector>
+#include <atomic>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/util/rwc_lock.h"
 #include "kudu/util/test_util.h"
 #include "kudu/util/locks.h"
+
+using std::atomic;
 
 namespace kudu {
 
@@ -81,11 +83,11 @@ struct LockHoldersCount {
 struct SharedState {
   LockHoldersCount counts;
   RWCLock rwc_lock;
-  Atomic32 stop;
+  atomic<bool> stop;
 };
 
 void ReaderThread(SharedState* state) {
-  while (!NoBarrier_Load(&state->stop)) {
+  while (!state->stop.load()) {
     state->rwc_lock.ReadLock();
     state->counts.AdjustReaders(1);
     state->counts.AdjustReaders(-1);
@@ -95,7 +97,7 @@ void ReaderThread(SharedState* state) {
 
 void WriterThread(SharedState* state) {
   string local_str;
-  while (!NoBarrier_Load(&state->stop)) {
+  while (!state->stop.load()) {
     state->rwc_lock.WriteLock();
     state->counts.AdjustWriters(1);
 
@@ -111,7 +113,7 @@ void WriterThread(SharedState* state) {
 
 TEST_F(RWCLockTest, TestCorrectBehavior) {
   SharedState state;
-  Release_Store(&state.stop, 0);
+  state.stop.store(false);
 
   vector<boost::thread*> threads;
 
@@ -131,7 +133,7 @@ TEST_F(RWCLockTest, TestCorrectBehavior) {
     SleepFor(MonoDelta::FromMilliseconds(100));
   }
 
-  Release_Store(&state.stop, 1);
+  state.stop.store(true);
 
   for (boost::thread* t : threads) {
     t->join();

@@ -34,7 +34,6 @@
 #include <sys/prctl.h>
 #endif // defined(__linux__)
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/dynamic_annotations.h"
 #include "kudu/gutil/mathlimits.h"
 #include "kudu/gutil/once.h"

@@ -15,12 +15,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <gtest/gtest.h>
+#include <algorithm>
+#include <atomic>
 #include <gflags/gflags.h>
 #include <glog/stl_logging.h>
-
+#include <gtest/gtest.h>
 #include <vector>
-#include <algorithm>
 
 #include "kudu/client/callbacks.h"
 #include "kudu/client/client.h"
@@ -34,7 +34,6 @@
 #include "kudu/common/partial_row.h"
 #include "kudu/common/wire_protocol.h"
 #include "kudu/consensus/consensus.proxy.h"
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/stl_util.h"
 #include "kudu/gutil/strings/substitute.h"
 #include "kudu/integration-tests/mini_cluster.h"
@@ -75,17 +74,15 @@ DEFINE_int32(test_scan_num_rows, 1000, "Number of rows to insert and scan");
 METRIC_DECLARE_counter(scans_started);
 METRIC_DECLARE_counter(rpcs_queue_overflow);
 
-using std::string;
+using std::atomic;
+using std::memory_order_relaxed;
 using std::set;
+using std::string;
 using std::vector;
 
 namespace kudu {
 namespace client {
 
-using base::subtle::Atomic32;
-using base::subtle::NoBarrier_AtomicIncrement;
-using base::subtle::NoBarrier_Load;
-using base::subtle::NoBarrier_Store;
 using master::CatalogManager;
 using master::GetTableLocationsRequestPB;
 using master::GetTableLocationsResponsePB;
@@ -2396,16 +2393,16 @@ TEST_F(ClientTest, TestMasterLookupPermits) {
 namespace {
   class DLSCallback : public KuduStatusCallback {
    public:
-    explicit DLSCallback(Atomic32* i) : i(i) {
+    explicit DLSCallback(atomic<int32_t>* i) : i(i) {
     }
 
     virtual void Run(const Status& s) OVERRIDE {
       CHECK_OK(s);
-      NoBarrier_AtomicIncrement(i, 1);
+      i->fetch_add(1, memory_order_relaxed);
       delete this;
     }
    private:
-    Atomic32* const i;
+    atomic<int32_t>* const i;
   };
 
   // Returns col1 value of first row.
@@ -2513,9 +2510,7 @@ TEST_F(ClientTest, TestDeadlockSimulation) {
   }
 
   // Run async calls - one thread updates sequentially, another in reverse.
-  Atomic32 ctr1, ctr2;
-  NoBarrier_Store(&ctr1, 0);
-  NoBarrier_Store(&ctr2, 0);
+  atomic<int32_t> ctr1(0), ctr2(0);
   for (int i = 0; i < kNumSessions; ++i) {
     // The callbacks are freed after they are invoked.
     fwd_sessions[i]->FlushAsync(new DLSCallback(&ctr1));
@@ -2525,8 +2520,8 @@ TEST_F(ClientTest, TestDeadlockSimulation) {
   // Spin while waiting for ops to complete.
   int lctr1, lctr2, prev1 = 0, prev2 = 0;
   do {
-    lctr1 = NoBarrier_Load(&ctr1);
-    lctr2 = NoBarrier_Load(&ctr2);
+    lctr1 = ctr1.load(memory_order_relaxed);
+    lctr2 = ctr2.load(memory_order_relaxed);
     // Display progress in 10% increments.
     if (prev1 == 0 || lctr1 + lctr2 - prev1 - prev2 > kNumSessions / 10) {
       LOG(INFO) << "# updates: " << lctr1 << " fwd, " << lctr2 << " rev";

@@ -26,7 +26,6 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/macros.h"
 #include "kudu/gutil/sysinfo.h"
 #include "kudu/gutil/walltime.h"

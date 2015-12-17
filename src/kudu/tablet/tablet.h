@@ -28,7 +28,6 @@
 #include "kudu/common/iterator.h"
 #include "kudu/common/predicate_encoder.h"
 #include "kudu/common/schema.h"
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/gscoped_ptr.h"
 #include "kudu/gutil/macros.h"
 #include "kudu/tablet/rowset_metadata.h"

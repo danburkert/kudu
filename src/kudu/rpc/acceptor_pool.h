@@ -18,9 +18,9 @@
 #ifndef KUDU_RPC_ACCEPTOR_POOL_H
 #define KUDU_RPC_ACCEPTOR_POOL_H
 
+#include <atomic>
 #include <vector>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/util/thread.h"
 #include "kudu/util/net/sockaddr.h"
 #include "kudu/util/net/socket.h"
@@ -69,7 +69,7 @@ class AcceptorPool {
 
   scoped_refptr<Counter> rpc_connections_accepted_;
 
-  Atomic32 closing_;
+  std::atomic<bool> closing_;
 
   DISALLOW_COPY_AND_ASSIGN(AcceptorPool);
 };

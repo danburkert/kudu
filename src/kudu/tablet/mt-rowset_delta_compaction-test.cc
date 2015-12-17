@@ -15,10 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#include <atomic>
 #include <boost/thread/thread.hpp>
 #include <memory>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/stringprintf.h"
 #include "kudu/gutil/strings/substitute.h"
 #include "kudu/gutil/walltime.h"
@@ -37,14 +37,12 @@ DEFINE_int32(num_compaction_threads, kDefaultNumCompactionThreads, "Number of co
 DEFINE_int32(num_seconds_per_thread, kDefaultNumSecondsPerThread,
              "Minimum number of seconds each thread should work");
 
+using std::atomic;
+using std::memory_order_relaxed;
 using std::shared_ptr;
 
 namespace kudu {
 namespace tablet {
-
-using base::subtle::Release_Store;
-using base::subtle::Release_Load;
-using base::subtle::NoBarrier_Load;
 
 class TestMultiThreadedRowSetDeltaCompaction : public TestRowSet {
  public:
@@ -52,7 +50,7 @@ class TestMultiThreadedRowSetDeltaCompaction : public TestRowSet {
   TestMultiThreadedRowSetDeltaCompaction()
       : TestRowSet(),
         update_counter_(0),
-        should_run_(1) {
+        should_run_(true) {
   }
 
   // This thread read the value of an atomic integer, updates all rows
@@ -63,10 +61,10 @@ class TestMultiThreadedRowSetDeltaCompaction : public TestRowSet {
   // before a thread setting value n).
   void RowSetUpdateThread(DiskRowSet *rs) {
     while (ShouldRun()) {
-      uint32_t val = Release_Load(&update_counter_);
+      uint32_t val = update_counter_.load();
       UpdateRowSet(rs, val + 1);
       if (ShouldRun()) {
-        Release_Store(&update_counter_, val + 1);
+        update_counter_.store(val + 1);
       }
     }
   }
@@ -94,7 +92,7 @@ class TestMultiThreadedRowSetDeltaCompaction : public TestRowSet {
     ASSERT_OK(rs->NewRowIterator(&schema_,
                                  MvccSnapshot::CreateSnapshotIncludingAllTransactions(),
                                  &iter));
-    uint32_t expected = NoBarrier_Load(&update_counter_);
+    uint32_t expected = update_counter_.load(memory_order_relaxed);
     ASSERT_OK(iter->Init(nullptr));
     while (iter->HasNext()) {
       ASSERT_OK_FAST(iter->NextBlock(&dst));
@@ -161,20 +159,22 @@ class TestMultiThreadedRowSetDeltaCompaction : public TestRowSet {
 
     StartThreads(rs.get());
     SleepFor(MonoDelta::FromSeconds(FLAGS_num_seconds_per_thread));
-    base::subtle::NoBarrier_Store(&should_run_, 0);
+    should_run_.store(false, memory_order_relaxed);
     ASSERT_NO_FATAL_FAILURE(JoinThreads());
 
     ASSERT_NO_FATAL_FAILURE(ReadVerify(rs.get()));
   }
 
   bool ShouldRun() const {
-    return NoBarrier_Load(&should_run_);
+    return should_run_.load(memory_order_relaxed);
   }
 
  protected:
 
-  Atomic32 update_counter_;
-  Atomic32 should_run_;
+  atomic<uint32_t> update_counter_;
+  // Signal to threads to keep running. No ordering or visibility is implied by
+  // accessing the variable, so relaxed operations are used.
+  atomic<bool> should_run_;
   vector<scoped_refptr<kudu::Thread> > update_threads_;
   vector<scoped_refptr<kudu::Thread> > flush_threads_;
   vector<scoped_refptr<kudu::Thread> > compaction_threads_;

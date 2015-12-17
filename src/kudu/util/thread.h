@@ -28,7 +28,6 @@
 #include <sys/types.h>
 #include <vector>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/ref_counted.h"
 #include "kudu/util/async_util.h"
 #include "kudu/util/status.h"

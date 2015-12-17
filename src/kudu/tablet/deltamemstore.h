@@ -17,6 +17,7 @@
 #ifndef KUDU_TABLET_DELTAMEMSTORE_H
 #define KUDU_TABLET_DELTAMEMSTORE_H
 
+#include <atomic>
 #include <boost/thread/mutex.hpp>
 #include <deque>
 #include <gtest/gtest_prod.h>
@@ -28,7 +29,6 @@
 #include "kudu/common/rowblock.h"
 #include "kudu/common/schema.h"
 #include "kudu/consensus/log_anchor_registry.h"
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/gscoped_ptr.h"
 #include "kudu/gutil/macros.h"
 #include "kudu/tablet/concurrent_btree.h"
@@ -36,7 +36,6 @@
 #include "kudu/tablet/delta_tracker.h"
 #include "kudu/tablet/delta_stats.h"
 #include "kudu/tablet/mvcc.h"
-#include "kudu/util/atomic.h"
 #include "kudu/util/memory/arena.h"
 
 namespace kudu {
@@ -168,7 +167,7 @@ class DeltaMemStore : public DeltaStore,
   // in the underlying tree, so that the later operations will sort after
   // the earlier ones. This atomic integer serves to provide such a sequence
   // number, and is only used in the case that such a collision occurs.
-  AtomicInt<Atomic32> disambiguator_sequence_number_;
+  atomic<uint32_t> disambiguator_sequence_number_;
 
   DISALLOW_COPY_AND_ASSIGN(DeltaMemStore);
 };

@@ -36,7 +36,6 @@
 #include "kudu/consensus/consensus.pb.h"
 #include "kudu/consensus/log_anchor_registry.h"
 #include "kudu/consensus/opid_util.h"
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/map-util.h"
 #include "kudu/gutil/stl_util.h"
 #include "kudu/gutil/strings/numbers.h"
@@ -107,7 +106,6 @@ using consensus::OpId;
 using consensus::MaximumOpId;
 using log::LogAnchorRegistry;
 using strings::Substitute;
-using base::subtle::Barrier_AtomicIncrement;
 
 static CompactionPolicy *CreateCompactionPolicy() {
   return new BudgetedCompactionPolicy(FLAGS_tablet_compaction_budget_mb);

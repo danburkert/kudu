@@ -17,10 +17,10 @@
 #ifndef KUDU_UTIL_RW_SEMAPHORE_H
 #define KUDU_UTIL_RW_SEMAPHORE_H
 
+#include <atomic>
 #include <boost/smart_ptr/detail/yield_k.hpp>
 #include <glog/logging.h>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/macros.h"
 #include "kudu/gutil/port.h"
 #include "kudu/util/debug-util.h"
@@ -57,13 +57,13 @@ class rw_semaphore {
 
   void lock_shared() {
     int loop_count = 0;
-    Atomic32 cur_state = base::subtle::NoBarrier_Load(&state_);
+    uint32_t cur_state = state_.load(std::memory_order_relaxed);
     while (true) {
-      Atomic32 expected = cur_state & kNumReadersMask;   // I expect no write lock
-      Atomic32 try_new_state = expected + 1;          // Add me as reader
-      cur_state = base::subtle::Acquire_CompareAndSwap(&state_, expected, try_new_state);
-      if (cur_state == expected)
+      cur_state &= kNumReadersMask;             // I expect no writer lock
+      uint32_t try_new_state = cur_state + 1;   // Add me as reader
+      if (state_.compare_exchange_weak(cur_state, try_new_state, std::memory_order_acquire)) {
         break;
+      }
       // Either was already locked by someone else, or CAS failed.
       boost::detail::yield(loop_count++);
     }
@@ -71,15 +71,14 @@ class rw_semaphore {
 
   void unlock_shared() {
     int loop_count = 0;
-    Atomic32 cur_state = base::subtle::NoBarrier_Load(&state_);
+    uint32_t cur_state = state_.load(std::memory_order_relaxed);
     while (true) {
       DCHECK_GT(cur_state & kNumReadersMask, 0)
         << "unlock_shared() called when there are no shared locks held";
-      Atomic32 expected = cur_state;           // I expect a write lock and other readers
-      Atomic32 try_new_state = expected - 1;   // Drop me as reader
-      cur_state = base::subtle::Release_CompareAndSwap(&state_, expected, try_new_state);
-      if (cur_state == expected)
+      uint32_t try_new_state = cur_state - 1;   // Drop me as reader
+      if (state_.compare_exchange_weak(cur_state, try_new_state, std::memory_order_release)) {
         break;
+      }
       // Either was already locked by someone else, or CAS failed.
       boost::detail::yield(loop_count++);
     }
@@ -89,17 +88,17 @@ class rw_semaphore {
   // This function retries on CAS failure and waits for readers to complete.
   bool try_lock() {
     int loop_count = 0;
-    Atomic32 cur_state = base::subtle::NoBarrier_Load(&state_);
+    uint32_t cur_state = state_.load(std::memory_order_relaxed);
     while (true) {
       // someone else has already the write lock
       if (cur_state & kWriteFlag)
         return false;
 
-      Atomic32 expected = cur_state & kNumReadersMask;   // I expect some 0+ readers
-      Atomic32 try_new_state = kWriteFlag | expected;    // I want to lock the other writers
-      cur_state = base::subtle::Acquire_CompareAndSwap(&state_, expected, try_new_state);
-      if (cur_state == expected)
+      cur_state &= kNumReadersMask;                     // I expect some 0+ readers
+      uint32_t try_new_state = kWriteFlag | cur_state;  // I want to lock the other writers
+      if (state_.compare_exchange_weak(cur_state, try_new_state, std::memory_order_acquire)) {
         break;
+      }
       // Either was already locked by someone else, or CAS failed.
       boost::detail::yield(loop_count++);
     }
@@ -111,15 +110,15 @@ class rw_semaphore {
 
   void lock() {
     int loop_count = 0;
-    Atomic32 cur_state = base::subtle::NoBarrier_Load(&state_);
+    uint32_t cur_state = state_.load(std::memory_order_relaxed);
     while (true) {
-      Atomic32 expected = cur_state & kNumReadersMask;   // I expect some 0+ readers
-      Atomic32 try_new_state = kWriteFlag | expected;    // I want to lock the other writers
+      cur_state &= kNumReadersMask;                     // I expect some 0+ readers
+      Atomic32 try_new_state = kWriteFlag | cur_state;  // I want to lock the other writers
       // Note: we use NoBarrier here because we'll do the Acquire barrier down below
       // in WaitPendingReaders
-      cur_state = base::subtle::NoBarrier_CompareAndSwap(&state_, expected, try_new_state);
-      if (cur_state == expected)
+      if (state_.compare_exchange_weak(cur_state, try_new_state, std::memory_order_relaxed)) {
         break;
+      }
       // Either was already locked by someone else, or CAS failed.
       boost::detail::yield(loop_count++);
     }
@@ -134,7 +133,7 @@ class rw_semaphore {
 
   void unlock() {
     // I expect to be the only writer
-    DCHECK_EQ(base::subtle::NoBarrier_Load(&state_), kWriteFlag);
+    DCHECK_EQ(state_.load(std::memory_order_relaxed), kWriteFlag);
 
 #ifndef NDEBUG
     writer_tid_ = -1; // Invalid tid.
@@ -142,20 +141,20 @@ class rw_semaphore {
 
     ResetLockHolderStack();
     // Reset: no writers & no readers.
-    Release_Store(&state_, 0);
+    state_.store(0, std::memory_order_release);
   }
 
   // Return true if the lock is currently held for write by any thread.
   // See simple_semaphore::is_locked() for details about where this is useful.
   bool is_write_locked() const {
-    return base::subtle::NoBarrier_Load(&state_) & kWriteFlag;
+    return state_.load(std::memory_order_relaxed) & kWriteFlag;
   }
 
   // Return true if the lock is currently held, either for read or write
   // by any thread.
   // See simple_semaphore::is_locked() for details about where this is useful.
   bool is_locked() const {
-    return base::subtle::NoBarrier_Load(&state_);
+    return state_.load(std::memory_order_relaxed);
   }
 
  private:
@@ -179,13 +178,13 @@ class rw_semaphore {
 
   void WaitPendingReaders() {
     int loop_count = 0;
-    while ((base::subtle::Acquire_Load(&state_) & kNumReadersMask) > 0) {
+    while ((state_.load(std::memory_order_acquire) & kNumReadersMask) > 0) {
       boost::detail::yield(loop_count++);
     }
   }
 
  private:
-  volatile Atomic32 state_;
+  volatile std::atomic<uint32_t> state_;
 #ifndef NDEBUG
   int64_t writer_tid_;
 #endif // NDEBUG

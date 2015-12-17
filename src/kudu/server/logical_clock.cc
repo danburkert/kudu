@@ -17,7 +17,6 @@
 
 #include "kudu/server/logical_clock.h"
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/bind.h"
 #include "kudu/gutil/strings/substitute.h"
 #include "kudu/util/metrics.h"
@@ -37,7 +36,7 @@ using base::subtle::Barrier_AtomicIncrement;
 using base::subtle::NoBarrier_CompareAndSwap;
 
 Timestamp LogicalClock::Now() {
-  return Timestamp(Barrier_AtomicIncrement(&now_, 1));
+  return Timestamp(now_.fetch_add(1) + 1);
 }
 
 Timestamp LogicalClock::NowLatest() {
@@ -45,20 +44,17 @@ Timestamp LogicalClock::NowLatest() {
 }
 
 Status LogicalClock::Update(const Timestamp& to_update) {
-  DCHECK_NE(to_update.value(), Timestamp::kInvalidTimestamp.value())
+  uint64_t new_value = to_update.value();
+  DCHECK_NE(new_value, Timestamp::kInvalidTimestamp.value())
       << "Updating the clock with an invalid timestamp";
-  Atomic64 new_value = to_update.value();
 
-  while (true) {
-    Atomic64 current_value = NoBarrier_Load(&now_);
-    // if the incoming value is less than the current one, or we've failed the
-    // CAS because the current clock increased to higher than the incoming value,
-    // we can stop the loop now.
-    if (new_value <= current_value) return Status::OK();
-    // otherwise try a CAS
-    if (PREDICT_TRUE(NoBarrier_CompareAndSwap(&now_, current_value, new_value)
-        == current_value))
-      break;
+  uint64_t current_value = now_.load(memory_order_relaxed);
+
+  // If the current value is less than the new value, then attempt to update it.
+  while (current_value < new_value) {
+    if (now_.compare_exchange_weak(current_value, new_value, memory_order_relaxed)) {
+      break; // CAS success
+    }
   }
   return Status::OK();
 }
@@ -77,7 +73,7 @@ Status LogicalClock::WaitUntilAfterLocally(const Timestamp& then,
 }
 
 bool LogicalClock::IsAfter(Timestamp t) {
-  return base::subtle::Acquire_Load(&now_) >= t.value();
+  return now_.load() >= t.value();
 }
 
 LogicalClock* LogicalClock::CreateStartingAt(const Timestamp& timestamp) {
@@ -87,7 +83,7 @@ LogicalClock* LogicalClock::CreateStartingAt(const Timestamp& timestamp) {
 
 uint64_t LogicalClock::NowForMetrics() {
   // We don't want reading metrics to change the clock.
-  return NoBarrier_Load(&now_);
+  return now_.load(memory_order_relaxed);
 }
 
 

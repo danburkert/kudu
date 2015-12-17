@@ -20,7 +20,6 @@
 #include <algorithm>
 #include <glog/logging.h>
 
-#include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/dynamic_annotations.h"
 #include "kudu/gutil/macros.h"
 #include "kudu/gutil/port.h"
