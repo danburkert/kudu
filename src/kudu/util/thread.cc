@@ -529,9 +529,8 @@ Status Thread::StartThread(const std::string& category, const std::string& name,
   {
     SCOPED_LOG_SLOW_EXECUTION_PREFIX(WARNING, 500 /* ms */, log_prefix,
                                      "waiting for new thread to publish its TID");
-    int loop_count = 0;
     while (Acquire_Load(&t->tid_) == PARENT_WAITING_TID) {
-      boost::detail::yield(loop_count++);
+      std::this_thread::yield();
     }
   }
 
@@ -564,9 +563,8 @@ void* Thread::SuperviseThread(void* arg) {
 
   // Wait until the parent has updated all caller-visible state, then write
   // the TID to 'tid_', thus completing the parent<-->child handshake.
-  int loop_count = 0;
   while (Acquire_Load(&t->tid_) == CHILD_WAITING_TID) {
-    boost::detail::yield(loop_count++);
+    std::this_thread::yield();
   }
   Release_Store(&t->tid_, system_tid);
 

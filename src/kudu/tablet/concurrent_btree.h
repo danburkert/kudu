@@ -39,10 +39,10 @@
 #define KUDU_TABLET_CONCURRENT_BTREE_H
 
 #include <algorithm>
-#include <boost/smart_ptr/detail/yield_k.hpp>
 #include <boost/utility/binary.hpp>
 #include <memory>
 #include <string>
+#include <thread>
 
 #include "kudu/util/inline_slice.h"
 #include "kudu/util/memory/arena.h"
@@ -100,7 +100,7 @@ inline void PrefetchMemory(const T *addr) {
 template<class Traits>
 void DebugRacyPoint() {
   if (Traits::debug_raciness > 0) {
-    boost::detail::yield(Traits::debug_raciness);
+    std::this_thread::yield();
   }
 }
 
@@ -116,18 +116,16 @@ typedef base::subtle::Atomic64 AtomicVersion;
 struct VersionField {
  public:
   static AtomicVersion StableVersion(volatile AtomicVersion *version) {
-    for (int loop_count = 0; true; loop_count++) {
+    while (true) {
       AtomicVersion v_acq = base::subtle::Acquire_Load(version);
       if (!IsLocked(v_acq)) {
         return v_acq;
       }
-      boost::detail::yield(loop_count++);
+      std::this_thread::yield();
     }
   }
 
   static void Lock(volatile AtomicVersion *version) {
-    int loop_count = 0;
-
     while (true) {
       AtomicVersion v_acq = base::subtle::Acquire_Load(version);
       if (!IsLocked(v_acq)) {
@@ -137,7 +135,7 @@ struct VersionField {
         }
       }
       // Either was already locked by someone else, or CAS failed.
-      boost::detail::yield(loop_count++);
+      std::this_thread::yield();
     }
   }
 

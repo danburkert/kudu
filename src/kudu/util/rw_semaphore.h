@@ -17,8 +17,8 @@
 #ifndef KUDU_UTIL_RW_SEMAPHORE_H
 #define KUDU_UTIL_RW_SEMAPHORE_H
 
-#include <boost/smart_ptr/detail/yield_k.hpp>
 #include <glog/logging.h>
+#include <thread>
 
 #include "kudu/gutil/atomicops.h"
 #include "kudu/gutil/macros.h"
@@ -56,7 +56,6 @@ class rw_semaphore {
   ~rw_semaphore() {}
 
   void lock_shared() {
-    int loop_count = 0;
     Atomic32 cur_state = base::subtle::NoBarrier_Load(&state_);
     while (true) {
       Atomic32 expected = cur_state & kNumReadersMask;   // I expect no write lock
@@ -65,12 +64,11 @@ class rw_semaphore {
       if (cur_state == expected)
         break;
       // Either was already locked by someone else, or CAS failed.
-      boost::detail::yield(loop_count++);
+      std::this_thread::yield();
     }
   }
 
   void unlock_shared() {
-    int loop_count = 0;
     Atomic32 cur_state = base::subtle::NoBarrier_Load(&state_);
     while (true) {
       DCHECK_GT(cur_state & kNumReadersMask, 0)
@@ -81,14 +79,13 @@ class rw_semaphore {
       if (cur_state == expected)
         break;
       // Either was already locked by someone else, or CAS failed.
-      boost::detail::yield(loop_count++);
+      std::this_thread::yield();
     }
   }
 
   // Tries to acquire a write lock, if no one else has it.
   // This function retries on CAS failure and waits for readers to complete.
   bool try_lock() {
-    int loop_count = 0;
     Atomic32 cur_state = base::subtle::NoBarrier_Load(&state_);
     while (true) {
       // someone else has already the write lock
@@ -101,7 +98,7 @@ class rw_semaphore {
       if (cur_state == expected)
         break;
       // Either was already locked by someone else, or CAS failed.
-      boost::detail::yield(loop_count++);
+      std::this_thread::yield();
     }
 
     WaitPendingReaders();
@@ -110,7 +107,6 @@ class rw_semaphore {
   }
 
   void lock() {
-    int loop_count = 0;
     Atomic32 cur_state = base::subtle::NoBarrier_Load(&state_);
     while (true) {
       Atomic32 expected = cur_state & kNumReadersMask;   // I expect some 0+ readers
@@ -121,7 +117,7 @@ class rw_semaphore {
       if (cur_state == expected)
         break;
       // Either was already locked by someone else, or CAS failed.
-      boost::detail::yield(loop_count++);
+      std::this_thread::yield();
     }
 
     WaitPendingReaders();
@@ -178,9 +174,8 @@ class rw_semaphore {
 #endif
 
   void WaitPendingReaders() {
-    int loop_count = 0;
     while ((base::subtle::Acquire_Load(&state_) & kNumReadersMask) > 0) {
-      boost::detail::yield(loop_count++);
+      std::this_thread::yield();
     }
   }
 

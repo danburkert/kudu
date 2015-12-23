@@ -50,7 +50,7 @@ TEST(TestThreadPool, TestNoTaskOpenClose) {
 static void SimpleTaskMethod(int n, Atomic32 *counter) {
   while (n--) {
     base::subtle::NoBarrier_AtomicIncrement(counter, 1);
-    boost::detail::yield(n);
+    std::this_thread::yield();
   }
 }
 
