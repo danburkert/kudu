@@ -52,7 +52,7 @@ TEST(TestThreadPool, TestNoTaskOpenClose) {
 static void SimpleTaskMethod(int n, atomic<int32_t> *counter) {
   while (n--) {
     counter->fetch_add(1, memory_order_relaxed);
-    boost::detail::yield(n);
+    std::this_thread::yield();
   }
 }
 
