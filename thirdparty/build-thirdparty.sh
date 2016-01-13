@@ -58,8 +58,8 @@ done
 #
 # We also enable -fno-omit-frame-pointer so that profiling tools which
 # use frame-pointer based stack unwinding can function correctly.
-EXTRA_CFLAGS="$CFLAGS $EXTRA_CFLAGS -g -fno-omit-frame-pointer"
-EXTRA_CXXFLAGS="$CXXFLAGS $EXTRA_CXXFLAGS -g -fno-omit-frame-pointer -O2"
+EXTRA_CFLAGS="$CFLAGS $EXTRA_CFLAGS -fno-omit-frame-pointer"
+EXTRA_CXXFLAGS="$CXXFLAGS $EXTRA_CXXFLAGS -fno-omit-frame-pointer -O2"
 EXTRA_LDFLAGS="$LDFLAGS $EXTRA_LDFLAGS"
 EXTRA_LIBS="$LIBS $EXTRA_LIBS"
 
@@ -146,6 +146,9 @@ fi
 if [ -n "$F_ALL" -o -n "$F_LLVM" ]; then
   build_llvm
 fi
+
+EXTRA_CFLAGS="-g $EXTRA_CFLAGS"
+EXTRA_CXXFLAGS="-g $EXTRA_CXXFLAGS"
 
 if [ -n "$OS_LINUX" ] && [ -n "$F_ALL" -o -n "$F_LIBUNWIND" ]; then
   build_libunwind
