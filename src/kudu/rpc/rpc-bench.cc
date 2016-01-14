@@ -16,10 +16,10 @@
 // under the License.
 
 #include <atomic>
-#include <boost/ptr_container/ptr_vector.hpp>
-#include <boost/thread/thread.hpp>
 #include <gtest/gtest.h>
+#include <memory>
 #include <string>
+#include <thread>
 
 #include "kudu/rpc/rpc-test-base.h"
 #include "kudu/rpc/rtest.proxy.h"
@@ -29,6 +29,7 @@
 using std::atomic;
 using std::string;
 using std::shared_ptr;
+using std::thread;
 
 namespace kudu {
 namespace rpc {
@@ -55,7 +56,7 @@ class ClientThread {
   }
 
   void Start() {
-    thread_.reset(new boost::thread(&ClientThread::Run, this));
+    thread_.reset(new thread(&ClientThread::Run, this));
   }
 
   void Join() {
@@ -80,7 +81,7 @@ class ClientThread {
     }
   }
 
-  gscoped_ptr<boost::thread> thread_;
+  unique_ptr<thread> thread_;
   RpcBench *bench_;
   int request_count_;
 };
@@ -100,11 +101,11 @@ TEST_F(RpcBench, BenchmarkCalls) {
   Stopwatch sw(Stopwatch::ALL_THREADS);
   sw.start();
 
-  boost::ptr_vector<ClientThread> threads;
+  vector<ClientThread> threads;
   for (int i = 0; i < 16; i++) {
-    auto thr = new ClientThread(this);
-    thr->Start();
-    threads.push_back(thr);
+    ClientThread thr(this);
+    thr.Start();
+    threads.push_back(std::move(thr));
   }
 
   SleepFor(MonoDelta::FromSeconds(AllowSlowTests() ? 10 : 1));
@@ -112,7 +113,7 @@ TEST_F(RpcBench, BenchmarkCalls) {
 
   int total_reqs = 0;
 
-  for (ClientThread &thr : threads) {
+  for (ClientThread& thr : threads) {
     thr.Join();
     total_reqs += thr.request_count_;
   }

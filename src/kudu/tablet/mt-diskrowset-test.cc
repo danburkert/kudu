@@ -15,8 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <boost/ptr_container/ptr_vector.hpp>
-#include <boost/thread/thread.hpp>
 #include <memory>
 
 #include "kudu/tablet/diskrowset-test-base.h"
@@ -42,24 +40,18 @@ class TestMultiThreadedRowSet : public TestRowSet {
     }
   }
 
-  void StartUpdaterThreads(boost::ptr_vector<boost::thread> *threads,
-                           DiskRowSet *rs,
-                           int n_threads) {
+  void StartUpdaterThreads(vector<thread>* threads, DiskRowSet *rs, int n_threads) {
     for (int i = 0; i < n_threads; i++) {
-      threads->push_back(new boost::thread(
-                           &TestMultiThreadedRowSet::RowSetUpdateThread, this,
-                           rs));
+      threads->emplace_back(&TestMultiThreadedRowSet::RowSetUpdateThread, this, rs);
     }
   }
 
-  void StartFlushThread(boost::ptr_vector<boost::thread> *threads,
-                        DiskRowSet *rs) {
-    threads->push_back(new boost::thread(
-                         &TestMultiThreadedRowSet::FlushThread, this, rs));
+  void StartFlushThread(vector<thread>* threads, DiskRowSet *rs) {
+    threads->emplace_back(&TestMultiThreadedRowSet::FlushThread, this, rs);
   }
 
-  void JoinThreads(boost::ptr_vector<boost::thread> *threads) {
-    for (boost::thread &thr : *threads) {
+  void JoinThreads(vector<thread>* threads) {
+    for (thread &thr : *threads) {
       thr.join();
     }
   }
@@ -80,7 +72,7 @@ TEST_F(TestMultiThreadedRowSet, TestMTUpdate) {
   ASSERT_OK(OpenTestRowSet(&rs));
 
   // Spawn a bunch of threads, each of which will do updates.
-  boost::ptr_vector<boost::thread> threads;
+  vector<thread> threads;
   StartUpdaterThreads(&threads, rs.get(), FLAGS_num_threads);
 
   JoinThreads(&threads);
@@ -100,7 +92,7 @@ TEST_F(TestMultiThreadedRowSet, TestMTUpdateAndFlush) {
   ASSERT_OK(OpenTestRowSet(&rs));
 
   // Spawn a bunch of threads, each of which will do updates.
-  boost::ptr_vector<boost::thread> threads;
+  vector<thread> threads;
   StartUpdaterThreads(&threads, rs.get(), FLAGS_num_threads);
   StartFlushThread(&threads, rs.get());
 

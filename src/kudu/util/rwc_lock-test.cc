@@ -115,16 +115,16 @@ TEST_F(RWCLockTest, TestCorrectBehavior) {
   SharedState state;
   state.stop.store(false);
 
-  vector<boost::thread*> threads;
+  vector<thread> threads;
 
   const int kNumWriters = 5;
   const int kNumReaders = 5;
 
   for (int i = 0; i < kNumWriters; i++) {
-    threads.push_back(new boost::thread(WriterThread, &state));
+    threads.emplace_back(WriterThread, &state);
   }
   for (int i = 0; i < kNumReaders; i++) {
-    threads.push_back(new boost::thread(ReaderThread, &state));
+    threads.emplace_back(ReaderThread, &state);
   }
 
   if (AllowSlowTests()) {
@@ -135,11 +135,9 @@ TEST_F(RWCLockTest, TestCorrectBehavior) {
 
   state.stop.store(true);
 
-  for (boost::thread* t : threads) {
-    t->join();
-    delete t;
+  for (thread& t : threads) {
+    t.join();
   }
-
 }
 
 } // namespace kudu
