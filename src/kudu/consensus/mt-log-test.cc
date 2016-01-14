@@ -17,11 +17,8 @@
 
 #include "kudu/consensus/log-test-base.h"
 
-#include <boost/thread/locks.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/thread.hpp>
-
 #include <algorithm>
+#include <mutex>
 #include <vector>
 
 #include "kudu/gutil/algorithm.h"
@@ -38,9 +35,10 @@ DEFINE_int32(num_ops_per_batch_avg, 5, "Target average number of ops per batch")
 namespace kudu {
 namespace log {
 
-using std::vector;
 using consensus::ReplicateRefPtr;
 using consensus::make_scoped_refptr_replicate;
+using std::lock_guard;
+using std::vector;
 
 namespace {
 
@@ -92,7 +90,7 @@ class MultiThreadedLogTest : public LogTestBase {
       DVLOG(1) << num_ops << " ops in this batch";
       num_ops =  std::max(num_ops, 1);
       {
-        boost::lock_guard<simple_spinlock> lock_guard(lock_);
+        lock_guard<simple_spinlock> lock_guard(lock_);
         for (int j = 0; j < num_ops; j++) {
           ReplicateRefPtr replicate = make_scoped_refptr_replicate(new ReplicateMsg);
           int32_t index = current_index_++;

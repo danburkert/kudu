@@ -17,8 +17,8 @@
 #ifndef KUDU_TWITTER_DEMO_TWITTER_STREAMER_H
 #define KUDU_TWITTER_DEMO_TWITTER_STREAMER_H
 
-#include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
+#include <mutex>
 
 #include "kudu/util/faststring.h"
 #include "kudu/util/slice.h"
@@ -50,7 +50,7 @@ class TwitterStreamer {
   size_t DataReceived(const Slice& data);
 
   boost::thread thread_;
-  boost::mutex lock_;
+  std::mutex lock_;
   Status stream_status_;
 
   faststring recv_buf_;

@@ -17,13 +17,13 @@
 
 #include "kudu/twitter-demo/twitter_streamer.h"
 
-#include <boost/thread/locks.hpp>
 #include <boost/thread/thread.hpp>
 #include <curl/curl.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
-#include <string>
+#include <mutex>
 #include <string.h>
+#include <string>
 
 #include "kudu/twitter-demo/oauth.h"
 #include "kudu/gutil/macros.h"
@@ -132,7 +132,7 @@ void TwitterStreamer::StreamThread() {
   Status s = DoStreaming();
   if (!s.ok()) {
     LOG(ERROR) << "Streaming thread failed: " << s.ToString();
-    boost::lock_guard<boost::mutex> l(lock_);
+    std::lock_guard<std::mutex> l(lock_);
     stream_status_ = s;
   }
 }

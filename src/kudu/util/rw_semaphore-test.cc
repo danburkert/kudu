@@ -15,9 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <gtest/gtest.h>
-#include <boost/thread/thread.hpp>
 #include <boost/thread/locks.hpp>
+#include <boost/thread/thread.hpp>
+#include <gtest/gtest.h>
+#include <mutex>
 #include <vector>
 
 #include "kudu/util/monotime.h"
@@ -39,7 +40,7 @@ struct SharedState {
 void Writer(SharedState* state) {
   int i = 0;
   while (true) {
-    boost::lock_guard<rw_semaphore> l(state->sem);
+    std::lock_guard<rw_semaphore> l(state->sem);
     state->int_var += (i++);
     if (state->done) {
       break;
@@ -77,7 +78,7 @@ TEST(RWSemaphoreTest, TestBasicOperation) {
 
   // Signal them to stop.
   {
-    boost::lock_guard<rw_semaphore> l(s.sem);
+    std::lock_guard<rw_semaphore> l(s.sem);
     s.done = true;
   }
 

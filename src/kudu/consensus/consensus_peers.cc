@@ -21,6 +21,7 @@
 #include <boost/bind.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -68,9 +69,10 @@ namespace consensus {
 
 using log::Log;
 using log::LogEntryBatch;
-using std::shared_ptr;
 using rpc::Messenger;
 using rpc::RpcController;
+using std::lock_guard;
+using std::shared_ptr;
 using strings::Substitute;
 
 Status Peer::NewRemotePeer(const RaftPeerPB& peer_pb,
@@ -114,7 +116,7 @@ void Peer::SetTermForTest(int term) {
 }
 
 Status Peer::Init() {
-  boost::lock_guard<simple_spinlock> lock(peer_lock_);
+  lock_guard<simple_spinlock> lock(peer_lock_);
   queue_->TrackPeer(peer_pb_.permanent_uuid());
   RETURN_NOT_OK(heartbeater_.Start());
   state_ = kPeerStarted;
@@ -128,7 +130,7 @@ Status Peer::SignalRequest(bool even_if_queue_empty) {
     return Status::OK();
   }
   {
-    boost::lock_guard<simple_spinlock> l(peer_lock_);
+    lock_guard<simple_spinlock> l(peer_lock_);
 
     if (PREDICT_FALSE(state_ == kPeerClosed)) {
       sem_.Release();
@@ -327,7 +329,7 @@ void Peer::Close() {
 
   // If the peer is already closed return.
   {
-    boost::lock_guard<simple_spinlock> lock(peer_lock_);
+    lock_guard<simple_spinlock> lock(peer_lock_);
     if (state_ == kPeerClosed) return;
     DCHECK(state_ == kPeerRunning || state_ == kPeerStarted) << "Unexpected state: " << state_;
     state_ = kPeerClosed;
@@ -337,7 +339,7 @@ void Peer::Close() {
   // Acquire the semaphore to wait for any concurrent request to finish.
   // They will see the state_ == kPeerClosed and not start any new requests,
   // but we can't currently cancel the already-sent ones. (see KUDU-699)
-  boost::lock_guard<Semaphore> l(sem_);
+  lock_guard<Semaphore> l(sem_);
   queue_->UntrackPeer(peer_pb_.permanent_uuid());
   // We don't own the ops (the queue does).
   request_.mutable_ops()->ExtractSubrange(0, request_.ops_size(), nullptr);

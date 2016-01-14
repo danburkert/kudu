@@ -18,7 +18,7 @@
 #define KUDU_BOOST_MUTEX_UTILS_H
 
 
-// Similar to boost::lock_guard except that it takes
+// Similar to std::lock_guard except that it takes
 // a lock pointer, and checks against NULL. If the
 // pointer is NULL, does nothing. Otherwise guards
 // with the lock.

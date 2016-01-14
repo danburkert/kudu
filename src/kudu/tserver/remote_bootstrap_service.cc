@@ -17,10 +17,9 @@
 #include "kudu/tserver/remote_bootstrap_service.h"
 
 #include <algorithm>
-#include <boost/date_time/time_duration.hpp>
-#include <boost/thread/locks.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -120,7 +119,7 @@ void RemoteBootstrapServiceImpl::BeginRemoteBootstrapSession(
 
   scoped_refptr<RemoteBootstrapSession> session;
   {
-    boost::lock_guard<simple_spinlock> l(sessions_lock_);
+    std::lock_guard<simple_spinlock> l(sessions_lock_);
     if (!FindCopy(sessions_, session_id, &session)) {
       LOG(INFO) << "Beginning new remote bootstrap session on tablet " << tablet_id
                 << " from peer " << requestor_uuid << " at " << context->requestor_string()
@@ -164,7 +163,7 @@ void RemoteBootstrapServiceImpl::CheckSessionActive(
 
   // Look up and validate remote bootstrap session.
   scoped_refptr<RemoteBootstrapSession> session;
-  boost::lock_guard<simple_spinlock> l(sessions_lock_);
+  std::lock_guard<simple_spinlock> l(sessions_lock_);
   RemoteBootstrapErrorPB::Code app_error;
   Status status = FindSessionUnlocked(session_id, &app_error, &session);
   if (status.ok()) {
@@ -192,7 +191,7 @@ void RemoteBootstrapServiceImpl::FetchData(const FetchDataRequestPB* req,
   // Look up and validate remote bootstrap session.
   scoped_refptr<RemoteBootstrapSession> session;
   {
-    boost::lock_guard<simple_spinlock> l(sessions_lock_);
+    std::lock_guard<simple_spinlock> l(sessions_lock_);
     RemoteBootstrapErrorPB::Code app_error;
     RPC_RETURN_NOT_OK(FindSessionUnlocked(session_id, &app_error, &session),
                       app_error, "No such session");
@@ -241,7 +240,7 @@ void RemoteBootstrapServiceImpl::EndRemoteBootstrapSession(
         EndRemoteBootstrapSessionResponsePB* resp,
         rpc::RpcContext* context) {
   {
-    boost::lock_guard<simple_spinlock> l(sessions_lock_);
+    std::lock_guard<simple_spinlock> l(sessions_lock_);
     RemoteBootstrapErrorPB::Code app_error;
     LOG(INFO) << "Request end of remote bootstrap session " << req->session_id()
       << " received from " << context->requestor_string();
@@ -334,7 +333,7 @@ Status RemoteBootstrapServiceImpl::DoEndRemoteBootstrapSessionUnlocked(
 
 void RemoteBootstrapServiceImpl::EndExpiredSessions() {
   do {
-    boost::lock_guard<simple_spinlock> l(sessions_lock_);
+    std::lock_guard<simple_spinlock> l(sessions_lock_);
     MonoTime now = MonoTime::Now(MonoTime::FINE);
 
     vector<string> expired_session_ids;

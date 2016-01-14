@@ -23,9 +23,9 @@
 #include "kudu/tserver/tserver_admin.proxy.h"
 #include "kudu/util/net/net_util.h"
 
-#include <boost/thread/locks.hpp>
 #include <boost/thread/mutex.hpp>
 
+#include <mutex>
 #include <vector>
 
 using std::shared_ptr;
@@ -53,7 +53,7 @@ TSDescriptor::~TSDescriptor() {
 
 Status TSDescriptor::Register(const NodeInstancePB& instance,
                               const TSRegistrationPB& registration) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   CHECK_EQ(instance.permanent_uuid(), permanent_uuid_);
 
   if (instance.instance_seqno() < latest_seqno_) {
@@ -81,39 +81,39 @@ Status TSDescriptor::Register(const NodeInstancePB& instance,
 }
 
 void TSDescriptor::UpdateHeartbeatTime() {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   last_heartbeat_ = MonoTime::Now(MonoTime::FINE);
 }
 
 MonoDelta TSDescriptor::TimeSinceHeartbeat() const {
   MonoTime now(MonoTime::Now(MonoTime::FINE));
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   return now.GetDeltaSince(last_heartbeat_);
 }
 
 int64_t TSDescriptor::latest_seqno() const {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   return latest_seqno_;
 }
 
 bool TSDescriptor::has_tablet_report() const {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   return has_tablet_report_;
 }
 
 void TSDescriptor::set_has_tablet_report(bool has_report) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   has_tablet_report_ = has_report;
 }
 
 void TSDescriptor::GetRegistration(TSRegistrationPB* reg) const {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   CHECK(registration_) << "No registration";
   CHECK_NOTNULL(reg)->CopyFrom(*registration_);
 }
 
 void TSDescriptor::GetNodeInstancePB(NodeInstancePB* instance_pb) const {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   instance_pb->set_permanent_uuid(permanent_uuid_);
   instance_pb->set_instance_seqno(latest_seqno_);
 }
@@ -121,7 +121,7 @@ void TSDescriptor::GetNodeInstancePB(NodeInstancePB* instance_pb) const {
 Status TSDescriptor::ResolveSockaddr(Sockaddr* addr) const {
   vector<HostPort> hostports;
   {
-    boost::lock_guard<simple_spinlock> l(lock_);
+    std::lock_guard<simple_spinlock> l(lock_);
     for (const HostPortPB& addr : registration_->rpc_addresses()) {
       hostports.push_back(HostPort(addr.host(), addr.port()));
     }
@@ -154,7 +154,7 @@ Status TSDescriptor::ResolveSockaddr(Sockaddr* addr) const {
 Status TSDescriptor::GetTSAdminProxy(const shared_ptr<rpc::Messenger>& messenger,
                                      shared_ptr<tserver::TabletServerAdminServiceProxy>* proxy) {
   {
-    boost::lock_guard<simple_spinlock> l(lock_);
+    std::lock_guard<simple_spinlock> l(lock_);
     if (ts_admin_proxy_) {
       *proxy = ts_admin_proxy_;
       return Status::OK();
@@ -164,7 +164,7 @@ Status TSDescriptor::GetTSAdminProxy(const shared_ptr<rpc::Messenger>& messenger
   Sockaddr addr;
   RETURN_NOT_OK(ResolveSockaddr(&addr));
 
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   if (!ts_admin_proxy_) {
     ts_admin_proxy_.reset(new tserver::TabletServerAdminServiceProxy(messenger, addr));
   }
@@ -175,7 +175,7 @@ Status TSDescriptor::GetTSAdminProxy(const shared_ptr<rpc::Messenger>& messenger
 Status TSDescriptor::GetConsensusProxy(const shared_ptr<rpc::Messenger>& messenger,
                                        shared_ptr<consensus::ConsensusServiceProxy>* proxy) {
   {
-    boost::lock_guard<simple_spinlock> l(lock_);
+    std::lock_guard<simple_spinlock> l(lock_);
     if (consensus_proxy_) {
       *proxy = consensus_proxy_;
       return Status::OK();
@@ -185,7 +185,7 @@ Status TSDescriptor::GetConsensusProxy(const shared_ptr<rpc::Messenger>& messeng
   Sockaddr addr;
   RETURN_NOT_OK(ResolveSockaddr(&addr));
 
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   if (!consensus_proxy_) {
     consensus_proxy_.reset(new consensus::ConsensusServiceProxy(messenger, addr));
   }

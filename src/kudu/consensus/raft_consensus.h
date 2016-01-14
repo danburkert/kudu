@@ -18,7 +18,6 @@
 #ifndef KUDU_CONSENSUS_RAFT_CONSENSUS_H_
 #define KUDU_CONSENSUS_RAFT_CONSENSUS_H_
 
-#include <boost/thread/locks.hpp>
 #include <memory>
 #include <string>
 #include <utility>
@@ -32,9 +31,6 @@
 #include "kudu/util/failure_detector.h"
 
 namespace kudu {
-
-typedef boost::lock_guard<simple_spinlock> Lock;
-typedef gscoped_ptr<Lock> ScopedLock;
 
 class Counter;
 class FailureDetector;
