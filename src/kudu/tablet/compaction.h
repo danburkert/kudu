@@ -78,7 +78,7 @@ class CompactionInput {
 class RowSetsInCompaction {
  public:
   void AddRowSet(const std::shared_ptr<RowSet> &rowset,
-                 const std::shared_ptr<boost::mutex::scoped_try_lock> &lock) {
+                 const std::shared_ptr<std::unique_lock<std::mutex>> &lock) {
     CHECK(lock->owns_lock());
 
     locks_.push_back(lock);
@@ -104,10 +104,8 @@ class RowSetsInCompaction {
   }
 
  private:
-  typedef vector<std::shared_ptr<boost::mutex::scoped_try_lock> > LockVector;
-
   RowSetVector rowsets_;
-  LockVector locks_;
+  vector<std::shared_ptr<std::unique_lock<std::mutex>>> locks_;
 };
 
 // One row yielded by CompactionInput::PrepareBlock.

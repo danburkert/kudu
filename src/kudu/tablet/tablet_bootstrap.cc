@@ -19,6 +19,7 @@
 
 #include <gflags/gflags.h>
 #include <map>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -362,7 +363,7 @@ TabletStatusListener::~TabletStatusListener() {
 void TabletStatusListener::StatusMessage(const string& status) {
   LOG(INFO) << "T " << tablet_id() << " P " << meta_->fs_manager()->uuid() << ": "
             << status;
-  boost::lock_guard<boost::shared_mutex> l(lock_);
+  std::lock_guard<boost::shared_mutex> l(lock_);
   last_status_ = status;
 }
 

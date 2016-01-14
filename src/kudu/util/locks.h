@@ -34,8 +34,8 @@ using base::subtle::Acquire_CompareAndSwap;
 using base::subtle::NoBarrier_Load;
 using base::subtle::Release_Store;
 
-// Wrapper around the Google SpinLock class to adapt it to the method names
-// expected by Boost.
+// Wrapper around the Google SpinLock class to adapt it to the lockable concept
+// for use with lock guards.
 class simple_spinlock {
  public:
   simple_spinlock() {}
@@ -151,7 +151,7 @@ class rw_spinlock {
 //   // Lock exclusive:
 //
 //   {
-//     boost::lock_guard<percpu_rwlock> lock(mylock);
+//     std::lock_guard<percpu_rwlock> lock(mylock);
 //     ...
 //   }
 class percpu_rwlock {
@@ -230,7 +230,7 @@ class percpu_rwlock {
   padded_lock *locks_;
 };
 
-// Simpler version of boost::lock_guard. Only supports the basic object
+// Simpler version of std::lock_guard. Only supports the basic object
 // lifecycle and defers any error checking to the underlying mutex.
 template <typename Mutex>
 class lock_guard {
@@ -249,7 +249,7 @@ class lock_guard {
   DISALLOW_COPY_AND_ASSIGN(lock_guard<Mutex>);
 };
 
-// Simpler version of boost::unique_lock. Tracks lock acquisition and will
+// Simpler version of std::unique_lock. Tracks lock acquisition and will
 // report attempts to double lock() or unlock().
 template <typename Mutex>
 class unique_lock {

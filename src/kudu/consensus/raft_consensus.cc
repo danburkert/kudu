@@ -21,6 +21,7 @@
 #include <boost/optional.hpp>
 #include <gflags/gflags.h>
 #include <iostream>
+#include <mutex>
 
 #include "kudu/common/wire_protocol.h"
 #include "kudu/consensus/consensus.pb.h"
@@ -493,7 +494,7 @@ Status RaftConsensus::Replicate(const scoped_refptr<ConsensusRound>& round) {
 
   RETURN_NOT_OK(ExecuteHook(PRE_REPLICATE));
 
-  boost::lock_guard<simple_spinlock> lock(update_lock_);
+  std::lock_guard<simple_spinlock> lock(update_lock_);
   {
     ReplicaState::UniqueLock lock;
     RETURN_NOT_OK(state_->LockForReplicate(&lock, *round->replicate_msg()));
@@ -663,7 +664,7 @@ Status RaftConsensus::Update(const ConsensusRequestPB* request,
   VLOG_WITH_PREFIX(2) << "Replica received request: " << request->ShortDebugString();
 
   // see var declaration
-  boost::lock_guard<simple_spinlock> lock(update_lock_);
+  std::lock_guard<simple_spinlock> lock(update_lock_);
   Status s = UpdateReplica(request, response);
   if (PREDICT_FALSE(VLOG_IS_ON(1))) {
     if (request->ops_size() == 0) {
@@ -1241,7 +1242,7 @@ Status RaftConsensus::RequestVote(const VoteRequestPB* request, VoteResponsePB* 
   // We must acquire the update lock in order to ensure that this vote action
   // takes place between requests.
   // Lock ordering: The update lock must be acquired before the ReplicaState lock.
-  boost::unique_lock<simple_spinlock> update_guard(update_lock_, boost::defer_lock);
+  std::unique_lock<simple_spinlock> update_guard(update_lock_, std::defer_lock);
   if (FLAGS_enable_leader_failure_detection) {
     update_guard.try_lock();
   } else {

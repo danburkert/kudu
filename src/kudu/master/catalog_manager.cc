@@ -37,12 +37,12 @@
 #include "kudu/master/catalog_manager.h"
 
 #include <boost/optional.hpp>
-#include <boost/thread/condition_variable.hpp>
 #include <boost/thread/locks.hpp>
-#include <boost/thread/mutex.hpp>
 #include <glog/logging.h>
 
 #include <algorithm>
+#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <vector>
 
@@ -143,6 +143,7 @@ DEFINE_bool(catalog_manager_check_ts_count_for_create_table, true,
 TAG_FLAG(catalog_manager_check_ts_count_for_create_table, hidden);
 
 using std::atomic;
+using std::condition_variable;
 using std::memory_order_relaxed;
 using std::shared_ptr;
 using std::string;
@@ -292,23 +293,22 @@ class CatalogManagerBgTasks {
   void Shutdown();
 
   void Wake() {
-    boost::lock_guard<boost::mutex> lock(lock_);
+    std::lock_guard<std::mutex> lock(lock_);
     pending_updates_ = true;
     cond_.notify_all();
   }
 
   void Wait(int msec) {
-    boost::unique_lock<boost::mutex> lock(lock_);
+    std::unique_lock<std::mutex> lock(lock_);
     if (closing_.load(memory_order_relaxed)) return;
     if (!pending_updates_) {
-      boost::system_time wtime = boost::get_system_time() + boost::posix_time::milliseconds(msec);
-      cond_.timed_wait(lock, wtime);
+      cond_.wait_for(lock, std::chrono::milliseconds(msec));
     }
     pending_updates_ = false;
   }
 
   void WakeIfHasPendingUpdates() {
-    boost::lock_guard<boost::mutex> lock(lock_);
+    std::lock_guard<std::mutex> lock(lock_);
     if (pending_updates_) {
       cond_.notify_all();
     }
@@ -322,8 +322,8 @@ class CatalogManagerBgTasks {
   // visibility is implied through this variable, so relaxed ops are used.
   atomic<bool> closing_;
   bool pending_updates_;
-  mutable boost::mutex lock_;
-  boost::condition_variable cond_;
+  mutable mutex lock_;
+  condition_variable cond_;
   scoped_refptr<kudu::Thread> thread_;
   CatalogManager *catalog_manager_;
 };
@@ -438,7 +438,7 @@ CatalogManager::~CatalogManager() {
 
 Status CatalogManager::Init(bool is_first_run) {
   {
-    boost::lock_guard<simple_spinlock> l(state_lock_);
+    std::lock_guard<simple_spinlock> l(state_lock_);
     CHECK_EQ(kConstructed, state_);
     state_ = kStarting;
   }
@@ -454,13 +454,13 @@ Status CatalogManager::Init(bool is_first_run) {
   RETURN_NOT_OK_PREPEND(sys_catalog_->WaitUntilRunning(),
                         "Failed waiting for the catalog tablet to run");
 
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<rw_spinlock> l(lock_);
   background_tasks_.reset(new CatalogManagerBgTasks(this));
   RETURN_NOT_OK_PREPEND(background_tasks_->Init(),
                         "Failed to initialize catalog manager background tasks");
 
   {
-    boost::lock_guard<simple_spinlock> l(state_lock_);
+    std::lock_guard<simple_spinlock> l(state_lock_);
     CHECK_EQ(kStarting, state_);
     state_ = kRunning;
   }
@@ -469,7 +469,7 @@ Status CatalogManager::Init(bool is_first_run) {
 }
 
 Status CatalogManager::ElectedAsLeaderCb() {
-  boost::lock_guard<simple_spinlock> l(state_lock_);
+  std::lock_guard<simple_spinlock> l(state_lock_);
   return worker_pool_->SubmitClosure(
       Bind(&CatalogManager::VisitTablesAndTabletsTask, Unretained(this)));
 }
@@ -506,7 +506,7 @@ void CatalogManager::VisitTablesAndTabletsTask() {
   }
 
   {
-    boost::lock_guard<LockType> lock(lock_);
+    std::lock_guard<rw_spinlock> lock(lock_);
     int64_t term_after_wait = consensus->ConsensusState(CONSENSUS_CONFIG_COMMITTED).current_term();
     if (term_after_wait != term) {
       // If we got elected leader again while waiting to catch up then we will
@@ -521,7 +521,7 @@ void CatalogManager::VisitTablesAndTabletsTask() {
       CHECK_OK(VisitTablesAndTabletsUnlocked());
     }
   }
-  boost::lock_guard<simple_spinlock> l(state_lock_);
+  std::lock_guard<simple_spinlock> l(state_lock_);
   leader_ready_term_ = term;
 }
 
@@ -544,7 +544,7 @@ Status CatalogManager::VisitTablesAndTabletsUnlocked() {
 }
 
 Status CatalogManager::InitSysCatalogAsync(bool is_first_run) {
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<rw_spinlock> l(lock_);
   sys_catalog_.reset(new SysCatalogTable(master_,
                                          master_->metric_registry(),
                                          Bind(&CatalogManager::ElectedAsLeaderCb,
@@ -558,12 +558,12 @@ Status CatalogManager::InitSysCatalogAsync(bool is_first_run) {
 }
 
 bool CatalogManager::IsInitialized() const {
-  boost::lock_guard<simple_spinlock> l(state_lock_);
+  std::lock_guard<simple_spinlock> l(state_lock_);
   return state_ == kRunning;
 }
 
 Status CatalogManager::CheckIsLeaderAndReady() const {
-  boost::lock_guard<simple_spinlock> l(state_lock_);
+  std::lock_guard<simple_spinlock> l(state_lock_);
   if (PREDICT_FALSE(state_ != kRunning)) {
     return Status::ServiceUnavailable(
         Substitute("Catalog manager is shutting down. State: $0", state_));
@@ -589,7 +589,7 @@ RaftPeerPB::Role CatalogManager::Role() const {
 
 void CatalogManager::Shutdown() {
   {
-    boost::lock_guard<simple_spinlock> l(state_lock_);
+    std::lock_guard<simple_spinlock> l(state_lock_);
     if (state_ == kClosing) {
       VLOG(2) << "CatalogManager already shut down";
       return;
@@ -646,7 +646,7 @@ void CatalogManager::AbortTableCreation(TableInfo* table,
   table->AbortTasks();
   table->WaitTasksCompletion();
 
-  boost::lock_guard<LockType> l(lock_);
+  std::lock_guard<rw_spinlock> l(lock_);
 
   // Call AbortMutation() manually, as otherwise the lock won't be
   // released.
@@ -764,7 +764,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
   scoped_refptr<TableInfo> table;
   vector<TabletInfo*> tablets;
   {
-    boost::lock_guard<LockType> l(lock_);
+    std::lock_guard<rw_spinlock> l(lock_);
     TRACE("Acquired catalog manager lock");
 
     // b. Verify that the table does not exist.
@@ -904,7 +904,7 @@ TabletInfo* CatalogManager::CreateTabletInfo(TableInfo* table,
 
 Status CatalogManager::FindTable(const TableIdentifierPB& table_identifier,
                                  scoped_refptr<TableInfo> *table_info) {
-  boost::shared_lock<LockType> l(lock_);
+  boost::shared_lock<rw_spinlock> l(lock_);
 
   if (table_identifier.has_table_id()) {
     *table_info = FindPtrOrNull(table_ids_map_, table_identifier.table_id());
@@ -968,7 +968,7 @@ Status CatalogManager::DeleteTable(const DeleteTableRequestPB* req,
   // 4. Remove it from the by-name map
   {
     TRACE("Removing from by-name map");
-    boost::lock_guard<LockType> l_map(lock_);
+    std::lock_guard<rw_spinlock> l_map(lock_);
     if (table_names_map_.erase(l.data().name()) != 1) {
       PANIC_RPC(rpc, "Could not remove table from map, name=" + l.data().name());
     }
@@ -1122,7 +1122,7 @@ Status CatalogManager::AlterTable(const AlterTableRequestPB* req,
 
   // 3. Try to acquire the new table name
   if (req->has_new_table_name()) {
-    boost::lock_guard<LockType> catalog_lock(lock_);
+    std::lock_guard<rw_spinlock> catalog_lock(lock_);
 
     TRACE("Acquired catalog manager lock");
 
@@ -1169,7 +1169,7 @@ Status CatalogManager::AlterTable(const AlterTableRequestPB* req,
                    s.ToString()));
     LOG(WARNING) << s.ToString();
     if (req->has_new_table_name()) {
-      boost::lock_guard<LockType> catalog_lock(lock_);
+      std::lock_guard<rw_spinlock> catalog_lock(lock_);
       CHECK_EQ(table_names_map_.erase(req->new_table_name()), 1);
     }
     CheckIfNoLongerLeaderAndSetupError(s, resp);
@@ -1181,7 +1181,7 @@ Status CatalogManager::AlterTable(const AlterTableRequestPB* req,
   // 6. Remove the old name
   if (req->has_new_table_name()) {
     TRACE("Removing old-name $0 from by-name map", table_name);
-    boost::lock_guard<LockType> l_map(lock_);
+    std::lock_guard<rw_spinlock> l_map(lock_);
     if (table_names_map_.erase(table_name) != 1) {
       PANIC_RPC(rpc, "Could not remove table from map, name=" + l.data().name());
     }
@@ -1271,7 +1271,7 @@ Status CatalogManager::ListTables(const ListTablesRequestPB* req,
                                   ListTablesResponsePB* resp) {
   RETURN_NOT_OK(CheckOnline());
 
-  boost::shared_lock<LockType> l(lock_);
+  boost::shared_lock<rw_spinlock> l(lock_);
 
   for (const TableInfoMap::value_type& entry : table_names_map_) {
     TableMetadataLock ltm(entry.second.get(), TableMetadataLock::READ);
@@ -1293,21 +1293,21 @@ Status CatalogManager::ListTables(const ListTablesRequestPB* req,
 }
 
 bool CatalogManager::GetTableInfo(const string& table_id, scoped_refptr<TableInfo> *table) {
-  boost::shared_lock<LockType> l(lock_);
+  boost::shared_lock<rw_spinlock> l(lock_);
   *table = FindPtrOrNull(table_ids_map_, table_id);
   return *table != nullptr;
 }
 
 void CatalogManager::GetAllTables(std::vector<scoped_refptr<TableInfo> > *tables) {
   tables->clear();
-  boost::shared_lock<LockType> l(lock_);
+  boost::shared_lock<rw_spinlock> l(lock_);
   for (const TableInfoMap::value_type& e : table_ids_map_) {
     tables->push_back(e.second);
   }
 }
 
 bool CatalogManager::TableNameExists(const string& table_name) {
-  boost::shared_lock<LockType> l(lock_);
+  boost::shared_lock<rw_spinlock> l(lock_);
   return table_names_map_.find(table_name) != table_names_map_.end();
 }
 
@@ -1382,7 +1382,7 @@ Status CatalogManager::HandleReportedTablet(TSDescriptor* ts_desc,
                "tablet_id", report.tablet_id());
   scoped_refptr<TabletInfo> tablet;
   {
-    boost::shared_lock<LockType> l(lock_);
+    boost::shared_lock<rw_spinlock> l(lock_);
     tablet = FindPtrOrNull(tablet_map_, report.tablet_id());
   }
   RETURN_NOT_OK_PREPEND(CheckIsLeaderAndReady(),
@@ -1685,7 +1685,7 @@ Status CatalogManager::GetTabletPeer(const string& tablet_id,
                                      scoped_refptr<TabletPeer>* tablet_peer) const {
   // Note: CatalogManager has only one table, 'sys_catalog', with only
   // one tablet.
-  boost::shared_lock<LockType> l(lock_);
+  boost::shared_lock<rw_spinlock> l(lock_);
   CHECK(sys_catalog_.get() != nullptr) << "sys_catalog_ must be initialized!";
   if (sys_catalog_->tablet_id() == tablet_id) {
     *tablet_peer = sys_catalog_->tablet_peer();
@@ -2486,7 +2486,7 @@ void CatalogManager::ExtractTabletsToProcess(
     std::vector<scoped_refptr<TabletInfo> > *tablets_to_delete,
     std::vector<scoped_refptr<TabletInfo> > *tablets_to_process) {
 
-  boost::shared_lock<LockType> l(lock_);
+  boost::shared_lock<rw_spinlock> l(lock_);
 
   // TODO: At the moment we loop through all the tablets
   //       we can keep a set of tablets waiting for "assignment"
@@ -2565,7 +2565,7 @@ void CatalogManager::HandleAssignCreatingTablet(TabletInfo* tablet,
 
   tablet->table()->AddTablet(replacement);
   {
-    boost::lock_guard<LockType> l_maps(lock_);
+    std::lock_guard<rw_spinlock> l_maps(lock_);
     tablet_map_[replacement->tablet_id()] = replacement;
   }
 
@@ -2748,7 +2748,7 @@ Status CatalogManager::ProcessPendingAssignments(
       }
       tablet_ids_to_remove.push_back(new_tablet->tablet_id());
     }
-    boost::lock_guard<LockType> l(lock_);
+    std::lock_guard<rw_spinlock> l(lock_);
     unlocker_out.Abort();
     unlocker_in.Abort();
     for (const string& tablet_id_to_remove : tablet_ids_to_remove) {
@@ -2909,7 +2909,7 @@ Status CatalogManager::GetTabletLocations(const std::string& tablet_id,
   locs_pb->mutable_replicas()->Clear();
   scoped_refptr<TabletInfo> tablet_info;
   {
-    boost::shared_lock<LockType> l(lock_);
+    boost::shared_lock<rw_spinlock> l(lock_);
     if (!FindCopy(tablet_map_, tablet_id, &tablet_info)) {
       return Status::NotFound(Substitute("Unknown tablet $0", tablet_id));
     }
@@ -2977,7 +2977,7 @@ void CatalogManager::DumpState(std::ostream* out) const {
   // Copy the internal state so that, if the output stream blocks,
   // we don't end up holding the lock for a long time.
   {
-    boost::shared_lock<LockType> l(lock_);
+    boost::shared_lock<rw_spinlock> l(lock_);
     ids_copy = table_ids_map_;
     names_copy = table_names_map_;
     tablets_copy = tablet_map_;
@@ -3054,33 +3054,33 @@ TabletInfo::~TabletInfo() {
 }
 
 void TabletInfo::SetReplicaLocations(const ReplicaMap& replica_locations) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   last_update_time_ = MonoTime::Now(MonoTime::FINE);
   replica_locations_ = replica_locations;
 }
 
 void TabletInfo::GetReplicaLocations(ReplicaMap* replica_locations) const {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   *replica_locations = replica_locations_;
 }
 
 bool TabletInfo::AddToReplicaLocations(const TabletReplica& replica) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   return InsertIfNotPresent(&replica_locations_, replica.ts_desc->permanent_uuid(), replica);
 }
 
 void TabletInfo::set_last_update_time(const MonoTime& ts) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   last_update_time_ = ts;
 }
 
 MonoTime TabletInfo::last_update_time() const {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   return last_update_time_;
 }
 
 bool TabletInfo::set_reported_schema_version(uint32_t version) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   if (version > reported_schema_version_) {
     reported_schema_version_ = version;
     return true;
@@ -3089,7 +3089,7 @@ bool TabletInfo::set_reported_schema_version(uint32_t version) {
 }
 
 uint32_t TabletInfo::reported_schema_version() const {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   return reported_schema_version_;
 }
 
@@ -3118,7 +3118,7 @@ std::string TableInfo::ToString() const {
 }
 
 bool TableInfo::RemoveTablet(const string& tablet_id) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   if (tablet_map_.find(tablet_id) != tablet_map_.end()) {
     CHECK_EQ(tablet_map_.erase(tablet_id), 1)
         << "Unable to erase tablet " << tablet_id << " from TableInfo.";
@@ -3128,12 +3128,12 @@ bool TableInfo::RemoveTablet(const string& tablet_id) {
 }
 
 void TableInfo::AddTablet(TabletInfo *tablet) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   AddTabletUnlocked(tablet);
 }
 
 void TableInfo::AddTablets(const vector<TabletInfo*>& tablets) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   for (TabletInfo *tablet : tablets) {
     AddTabletUnlocked(tablet);
   }
@@ -3153,7 +3153,7 @@ void TableInfo::AddTabletUnlocked(TabletInfo* tablet) {
 
 void TableInfo::GetTabletsInRange(const GetTableLocationsRequestPB* req,
                                   vector<scoped_refptr<TabletInfo> > *ret) const {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   int max_returned_locations = req->max_returned_locations();
 
   TableInfo::TabletInfoMap::const_iterator it, it_end;
@@ -3178,7 +3178,7 @@ void TableInfo::GetTabletsInRange(const GetTableLocationsRequestPB* req,
 }
 
 bool TableInfo::IsAlterInProgress(uint32_t version) const {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   for (const TableInfo::TabletInfoMap::value_type& e : tablet_map_) {
     if (e.second->reported_schema_version() < version) {
       VLOG(3) << "Table " << table_id_ << " ALTER in progress due to tablet "
@@ -3191,7 +3191,7 @@ bool TableInfo::IsAlterInProgress(uint32_t version) const {
 }
 
 bool TableInfo::IsCreateInProgress() const {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   for (const TableInfo::TabletInfoMap::value_type& e : tablet_map_) {
     TabletMetadataLock tablet_lock(e.second, TabletMetadataLock::READ);
     if (!tablet_lock.data().is_running()) {
@@ -3202,19 +3202,19 @@ bool TableInfo::IsCreateInProgress() const {
 }
 
 void TableInfo::AddTask(MonitoredTask* task) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   task->AddRef();
   pending_tasks_.insert(task);
 }
 
 void TableInfo::RemoveTask(MonitoredTask* task) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   pending_tasks_.erase(task);
   task->Release();
 }
 
 void TableInfo::AbortTasks() {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   for (MonitoredTask* task : pending_tasks_) {
     task->Abort();
   }
@@ -3224,7 +3224,7 @@ void TableInfo::WaitTasksCompletion() {
   int wait_time = 5;
   while (1) {
     {
-      boost::lock_guard<simple_spinlock> l(lock_);
+      std::lock_guard<simple_spinlock> l(lock_);
       if (pending_tasks_.empty()) {
         break;
       }
@@ -3235,7 +3235,7 @@ void TableInfo::WaitTasksCompletion() {
 }
 
 void TableInfo::GetTaskList(std::vector<scoped_refptr<MonitoredTask> > *ret) {
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   for (MonitoredTask* task : pending_tasks_) {
     ret->push_back(make_scoped_refptr(task));
   }
@@ -3243,7 +3243,7 @@ void TableInfo::GetTaskList(std::vector<scoped_refptr<MonitoredTask> > *ret) {
 
 void TableInfo::GetAllTablets(vector<scoped_refptr<TabletInfo> > *ret) const {
   ret->clear();
-  boost::lock_guard<simple_spinlock> l(lock_);
+  std::lock_guard<simple_spinlock> l(lock_);
   for (const TableInfo::TabletInfoMap::value_type& e : tablet_map_) {
     ret->push_back(make_scoped_refptr(e.second));
   }

@@ -15,11 +15,11 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <algorithm>
-#include <boost/thread/locks.hpp>
-#include <glog/logging.h>
-
 #include "kudu/server/hybrid_clock.h"
+
+#include <algorithm>
+#include <glog/logging.h>
+#include <mutex>
 
 #include "kudu/gutil/bind.h"
 #include "kudu/gutil/strings/substitute.h"
@@ -190,7 +190,7 @@ Timestamp HybridClock::Now() {
   Timestamp now;
   uint64_t error;
 
-  boost::lock_guard<simple_spinlock> lock(lock_);
+  std::lock_guard<simple_spinlock> lock(lock_);
   NowWithError(&now, &error);
   return now;
 }
@@ -200,7 +200,7 @@ Timestamp HybridClock::NowLatest() {
   uint64_t error;
 
   {
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     NowWithError(&now, &error);
   }
 
@@ -273,7 +273,7 @@ void HybridClock::NowWithError(Timestamp* timestamp, uint64_t* max_error_usec) {
 }
 
 Status HybridClock::Update(const Timestamp& to_update) {
-  boost::lock_guard<simple_spinlock> lock(lock_);
+  std::lock_guard<simple_spinlock> lock(lock_);
   Timestamp now;
   uint64_t error_ignored;
   NowWithError(&now, &error_ignored);
@@ -306,7 +306,7 @@ Status HybridClock::WaitUntilAfter(const Timestamp& then_latest,
   Timestamp now;
   uint64_t error;
   {
-    boost::lock_guard<simple_spinlock> lock(lock_);
+    std::lock_guard<simple_spinlock> lock(lock_);
     NowWithError(&now, &error);
   }
 
@@ -350,7 +350,7 @@ Status HybridClock::WaitUntilAfter(const Timestamp& then_latest,
     Timestamp now;
     uint64_t error;
     {
-      boost::lock_guard<simple_spinlock> lock(lock_);
+      std::lock_guard<simple_spinlock> lock(lock_);
       NowWithError(&now, &error);
     }
     if (now.CompareTo(then) > 0) {
@@ -370,7 +370,7 @@ bool HybridClock::IsAfter(Timestamp t) {
   uint64_t error_usec;
   CHECK_OK(WalltimeWithError(&now_usec, &error_usec));
 
-  boost::lock_guard<simple_spinlock> lock(lock_);
+  std::lock_guard<simple_spinlock> lock(lock_);
   now_usec = std::max(now_usec, last_usec_);
 
   Timestamp now;
@@ -417,14 +417,14 @@ kudu::Status HybridClock::WalltimeWithError(uint64_t* now_usec, uint64_t* error_
 
 void HybridClock::SetMockClockWallTimeForTests(uint64_t now_usec) {
   CHECK(FLAGS_use_mock_wall_clock);
-  boost::lock_guard<simple_spinlock> lock(lock_);
+  std::lock_guard<simple_spinlock> lock(lock_);
   CHECK_GE(now_usec, mock_clock_time_usec_);
   mock_clock_time_usec_= now_usec;
 }
 
 void HybridClock::SetMockMaxClockErrorForTests(uint64_t max_error_usec) {
   CHECK(FLAGS_use_mock_wall_clock);
-  boost::lock_guard<simple_spinlock> lock(lock_);
+  std::lock_guard<simple_spinlock> lock(lock_);
   mock_clock_max_error_usec_ = max_error_usec;
 }
 
@@ -438,7 +438,7 @@ uint64_t HybridClock::ErrorForMetrics() {
   Timestamp now;
   uint64_t error;
 
-  boost::lock_guard<simple_spinlock> lock(lock_);
+  std::lock_guard<simple_spinlock> lock(lock_);
   NowWithError(&now, &error);
   return error;
 }

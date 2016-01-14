@@ -596,8 +596,7 @@ class CatalogManager : public tserver::TabletPeerLookupIf {
   // easy to make a "gettable set".
 
   // Lock protecting the various maps below.
-  typedef rw_spinlock LockType;
-  mutable LockType lock_;
+  mutable rw_spinlock lock_;
 
   // Table maps: table-id -> TableInfo and table-name -> TableInfo
   typedef std::unordered_map<std::string, scoped_refptr<TableInfo> > TableInfoMap;

@@ -17,9 +17,9 @@
 #include "kudu/consensus/consensus_queue.h"
 
 #include <algorithm>
-#include <boost/thread/locks.hpp>
 #include <gflags/gflags.h>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <utility>
 
@@ -69,6 +69,8 @@ namespace consensus {
 using log::AsyncLogReader;
 using log::Log;
 using rpc::Messenger;
+using std::lock_guard;
+using std::unique_lock;
 using strings::Substitute;
 
 METRIC_DEFINE_gauge_int64(tablet, majority_done_ops, "Leader Operations Acked by Majority",
@@ -119,7 +121,7 @@ PeerMessageQueue::PeerMessageQueue(const scoped_refptr<MetricEntity>& metric_ent
 }
 
 void PeerMessageQueue::Init(const OpId& last_locally_replicated) {
-  boost::lock_guard<simple_spinlock> lock(queue_lock_);
+  lock_guard<simple_spinlock> lock(queue_lock_);
   CHECK_EQ(queue_state_.state, kQueueConstructed);
   log_cache_.Init(last_locally_replicated);
   queue_state_.last_appended = last_locally_replicated;
@@ -130,7 +132,7 @@ void PeerMessageQueue::Init(const OpId& last_locally_replicated) {
 void PeerMessageQueue::SetLeaderMode(const OpId& committed_index,
                                      int64_t current_term,
                                      const RaftConfigPB& active_config) {
-  boost::lock_guard<simple_spinlock> lock(queue_lock_);
+  lock_guard<simple_spinlock> lock(queue_lock_);
   CHECK(committed_index.IsInitialized());
   queue_state_.current_term = current_term;
   queue_state_.committed_index = committed_index;
@@ -155,7 +157,7 @@ void PeerMessageQueue::SetLeaderMode(const OpId& committed_index,
 }
 
 void PeerMessageQueue::SetNonLeaderMode() {
-  boost::lock_guard<simple_spinlock> lock(queue_lock_);
+  lock_guard<simple_spinlock> lock(queue_lock_);
   queue_state_.active_config.reset();
   queue_state_.mode = NON_LEADER;
   queue_state_.majority_size_ = -1;
@@ -164,7 +166,7 @@ void PeerMessageQueue::SetNonLeaderMode() {
 }
 
 void PeerMessageQueue::TrackPeer(const string& uuid) {
-  boost::lock_guard<simple_spinlock> lock(queue_lock_);
+  lock_guard<simple_spinlock> lock(queue_lock_);
   TrackPeerUnlocked(uuid);
 }
 
@@ -192,7 +194,7 @@ void PeerMessageQueue::TrackPeerUnlocked(const string& uuid) {
 }
 
 void PeerMessageQueue::UntrackPeer(const string& uuid) {
-  boost::lock_guard<simple_spinlock> lock(queue_lock_);
+  lock_guard<simple_spinlock> lock(queue_lock_);
   TrackedPeer* peer = EraseKeyReturnValuePtr(&peers_map_, uuid);
   if (peer != nullptr) {
     delete peer;
@@ -229,7 +231,7 @@ void PeerMessageQueue::LocalPeerAppendFinished(const OpId& id,
   *fake_response.mutable_status()->mutable_last_received() = id;
   *fake_response.mutable_status()->mutable_last_received_current_leader() = id;
   {
-    boost::unique_lock<simple_spinlock> lock(queue_lock_);
+    lock_guard<simple_spinlock> lock(queue_lock_);
     fake_response.mutable_status()->set_last_committed_idx(queue_state_.committed_index.index());
   }
   bool junk;
@@ -246,7 +248,7 @@ Status PeerMessageQueue::AppendOperations(const vector<ReplicateRefPtr>& msgs,
                                           const StatusCallback& log_append_callback) {
 
   DFAKE_SCOPED_LOCK(append_fake_lock_);
-  boost::unique_lock<simple_spinlock> lock(queue_lock_);
+  unique_lock<simple_spinlock> lock(queue_lock_);
 
   OpId last_id = msgs.back()->get()->id();
 
@@ -278,7 +280,7 @@ Status PeerMessageQueue::RequestForPeer(const string& uuid,
   TrackedPeer* peer = nullptr;
   OpId preceding_id;
   {
-    lock_guard<simple_spinlock> lock(&queue_lock_);
+    lock_guard<simple_spinlock> lock(queue_lock_);
     DCHECK_EQ(queue_state_.state, kQueueOpen);
     DCHECK_NE(uuid, local_peer_pb_.permanent_uuid());
 
@@ -390,7 +392,7 @@ Status PeerMessageQueue::GetRemoteBootstrapRequestForPeer(const string& uuid,
                                                           StartRemoteBootstrapRequestPB* req) {
   TrackedPeer* peer = nullptr;
   {
-    lock_guard<simple_spinlock> lock(&queue_lock_);
+    lock_guard<simple_spinlock> lock(queue_lock_);
     DCHECK_EQ(queue_state_.state, kQueueOpen);
     DCHECK_NE(uuid, local_peer_pb_.permanent_uuid());
     peer = FindPtrOrNull(peers_map_, uuid);
@@ -466,7 +468,7 @@ void PeerMessageQueue::AdvanceQueueWatermark(const char* type,
 }
 
 void PeerMessageQueue::NotifyPeerIsResponsiveDespiteError(const std::string& peer_uuid) {
-  lock_guard<simple_spinlock> l(&queue_lock_);
+  lock_guard<simple_spinlock> l(queue_lock_);
   TrackedPeer* peer = FindPtrOrNull(peers_map_, peer_uuid);
   if (!peer) return;
   peer->last_successful_communication_time = MonoTime::Now(MonoTime::FINE);
@@ -481,7 +483,7 @@ void PeerMessageQueue::ResponseFromPeer(const std::string& peer_uuid,
   OpId updated_majority_replicated_opid;
   Mode mode_copy;
   {
-    unique_lock<simple_spinlock> scoped_lock(&queue_lock_);
+    lock_guard<simple_spinlock> scoped_lock(queue_lock_);
     DCHECK_NE(kQueueConstructed, queue_state_.state);
 
     TrackedPeer* peer = FindPtrOrNull(peers_map_, peer_uuid);
@@ -646,23 +648,23 @@ void PeerMessageQueue::ResponseFromPeer(const std::string& peer_uuid,
 }
 
 PeerMessageQueue::TrackedPeer PeerMessageQueue::GetTrackedPeerForTests(string uuid) {
-  unique_lock<simple_spinlock> scoped_lock(&queue_lock_);
+  lock_guard<simple_spinlock> scoped_lock(queue_lock_);
   TrackedPeer* tracked = FindOrDie(peers_map_, uuid);
   return *tracked;
 }
 
 OpId PeerMessageQueue::GetAllReplicatedIndexForTests() const {
-  boost::lock_guard<simple_spinlock> lock(queue_lock_);
+  lock_guard<simple_spinlock> lock(queue_lock_);
   return queue_state_.all_replicated_opid;
 }
 
 OpId PeerMessageQueue::GetCommittedIndexForTests() const {
-  boost::lock_guard<simple_spinlock> lock(queue_lock_);
+  lock_guard<simple_spinlock> lock(queue_lock_);
   return queue_state_.committed_index;
 }
 
 OpId PeerMessageQueue::GetMajorityReplicatedOpIdForTests() const {
-  boost::lock_guard<simple_spinlock> lock(queue_lock_);
+  lock_guard<simple_spinlock> lock(queue_lock_);
   return queue_state_.majority_replicated_opid;
 }
 
@@ -679,7 +681,7 @@ void PeerMessageQueue::UpdateMetrics() {
 }
 
 void PeerMessageQueue::DumpToStrings(vector<string>* lines) const {
-  boost::lock_guard<simple_spinlock> lock(queue_lock_);
+  lock_guard<simple_spinlock> lock(queue_lock_);
   DumpToStringsUnlocked(lines);
 }
 
@@ -696,7 +698,7 @@ void PeerMessageQueue::DumpToStringsUnlocked(vector<string>* lines) const {
 void PeerMessageQueue::DumpToHtml(std::ostream& out) const {
   using std::endl;
 
-  boost::lock_guard<simple_spinlock> lock(queue_lock_);
+  lock_guard<simple_spinlock> lock(queue_lock_);
   out << "<h3>Watermarks</h3>" << endl;
   out << "<table>" << endl;;
   out << "  <tr><th>Peer</th><th>Watermark</th></tr>" << endl;
@@ -717,7 +719,7 @@ void PeerMessageQueue::ClearUnlocked() {
 
 void PeerMessageQueue::Close() {
   observers_pool_->Shutdown();
-  boost::lock_guard<simple_spinlock> lock(queue_lock_);
+  lock_guard<simple_spinlock> lock(queue_lock_);
   ClearUnlocked();
 }
 
@@ -728,7 +730,7 @@ int64_t PeerMessageQueue::GetQueuedOperationsSizeBytesForTests() const {
 string PeerMessageQueue::ToString() const {
   // Even though metrics are thread-safe obtain the lock so that we get
   // a "consistent" snapshot of the metrics.
-  boost::lock_guard<simple_spinlock> lock(queue_lock_);
+  lock_guard<simple_spinlock> lock(queue_lock_);
   return ToStringUnlocked();
 }
 
@@ -740,7 +742,7 @@ string PeerMessageQueue::ToStringUnlocked() const {
 }
 
 void PeerMessageQueue::RegisterObserver(PeerMessageQueueObserver* observer) {
-  boost::lock_guard<simple_spinlock> lock(queue_lock_);
+  lock_guard<simple_spinlock> lock(queue_lock_);
   auto iter = std::find(observers_.begin(), observers_.end(), observer);
   if (iter == observers_.end()) {
     observers_.push_back(observer);
@@ -748,7 +750,7 @@ void PeerMessageQueue::RegisterObserver(PeerMessageQueueObserver* observer) {
 }
 
 Status PeerMessageQueue::UnRegisterObserver(PeerMessageQueueObserver* observer) {
-  boost::lock_guard<simple_spinlock> lock(queue_lock_);
+  lock_guard<simple_spinlock> lock(queue_lock_);
   auto iter = std::find(observers_.begin(), observers_.end(), observer);
   if (iter == observers_.end()) {
     return Status::NotFound("Can't find observer.");
@@ -790,7 +792,7 @@ void PeerMessageQueue::NotifyObserversOfMajorityReplOpChangeTask(
     const OpId new_majority_replicated_op) {
   std::vector<PeerMessageQueueObserver*> copy;
   {
-    boost::lock_guard<simple_spinlock> lock(queue_lock_);
+    lock_guard<simple_spinlock> lock(queue_lock_);
     copy = observers_;
   }
 
@@ -802,7 +804,7 @@ void PeerMessageQueue::NotifyObserversOfMajorityReplOpChangeTask(
   }
 
   {
-    boost::lock_guard<simple_spinlock> lock(queue_lock_);
+    lock_guard<simple_spinlock> lock(queue_lock_);
     if (new_committed_index.IsInitialized() &&
         new_committed_index.index() > queue_state_.committed_index.index()) {
       queue_state_.committed_index.CopyFrom(new_committed_index);
@@ -814,7 +816,7 @@ void PeerMessageQueue::NotifyObserversOfTermChangeTask(int64_t term) {
   MAYBE_INJECT_RANDOM_LATENCY(FLAGS_consensus_inject_latency_ms_in_notifications);
   std::vector<PeerMessageQueueObserver*> copy;
   {
-    boost::lock_guard<simple_spinlock> lock(queue_lock_);
+    lock_guard<simple_spinlock> lock(queue_lock_);
     copy = observers_;
   }
   OpId new_committed_index;
@@ -838,7 +840,7 @@ void PeerMessageQueue::NotifyObserversOfFailedFollowerTask(const string& uuid,
   MAYBE_INJECT_RANDOM_LATENCY(FLAGS_consensus_inject_latency_ms_in_notifications);
   std::vector<PeerMessageQueueObserver*> observers_copy;
   {
-    boost::lock_guard<simple_spinlock> lock(queue_lock_);
+    lock_guard<simple_spinlock> lock(queue_lock_);
     observers_copy = observers_;
   }
   OpId new_committed_index;

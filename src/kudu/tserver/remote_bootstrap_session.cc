@@ -17,6 +17,7 @@
 #include "kudu/tserver/remote_bootstrap_session.h"
 
 #include <algorithm>
+#include <mutex>
 
 #include "kudu/consensus/log.h"
 #include "kudu/consensus/log_reader.h"
@@ -64,7 +65,7 @@ RemoteBootstrapSession::~RemoteBootstrapSession() {
 
 Status RemoteBootstrapSession::Init() {
   // Take locks to support re-initialization of the same session.
-  boost::lock_guard<simple_spinlock> l(session_lock_);
+  std::lock_guard<simple_spinlock> l(session_lock_);
   RETURN_NOT_OK(UnregisterAnchorIfNeededUnlocked());
 
   STLDeleteValues(&blocks_);
@@ -261,7 +262,7 @@ Status RemoteBootstrapSession::GetLogSegmentPiece(uint64_t segment_seqno,
 }
 
 bool RemoteBootstrapSession::IsBlockOpenForTests(const BlockId& block_id) const {
-  boost::lock_guard<simple_spinlock> l(session_lock_);
+  std::lock_guard<simple_spinlock> l(session_lock_);
   return ContainsKey(blocks_, block_id);
 }
 
@@ -317,7 +318,7 @@ Status RemoteBootstrapSession::FindBlock(const BlockId& block_id,
                                          ImmutableReadableBlockInfo** block_info,
                                          RemoteBootstrapErrorPB::Code* error_code) {
   Status s;
-  boost::lock_guard<simple_spinlock> l(session_lock_);
+  std::lock_guard<simple_spinlock> l(session_lock_);
   if (!FindCopy(blocks_, block_id, block_info)) {
     *error_code = RemoteBootstrapErrorPB::BLOCK_NOT_FOUND;
     s = Status::NotFound("Block not found", block_id.ToString());
@@ -354,7 +355,7 @@ Status RemoteBootstrapSession::OpenLogSegmentUnlocked(uint64_t segment_seqno) {
 Status RemoteBootstrapSession::FindLogSegment(uint64_t segment_seqno,
                                               ImmutableRandomAccessFileInfo** file_info,
                                               RemoteBootstrapErrorPB::Code* error_code) {
-  boost::lock_guard<simple_spinlock> l(session_lock_);
+  std::lock_guard<simple_spinlock> l(session_lock_);
   if (!FindCopy(logs_, segment_seqno, file_info)) {
     *error_code = RemoteBootstrapErrorPB::WAL_SEGMENT_NOT_FOUND;
     return Status::NotFound(Substitute("Segment with sequence number $0 not found",

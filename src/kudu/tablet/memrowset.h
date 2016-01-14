@@ -19,6 +19,7 @@
 
 #include <boost/optional.hpp>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -227,7 +228,7 @@ class MemRowSet : public RowSet,
     return 0;
   }
 
-  boost::mutex *compact_flush_lock() OVERRIDE {
+  std::mutex *compact_flush_lock() OVERRIDE {
     return &compact_flush_lock_;
   }
 
@@ -360,7 +361,7 @@ class MemRowSet : public RowSet,
   volatile uint64_t debug_insert_count_;
   volatile uint64_t debug_update_count_;
 
-  boost::mutex compact_flush_lock_;
+  std::mutex compact_flush_lock_;
 
   Atomic32 has_logged_throttling_;
 
