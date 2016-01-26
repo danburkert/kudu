@@ -35,6 +35,7 @@ class ColumnRangePredicate;
 class ConstContiguousRow;
 class KuduPartialRow;
 class PartitionSchemaPB;
+class ScanSpec;
 class TypeInfo;
 
 // A Partition describes the set of rows that a Tablet is responsible for
@@ -182,6 +183,11 @@ class PartitionSchema {
   // Return true if the partitioning scheme simply range-partitions on the full primary key,
   // with no bucketing components, etc.
   bool IsSimplePKRangePartitioning(const Schema& schema) const;
+
+  // Simplify a scan spec using knowledge about the partition schema.
+  //
+  // This should be called after the scan spec is completely populated.
+  Status OptimizeScanSpec(const Schema& schema, ScanSpec* spec) const;
 
  private:
 

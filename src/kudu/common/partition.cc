@@ -19,23 +19,34 @@
 
 #include <algorithm>
 #include <set>
+#include <unordered_map>
+#include <unordered_set>
+#include <tuple>
+
+#include "google/protobuf/repeated_field.h"
 
 #include "kudu/common/partial_row.h"
 #include "kudu/common/row_key-util.h"
 #include "kudu/common/scan_predicate.h"
+#include "kudu/common/scan_spec.h"
 #include "kudu/common/wire_protocol.pb.h"
 #include "kudu/gutil/map-util.h"
 #include "kudu/gutil/strings/join.h"
 #include "kudu/gutil/strings/substitute.h"
 #include "kudu/util/hash_util.h"
-
-namespace kudu {
+#include "kudu/util/slice.h"
 
 using std::set;
 using std::string;
+using std::tuple;
+using std::unordered_map;
+using std::unordered_set;
 using std::vector;
 
 using google::protobuf::RepeatedPtrField;
+
+namespace kudu {
+
 using strings::Substitute;
 
 // The encoded size of a hash bucket in a partition key.
@@ -663,6 +674,13 @@ bool PartitionSchema::IsSimplePKRangePartitioning(const Schema& schema) const {
     if (range_schema_.column_ids[i] != schema.column_id(i)) return false;
   }
   return true;
+}
+
+Status PartitionSchema::OptimizeScanSpec(const Schema& schema, ScanSpec* spec) const {
+
+
+
+  return Status::OK();
 }
 
 // Encodes the specified primary key columns of the supplied row into the buffer.
