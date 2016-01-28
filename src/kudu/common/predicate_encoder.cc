@@ -33,14 +33,11 @@ RangePredicateEncoder::RangePredicateEncoder(const Schema* key_schema,
 }
 
 void RangePredicateEncoder::EncodeRangePredicates(ScanSpec *spec, bool erase_pushed) {
+
   // Step 1) Simplify all predicates which apply to keys.
-  //
-  // First, we loop over all predicates, find those that apply to key columns,
-  // and group them by the column they apply to. Bounds are simplified (i.e.
-  // the tightest bounds are retained). In this step, we retain the original indexes
-  // of the predicates that we've analyzed, so we can later remove them if necessary.
   vector<SimplifiedBounds> key_bounds;
-  SimplifyBounds(*spec, &key_bounds);
+  SimplifyPredicates(*spec, &key_bounds);
+  LiftPrimaryKeyBounds(*spec, &key_bounds);
 
   // Step 2) Determine the length of the "equality" part of the key.
   //
@@ -116,7 +113,7 @@ void RangePredicateEncoder::EncodeRangePredicates(ScanSpec *spec, bool erase_pus
     }
   }
 
-  // Step 4) Convert upper bound to exclusive
+  // Step 5) Convert upper bound to exclusive
   //
   // Column range predicates are inclusive, but primary key predicates are exclusive.
   // Here, we increment the upper bound key to convert between the two.
@@ -170,8 +167,8 @@ void RangePredicateEncoder::EncodeRangePredicates(ScanSpec *spec, bool erase_pus
   }
 }
 
-void RangePredicateEncoder::SimplifyBounds(const ScanSpec& spec,
-                                           vector<SimplifiedBounds>* key_bounds) const {
+void RangePredicateEncoder::SimplifyPredicates(const ScanSpec& spec,
+                                               vector<SimplifiedBounds>* key_bounds) const {
   key_bounds->clear();
   key_bounds->resize(key_schema_->num_key_columns());
 
@@ -209,6 +206,72 @@ void RangePredicateEncoder::SimplifyBounds(const ScanSpec& spec,
   }
 }
 
+void RangePredicateEncoder::LiftPrimaryKeyBounds(const ScanSpec& spec,
+                                                 vector<SimplifiedBounds>* key_bounds) const {
+
+  // Transform the upper and lower bounds into row objects.
+  const EncodedKey* lower_bound_key = spec.lower_bound_key();
+  const EncodedKey* exclusive_upper_bound_key = spec.exclusive_upper_bound_key();
+
+  const uint8_t* lower_bound_data = lower_bound_key == nullptr
+    ? nullptr : static_cast<const uint8_t*>(lower_bound_key->raw_keys()[0]);
+  const uint8_t* upper_bound_data = nullptr;
+
+  // If the exclusive upper bound exists, convert it to inclusive by
+  // decrementing it.
+  if (exclusive_upper_bound_key != nullptr) {
+    uint8_t* upper_bound_buf = static_cast<uint8_t*>(
+        CHECK_NOTNULL(arena_->AllocateBytes(key_schema_->key_byte_size())));
+
+    memcpy(upper_bound_buf, exclusive_upper_bound_key->raw_keys()[0], key_schema_->key_byte_size());
+
+    ContiguousRow upper_bound(key_schema_, upper_bound_buf);
+    if (row_key_util::DecrementKey(&upper_bound, arena_)) {
+      upper_bound_data = upper_bound_buf;
+    }
+  }
+
+  ConstContiguousRow lower_bound(key_schema_, lower_bound_data);
+  ConstContiguousRow upper_bound(key_schema_, upper_bound_data);
+
+  int num_lower_bound_predicates = 0;
+  int num_upper_bound_predicates = 0;
+
+  if (lower_bound_key && exclusive_upper_bound_key) {
+    int prefix_equalities = CountKeyPrefixEqualities(lower_bound, upper_bound);
+    num_lower_bound_predicates = std::min<int>(prefix_equalities + 1,
+                                               key_schema_->num_key_columns());
+    num_upper_bound_predicates = std::min<int>(prefix_equalities + 1,
+                                               key_schema_->num_key_columns());
+  } else if (lower_bound_key) {
+    num_lower_bound_predicates = 1;
+  } else if (exclusive_upper_bound_key) {
+    num_upper_bound_predicates = 1;
+  }
+
+  for (int idx = 0; idx < num_upper_bound_predicates; idx++) {
+    const ColumnSchema& col = key_schema_->column(idx);
+    const uint8_t * upper_bound_raw = upper_bound.cell_ptr(idx);
+    // If we haven't seen any upper bound, or this upper bound is tighter than
+    // (greater than) the one we've seen already, replace it.
+    if ((*key_bounds)[idx].upper == nullptr ||
+        col.type_info()->Compare(upper_bound_raw, (*key_bounds)[idx].upper) < 0) {
+      (*key_bounds)[idx].upper = upper_bound_raw;
+    }
+  }
+
+  for (int idx = 0; idx < num_lower_bound_predicates; idx++) {
+    const ColumnSchema& col = key_schema_->column(idx);
+    const void* lower_bound_raw = lower_bound.cell_ptr(idx);
+    // If we haven't seen any lower bound, or this lower bound is tighter than
+    // (greater than) the one we've seen already, replace it.
+    if ((*key_bounds)[idx].lower == nullptr ||
+        col.type_info()->Compare(lower_bound_raw, (*key_bounds)[idx].lower) > 0) {
+      (*key_bounds)[idx].lower = lower_bound_raw;
+    }
+  }
+}
+
 int RangePredicateEncoder::CountKeyPrefixEqualities(
     const vector<SimplifiedBounds>& key_bounds) const {
 
@@ -221,6 +284,20 @@ int RangePredicateEncoder::CountKeyPrefixEqualities(
                               key_bounds[i].lower,
                               key_bounds[i].upper);
     if (!pred.range().IsEquality()) break;
+  }
+  return i;
+}
+
+int RangePredicateEncoder::CountKeyPrefixEqualities(const ConstContiguousRow& key_a,
+                                                    const ConstContiguousRow& key_b) const {
+  DCHECK(key_schema_->Equals(*key_a.schema()));
+  DCHECK(key_schema_->Equals(*key_b.schema()));
+
+  int i;
+  for (i = 0; i < key_schema_->num_key_columns(); i++) {
+    if (key_schema_->column(i).type_info()->Compare(key_a.cell_ptr(i), key_b.cell_ptr(i)) != 0) {
+      break;
+    }
   }
   return i;
 }
