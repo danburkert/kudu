@@ -20,12 +20,12 @@
 #include <gtest/gtest_prod.h>
 #include <vector>
 
-
 #include "kudu/common/encoded_key.h"
 #include "kudu/common/row.h"
 #include "kudu/common/scan_spec.h"
 #include "kudu/common/schema.h"
 #include "kudu/util/auto_release_pool.h"
+#include "kudu/util/status.h"
 
 namespace kudu {
 
@@ -49,24 +49,30 @@ class RangePredicateEncoder {
   // then emitted back into 'spec'.
   //
   // If 'erase_pushed' is true, pushed predicates are removed from 'spec'.
-  void EncodeRangePredicates(ScanSpec *spec, bool erase_pushed);
+  //
+  // Returns Status::InvalidArgument if the scan spec would result in an empty
+  // scan.
+  Status EncodeRangePredicates(ScanSpec *spec, bool erase_pushed);
 
  private:
   friend class TestRangePredicateEncoder;
   FRIEND_TEST(CompositeIntKeysTest, TestSimplify);
+  FRIEND_TEST(CompositeIntKeysTest, TestLiftPrimaryKeyBounds);
 
   struct SimplifiedBounds {
-    SimplifiedBounds() : upper(NULL), lower(NULL) {}
+    SimplifiedBounds() : upper(nullptr), lower(nullptr) {}
     const void* upper;
     const void* lower;
     vector<int> orig_predicate_indexes;
   };
 
-  void SimplifyBounds(const ScanSpec& spec,
-                      std::vector<SimplifiedBounds>* key_bounds) const;
+  Status SimplifyBounds(const ScanSpec& spec,
+                        std::vector<SimplifiedBounds>* key_bounds) const;
 
   // Returns the number of contiguous equalities in the key prefix.
   int CountKeyPrefixEqualities(const std::vector<SimplifiedBounds>& bounds) const;
+  int CountKeyPrefixEqualities(const EncodedKey& key_a,
+                               const EncodedKey& key_b) const;
 
   // Erases any predicates we've encoded from the predicate list within the
   // ScanSpec.

@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 #include <vector>
 
+#include "kudu/common/partial_row.h"
 #include "kudu/common/predicate_encoder.h"
 #include "kudu/common/schema.h"
 #include "kudu/util/test_macros.h"
@@ -66,7 +67,24 @@ class TestRangePredicateEncoder : public KuduTest {
     spec->AddPredicate(pred);
   }
 
+  // Set the lower bound of the spec to the provided row. The row must outlive
+  // the spec.
+  void SetLowerBound(ScanSpec* spec, const KuduPartialRow& row) {
+    gscoped_ptr<EncodedKey> enc_key(EncodedKey::FromPartialRow(row));
+    spec->SetLowerBoundKey(enc_key.get());
+    pool_.Add(enc_key.release());
+  }
+
+  // Set the exclusive lower bound of the spec to the provided row. The row must
+  // outlive the spec.
+  void SetExclusiveUpperBound(ScanSpec* spec, const KuduPartialRow& row) {
+    gscoped_ptr<EncodedKey> enc_key(EncodedKey::FromPartialRow(row));
+    spec->SetExclusiveUpperBoundKey(enc_key.get());
+    pool_.Add(enc_key.release());
+  }
+
  protected:
+  AutoReleasePool pool_;
   Arena arena_;
   Schema schema_;
   RangePredicateEncoder enc_;
@@ -225,6 +243,35 @@ TEST_F(CompositeIntKeysTest, TestPredicateOrderDoesntMatter) {
   EXPECT_EQ("PK >= (int8 a=126, int8 b=126, int8 c=-128) AND "
             "PK < (int8 a=126, int8 b=127, int8 c=-128)",
             spec.ToStringWithSchema(schema_));
+}
+
+// Test that implicit constraints specified in the primary key upper/lower
+// bounds are lifted into the set of simplified predicates.
+TEST_F(CompositeIntKeysTest, TestLiftPrimaryKeyBounds) {
+  ScanSpec spec;
+  AddPredicate<int8_t>(&spec, "b", GE, 3);
+  AddPredicate<int8_t>(&spec, "b", LE, 100);
+
+  KuduPartialRow lower_bound(&schema_);
+  CHECK_OK(lower_bound.SetInt8("a", 10));
+
+  KuduPartialRow upper_bound(&schema_);
+  CHECK_OK(upper_bound.SetInt8("a", 10));
+
+  SetLowerBound(&spec, lower_bound);
+  SetExclusiveUpperBound(&spec, upper_bound);
+
+  vector<RangePredicateEncoder::SimplifiedBounds> bounds;
+  enc_.SimplifyBounds(spec, &bounds);
+  ASSERT_EQ(3, bounds.size());
+  ASSERT_EQ("(`a` BETWEEN 10 AND 10)",
+            ColumnRangePredicate(schema_.column(0), bounds[0].lower, bounds[0].upper).ToString());
+
+  ASSERT_EQ("(`b` BETWEEN 3 AND 100)",
+            ColumnRangePredicate(schema_.column(1), bounds[1].lower, bounds[1].upper).ToString());
+
+  ASSERT_EQ(nullptr, bounds[2].lower);
+  ASSERT_EQ(nullptr, bounds[2].upper);
 }
 
 // Tests for String parts in composite keys
