@@ -49,9 +49,8 @@ TEST_F(PartialRowTest, UnitTest) {
   EXPECT_FALSE(row.IsKeySet());
   EXPECT_EQ("", row.ToString());
 
-  // Encoding the key when it is not set should give an error.
-  EXPECT_EQ("Invalid argument: All key columns must be set: key",
-            row.EncodeRowKey(&enc_key).ToString());
+  // Encoding the key when it is not set should return an empty key.
+  EXPECT_EQ("", row.ToEncodedRowKeyOrDie());
 
   // Set just the key.
   EXPECT_OK(row.SetInt32("key", 12345));

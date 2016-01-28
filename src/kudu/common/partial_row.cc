@@ -607,20 +607,11 @@ Status KuduPartialRow::Get(int col_idx, typename T::cpp_type* val) const {
 // Key-encoding related functions
 //------------------------------------------------------------
 Status KuduPartialRow::EncodeRowKey(string* encoded_key) const {
-  // Currently, a row key must be fully specified.
-  // TODO: allow specifying a prefix of the key, and automatically
-  // fill the rest with minimum values.
-  for (int i = 0; i < schema_->num_key_columns(); i++) {
-    if (PREDICT_FALSE(!IsColumnSet(i))) {
-      return Status::InvalidArgument("All key columns must be set",
-                                     schema_->column(i).name());
-    }
-  }
-
   encoded_key->clear();
   ContiguousRow row(schema_, row_data_);
 
   for (int i = 0; i < schema_->num_key_columns(); i++) {
+    if (!IsColumnSet(i)) { break; }
     bool is_last = i == schema_->num_key_columns() - 1;
     const TypeInfo* ti = schema_->column(i).type_info();
     GetKeyEncoder<string>(ti).Encode(row.cell_ptr(i), is_last, encoded_key);

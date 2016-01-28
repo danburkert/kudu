@@ -26,6 +26,7 @@
 namespace kudu {
 
 class ConstContiguousRow;
+class KuduPartialRow;
 
 class EncodedKey {
  public:
@@ -40,6 +41,8 @@ class EncodedKey {
              size_t num_key_cols);
 
   static gscoped_ptr<EncodedKey> FromContiguousRow(const ConstContiguousRow& row);
+
+  static gscoped_ptr<EncodedKey> FromPartialRow(const KuduPartialRow& row);
 
   // Decode the encoded key specified in 'encoded', which must correspond to the
   // provided schema.

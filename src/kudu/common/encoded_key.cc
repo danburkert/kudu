@@ -19,13 +19,13 @@
 
 #include "kudu/common/encoded_key.h"
 #include "kudu/common/key_encoder.h"
+#include "kudu/common/partial_row.h"
 #include "kudu/common/row.h"
 #include "kudu/common/row_key-util.h"
 
 namespace kudu {
 
 using std::string;
-
 
 EncodedKey::EncodedKey(faststring* data,
                        vector<const void *> *raw_keys,
@@ -46,7 +46,22 @@ gscoped_ptr<EncodedKey> EncodedKey::FromContiguousRow(const ConstContiguousRow& 
     kb.AddColumnKey(row.cell_ptr(i));
   }
   return make_gscoped_ptr(kb.BuildEncodedKey());
+}
 
+gscoped_ptr<EncodedKey> EncodedKey::FromPartialRow(const KuduPartialRow& row) {
+  EncodedKeyBuilder kb(row.schema());
+
+  ConstContiguousRow contiguous_row(row.schema(), row.row_data_);
+
+  for (int i = 0; i < row.schema()->num_key_columns(); i++) {
+    if (row.IsColumnSet(i)) {
+      kb.AddColumnKey(contiguous_row.cell_ptr(i));
+    } else {
+      break;
+    }
+  }
+
+  return make_gscoped_ptr(kb.BuildEncodedKey());
 }
 
 Status EncodedKey::DecodeEncodedString(const Schema& schema,
@@ -58,7 +73,7 @@ Status EncodedKey::DecodeEncodedString(const Schema& schema,
     return Status::RuntimeError("OOM");
   }
 
-  RETURN_NOT_OK(schema.DecodeRowKey(encoded, raw_key_buf, arena));
+  CHECK_OK(schema.DecodeRowKey(encoded, raw_key_buf, arena));
 
   vector<const void*> raw_keys(schema.num_key_columns());
   for (int i = 0; i < schema.num_key_columns(); i++) {

@@ -958,10 +958,11 @@ Status KuduScanner::AddConjunctPredicate(KuduPredicate* pred) {
 }
 
 Status KuduScanner::AddLowerBound(const KuduPartialRow& key) {
-  gscoped_ptr<string> enc(new string());
-  RETURN_NOT_OK(key.EncodeRowKey(enc.get()));
-  RETURN_NOT_OK(AddLowerBoundRaw(Slice(*enc)));
-  data_->pool_.Add(enc.release());
+  gscoped_ptr<KuduPartialRow> copy(new KuduPartialRow(key));
+  gscoped_ptr<EncodedKey> enc_key(EncodedKey::FromPartialRow(*copy));
+  data_->spec_.SetLowerBoundKey(enc_key.get());
+  data_->pool_.Add(copy.release());
+  data_->pool_.Add(enc_key.release());
   return Status::OK();
 }
 
@@ -976,10 +977,11 @@ Status KuduScanner::AddLowerBoundRaw(const Slice& key) {
 }
 
 Status KuduScanner::AddExclusiveUpperBound(const KuduPartialRow& key) {
-  gscoped_ptr<string> enc(new string());
-  RETURN_NOT_OK(key.EncodeRowKey(enc.get()));
-  RETURN_NOT_OK(AddExclusiveUpperBoundRaw(Slice(*enc)));
-  data_->pool_.Add(enc.release());
+  gscoped_ptr<KuduPartialRow> copy(new KuduPartialRow(key));
+  gscoped_ptr<EncodedKey> enc_key(EncodedKey::FromPartialRow(*copy));
+  data_->spec_.SetExclusiveUpperBoundKey(enc_key.get());
+  data_->pool_.Add(copy.release());
+  data_->pool_.Add(enc_key.release());
   return Status::OK();
 }
 
