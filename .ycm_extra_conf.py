@@ -62,7 +62,7 @@ flags = [
 '-g',
 '-fPIC',
 '-Isrc',
-'-Ibuild/latest/src'
+'-Ibuild/latest/src',
 '-isystem',
 'thirdparty/installed/include',
 '-isystem',

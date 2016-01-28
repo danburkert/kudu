@@ -146,56 +146,48 @@ Status KuduPartialRow::Set(int col_idx,
   return Status::OK();
 }
 
-Status KuduPartialRow::Set(int32_t column_idx, const uint8_t* val) {
+Status KuduPartialRow::Set(int32_t column_idx, const uint8_t* val, bool owned) {
   const ColumnSchema& column_schema = schema()->column(column_idx);
 
   switch (column_schema.type_info()->type()) {
     case BOOL: {
-      RETURN_NOT_OK(SetBool(column_idx, *reinterpret_cast<const bool*>(val)));
-      break;
+      return Set<TypeTraits<BOOL>>(column_idx, *reinterpret_cast<const bool*>(val), owned);
     };
     case INT8: {
-      RETURN_NOT_OK(SetInt8(column_idx, *reinterpret_cast<const int8_t*>(val)));
-      break;
+      return Set<TypeTraits<INT8>>(column_idx, *reinterpret_cast<const int8_t*>(val), owned);
     };
     case INT16: {
-      RETURN_NOT_OK(SetInt16(column_idx, *reinterpret_cast<const int16_t*>(val)));
-      break;
+      return Set<TypeTraits<INT16>>(column_idx, *reinterpret_cast<const int16_t*>(val), owned);
     };
     case INT32: {
-      RETURN_NOT_OK(SetInt32(column_idx, *reinterpret_cast<const int32_t*>(val)));
-      break;
+      return Set<TypeTraits<INT32>>(column_idx, *reinterpret_cast<const int32_t*>(val), owned);
     };
     case INT64: {
-      RETURN_NOT_OK(SetInt64(column_idx, *reinterpret_cast<const int64_t*>(val)));
-      break;
+      return Set<TypeTraits<INT64>>(column_idx, *reinterpret_cast<const int64_t*>(val), owned);
     };
     case FLOAT: {
-      RETURN_NOT_OK(SetFloat(column_idx, *reinterpret_cast<const float*>(val)));
-      break;
+      return Set<TypeTraits<FLOAT>>(column_idx, *reinterpret_cast<const float*>(val), owned);
     };
     case DOUBLE: {
-      RETURN_NOT_OK(SetDouble(column_idx, *reinterpret_cast<const double*>(val)));
-      break;
+      return Set<TypeTraits<DOUBLE>>(column_idx, *reinterpret_cast<const double*>(val), owned);
     };
     case STRING: {
-      RETURN_NOT_OK(SetStringCopy(column_idx, *reinterpret_cast<const Slice*>(val)));
-      break;
+      return Set<TypeTraits<STRING>>(column_idx, *reinterpret_cast<const Slice*>(val), owned);
     };
     case BINARY: {
-      RETURN_NOT_OK(SetBinaryCopy(column_idx, *reinterpret_cast<const Slice*>(val)));
-      break;
+      return Set<TypeTraits<BINARY>>(column_idx, *reinterpret_cast<const Slice*>(val), owned);
     };
     case TIMESTAMP: {
-      RETURN_NOT_OK(SetTimestamp(column_idx, *reinterpret_cast<const int64_t*>(val)));
-      break;
+      return Set<TypeTraits<TIMESTAMP>>(column_idx, *reinterpret_cast<const int64_t*>(val), owned);
     };
     default: {
-      return Status::InvalidArgument("Unknown column type in schema",
-                                     column_schema.ToString());
+      return Status::InvalidArgument("Unknown column type in schema", column_schema.ToString());
     };
   }
-  return Status::OK();
+}
+
+const uint8_t* KuduPartialRow::Get(int32_t column_idx) {
+  return ContiguousRow(schema_, row_data_).cell_ptr(column_idx);
 }
 
 void KuduPartialRow::DeallocateStringIfSet(int col_idx, const ColumnSchema& col) {

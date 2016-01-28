@@ -52,6 +52,7 @@ set(COMMON_SRCS
   row_changelist.cc
   row_key-util.cc
   row_operations.cc
+  scan_optimizer.cc
   scan_predicate.cc
   scan_spec.cc
   schema.cc

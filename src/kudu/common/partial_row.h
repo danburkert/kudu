@@ -194,6 +194,7 @@ class KUDU_EXPORT KuduPartialRow {
   friend class RowOperationsPBEncoder;
   friend class client::KuduWriteOperation;   // for row_data_.
   friend class PartitionSchema;
+  friend class ScanOptimizer;
   template<typename KeyTypeWrapper> friend struct client::SliceKeysTestSetup;
   template<typename KeyTypeWrapper> friend struct client::IntKeysTestSetup;
 
@@ -206,7 +207,15 @@ class KUDU_EXPORT KuduPartialRow {
              bool owned = false);
 
   // Runtime version of the generic setter.
-  Status Set(int32_t column_idx, const uint8_t* val);
+  //
+  // Note: unlike the normal partial row setters, this one defaults to copying
+  // indirect data.
+  Status Set(int32_t column_idx, const uint8_t* val, bool owned = true);
+
+  // Retrieve the cell ptr of the column in the partial row.
+  //
+  // This should only be called when the column is known to be set.
+  const uint8_t* Get(int32_t column_idx);
 
   template<typename T>
   Status Get(const Slice& col_name, typename T::cpp_type* val) const;
