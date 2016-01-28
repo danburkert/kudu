@@ -19,23 +19,34 @@
 
 #include <algorithm>
 #include <set>
+#include <unordered_map>
+#include <unordered_set>
+#include <tuple>
+
+#include "google/protobuf/repeated_field.h"
 
 #include "kudu/common/partial_row.h"
 #include "kudu/common/row_key-util.h"
 #include "kudu/common/scan_predicate.h"
+#include "kudu/common/scan_spec.h"
 #include "kudu/common/wire_protocol.pb.h"
 #include "kudu/gutil/map-util.h"
 #include "kudu/gutil/strings/join.h"
 #include "kudu/gutil/strings/substitute.h"
 #include "kudu/util/hash_util.h"
-
-namespace kudu {
+#include "kudu/util/slice.h"
 
 using std::set;
 using std::string;
+using std::tuple;
+using std::unordered_map;
+using std::unordered_set;
 using std::vector;
 
 using google::protobuf::RepeatedPtrField;
+
+namespace kudu {
+
 using strings::Substitute;
 
 // The encoded size of a hash bucket in a partition key.
@@ -663,6 +674,57 @@ bool PartitionSchema::IsSimplePKRangePartitioning(const Schema& schema) const {
     if (range_schema_.column_ids[i] != schema.column_id(i)) return false;
   }
   return true;
+}
+
+Status PartitionSchema::CreatePartitionPruner(const Schema& schema,
+                                              ScanSpec& spec,
+                                              PartitionPruner* pruner) const {
+  pruner->hash_buckets_.clear();
+  pruner->hash_buckets_.reserve(hash_bucket_schemas_.size());
+
+  if (!spec.predicates().empty()) {
+
+    // Map of column ID to predicate
+    unordered_map<ColumnId, const ColumnRangePredicate*> predicates;
+    for (const ColumnRangePredicate& predicate : spec.predicates()) {
+      const string& column_name = predicate.column().name();
+      int32_t column_idx = schema.find_column(column_name);
+      if (column_idx == Schema::kColumnNotFound) {
+        LOG(FATAL) << "Scan spec contained an unknown column: " << column_name;
+      }
+      // TODO: check for emplace fail due to multiple predicates on same column?
+      predicates.emplace(schema.column_id(column_idx), &predicate);
+    }
+
+    vector<int32_t> buckets;
+
+    // Build up the hash buckets, or -1
+    for (const auto& hash_bucket_schema : hash_bucket_schemas_) {
+      string encoded_value;
+      const auto& column_ids = hash_bucket_schema.column_ids;
+
+      for (int i = 0; i < column_ids.size(); i++) {
+        ColumnId column_id = hash_bucket_schema.column_ids[i];
+        const ColumnRangePredicate** predicate = FindOrNull(predicates, column_id);
+        if (predicate != nullptr && (*predicate)->range().IsEquality()) {
+          const TypeInfo* type = (*predicate)->column().type_info();
+          bool is_final = i + 1 == column_ids.size();
+          GetKeyEncoder<string>(type).Encode((*predicate)->range().lower_bound(),
+                                             is_final,
+                                             &encoded_value);
+
+          if (is_final) {
+            int32_t bucket = BucketForEncodedColumns(encoded_value, hash_bucket_schema);
+            buckets.push_back(bucket);
+          }
+        } else {
+          buckets.push_back(-1);
+          break;
+        }
+      }
+    }
+  }
+  return Status::OK();
 }
 
 // Encodes the specified primary key columns of the supplied row into the buffer.
