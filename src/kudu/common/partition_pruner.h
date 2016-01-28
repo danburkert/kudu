@@ -27,32 +27,5 @@ class PartitionSchema;
 class ScanSpec;
 class Schema;
 
-class PartitionPruner {
- public:
-
-  PartitionPruner(const Schema& schema,
-                  const PartitionSchema& partition_schema,
-                  const ScanSpec& scan_spec);
-
-  // Returns true if the provided partition should be pruned.
-  bool should_prune(const Partition& partition) const;
-
-  // Functor method which calls should_prune.
-  bool operator()(const Partition& partition) const {
-    return this->should_prune(partition);
-  }
-
- private:
-
-  // The first (inclusive) range key in the scan.
-  std::string range_key_start_;
-
-  // The final (exclusive) range key in the scan.
-  std::string range_key_end_;
-
-  // For each hash component in the table, this vector holds the value of the
-  // hash bucket if the scan is constrained to a single hash bucket, or -1.
-  std::vector<int32_t> hash_buckets_;
-};
 
 } // namespace kudu

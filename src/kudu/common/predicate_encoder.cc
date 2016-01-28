@@ -32,7 +32,7 @@ RangePredicateEncoder::RangePredicateEncoder(const Schema* key_schema,
     arena_(arena) {
 }
 
-void RangePredicateEncoder::EncodeRangePredicates(ScanSpec *spec, bool erase_pushed) {
+Status RangePredicateEncoder::EncodeRangePredicates(ScanSpec *spec, bool erase_pushed) {
   // Step 1) Simplify all predicates which apply to keys.
   //
   // First, we loop over all predicates, find those that apply to key columns,
@@ -40,7 +40,7 @@ void RangePredicateEncoder::EncodeRangePredicates(ScanSpec *spec, bool erase_pus
   // the tightest bounds are retained). In this step, we retain the original indexes
   // of the predicates that we've analyzed, so we can later remove them if necessary.
   vector<SimplifiedBounds> key_bounds;
-  SimplifyBounds(*spec, &key_bounds);
+  RETURN_NOT_OK(SimplifyBounds(*spec, &key_bounds));
 
   // Step 2) Determine the length of the "equality" part of the key.
   //
@@ -116,7 +116,7 @@ void RangePredicateEncoder::EncodeRangePredicates(ScanSpec *spec, bool erase_pus
     }
   }
 
-  // Step 4) Convert upper bound to exclusive
+  // Step 5) Convert upper bound to exclusive
   //
   // Column range predicates are inclusive, but primary key predicates are exclusive.
   // Here, we increment the upper bound key to convert between the two.
@@ -168,13 +168,15 @@ void RangePredicateEncoder::EncodeRangePredicates(ScanSpec *spec, bool erase_pus
     pool_.Add(upper);
     spec->SetExclusiveUpperBoundKey(upper);
   }
+  return Status::OK();
 }
 
-void RangePredicateEncoder::SimplifyBounds(const ScanSpec& spec,
-                                           vector<SimplifiedBounds>* key_bounds) const {
+Status RangePredicateEncoder::SimplifyBounds(const ScanSpec& spec,
+                                             vector<SimplifiedBounds>* key_bounds) const {
   key_bounds->clear();
   key_bounds->resize(key_schema_->num_key_columns());
 
+  // Step 1: simplify predicates
   for (int i = 0; i < spec.predicates().size(); i++) {
     const ColumnRangePredicate& pred = spec.predicates()[i];
     int idx = key_schema_->find_column(pred.column().name());
@@ -207,6 +209,60 @@ void RangePredicateEncoder::SimplifyBounds(const ScanSpec& spec,
       }
     }
   }
+
+  // Step 2: lift implicit predicates specified as part of the lower and upper
+  // bound primary key constraints into the simplified predicate bounds.
+  //
+  // When the lower and exclusive upper bound primary keys have a prefix of
+  // equal components, the components can be lifted into an equality predicate
+  // over their associated column. Optionally, a single range predicate can be
+  // lifted from the component following the prefix of equal components (if it
+  // exists).
+
+  const EncodedKey* lower_bound_key = spec.lower_bound_key();
+  const EncodedKey* exclusive_upper_bound_key = spec.exclusive_upper_bound_key();
+
+  int num_lower_bound_predicates = 0;
+  int num_exclusive_upper_bound_predicates = 0;
+
+  if (lower_bound_key && exclusive_upper_bound_key) {
+    int prefix_equalities = CountKeyPrefixEqualities(*lower_bound_key, *exclusive_upper_bound_key);
+    num_lower_bound_predicates =
+      std::min<int>(prefix_equalities + 1, lower_bound_key->raw_keys().size());
+    num_exclusive_upper_bound_predicates =
+      std::min<int>(prefix_equalities + 1, exclusive_upper_bound_key->raw_keys().size());
+  } else if (lower_bound_key) {
+    num_lower_bound_predicates = 1;
+  } else if (exclusive_upper_bound_key) {
+    num_exclusive_upper_bound_predicates = 1;
+  }
+
+  for (int idx = 0; idx < num_exclusive_upper_bound_predicates; idx++) {
+    const ColumnSchema& col = key_schema_->column(idx);
+    const void* exclusive_upper_bound_raw = exclusive_upper_bound_key->raw_keys()[idx];
+    // If we haven't seen any upper bound, or this upper bound is tighter than
+    // (greater than) the one we've seen already, replace it.
+    if ((*key_bounds)[idx].upper == nullptr ||
+        col.type_info()->Compare(exclusive_upper_bound_raw, (*key_bounds)[idx].upper) < 0) {
+      (*key_bounds)[idx].upper = exclusive_upper_bound_raw;
+    }
+  }
+
+  for (int idx = 0; idx < num_lower_bound_predicates; idx++) {
+    const ColumnSchema& col = key_schema_->column(idx);
+    const void* lower_bound_raw = lower_bound_key->raw_keys()[idx];
+    // If we haven't seen any lower bound, or this lower bound is tighter than
+    // (greater than) the one we've seen already, replace it.
+    if ((*key_bounds)[idx].lower == nullptr ||
+        col.type_info()->Compare(lower_bound_raw, (*key_bounds)[idx].lower) > 0) {
+      (*key_bounds)[idx].lower = lower_bound_raw;
+    }
+  }
+
+  // Step 3: check that all predicate bounds are coherent
+  
+
+  return Status::OK();
 }
 
 int RangePredicateEncoder::CountKeyPrefixEqualities(
@@ -221,6 +277,18 @@ int RangePredicateEncoder::CountKeyPrefixEqualities(
                               key_bounds[i].lower,
                               key_bounds[i].upper);
     if (!pred.range().IsEquality()) break;
+  }
+  return i;
+}
+
+int RangePredicateEncoder::CountKeyPrefixEqualities(const EncodedKey& key_a,
+                                                    const EncodedKey& key_b) const {
+  int num_components = std::min(key_a.raw_keys().size(), key_b.raw_keys().size());
+  int i;
+  for (i = 0; i < num_components; i++) {
+    if (key_schema_->column(i).type_info()->Compare(key_a.raw_keys()[i], key_b.raw_keys()[i]) != 0) {
+      break;
+    }
   }
   return i;
 }

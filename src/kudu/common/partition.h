@@ -88,6 +88,32 @@ class Partition {
   std::string partition_key_end_;
 };
 
+class PartitionPruner {
+ public:
+
+  // Returns true if the provided partition should be pruned.
+  bool should_prune(const Partition& partition) const;
+
+  // Functor method which calls should_prune.
+  bool operator()(const Partition& partition) const {
+    return this->should_prune(partition);
+  }
+
+ private:
+
+  friend class PartitionSchema;
+
+  // The first (inclusive) range key in the scan.
+  std::string range_key_start_;
+
+  // The final (exclusive) range key in the scan.
+  std::string range_key_end_;
+
+  // For each hash component in the table, this vector holds the value of the
+  // hash bucket if the scan is constrained to a single hash bucket, or -1.
+  std::vector<int32_t> hash_buckets_;
+};
+
 // A partition schema describes how the rows of a table are distributed among
 // tablets.
 //
@@ -184,12 +210,11 @@ class PartitionSchema {
   // with no bucketing components, etc.
   bool IsSimplePKRangePartitioning(const Schema& schema) const;
 
-  // Simplify a scan spec using knowledge about the partition schema.
-  //
-  // This should be called after the scan spec is completely populated.
-  Status OptimizeScanSpec(const Schema& schema, ScanSpec* spec) const;
+  // Builds the partition pruner for the provided shcema and scan spec.
+  Status CreatePartitionPruner(const Schema& schema, ScanSpec& spec, PartitionPruner* pruner) const;
 
  private:
+  friend class PartitionPruner;
 
   struct RangeSchema {
     std::vector<ColumnId> column_ids;

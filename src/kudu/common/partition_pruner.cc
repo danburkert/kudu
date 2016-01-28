@@ -20,26 +20,27 @@
 #include "kudu/common/partition.h"
 #include "kudu/common/scan_spec.h"
 #include "kudu/common/schema.h"
+#include "kudu/util/status.h"
 
 namespace kudu {
 
 PartitionPruner::PartitionPruner(const Schema& schema,
                                  const PartitionSchema& partition_schema,
-                                 const ScanSpec& scan_spec)
+                                 const ScanSpec& spec)
     : range_key_start_(),
       range_key_end_(),
       hash_buckets_() {
-  hash_buckets_.reserve();
+  hash_buckets_.reserve(partition_schema.hash_bucket_schemas_.size());
 
-  if (!spec->predicates().empty()) {
+  if (!spec.predicates().empty()) {
 
     // Map of column ID to predicate
     unordered_map<ColumnId, const ColumnRangePredicate*> predicates;
-    for (const ColumnRangePredicate& predicate : spec->predicates()) {
+    for (const ColumnRangePredicate& predicate : spec.predicates()) {
       const string& column_name = predicate.column().name();
       int32_t column_idx = schema.find_column(column_name);
       if (column_idx == Schema::kColumnNotFound) {
-        return Status::InvalidArgument("Scan spec contained an unknown column", column_name);
+        LOG(FATAL) << "Scan spec contained an unknown column: " << column_name;
       }
       // TODO: check for emplace fail due to multiple predicates on same column?
       predicates.emplace(schema.column_id(column_idx), predicate);
@@ -53,38 +54,20 @@ PartitionPruner::PartitionPruner(const Schema& schema,
     // order and check whether the scan spec specifies an equality relation on
     // the columns in the hash component. If so, the partition key range can be
     // reduced to cover only that hash bucket.
-    if (!hash_bucket_schemas_.empty()) {
-      for (const HashBucketSchema& hash_bucket : hash_bucket_schemas_) {
-        string encoded_value;
-        bool cont = true;
-        for (vector<ColumnId>::const_iterator column_id = hash_bucket.column_ids.begin();
-             cont && column_id != hash_bucket.column_ids.end(); column_id++) {
-          const ColumnRangePredicate** predicate = FindOrNull(predicates, *column_id);
-          if (predicate != nullptr && (*predicate)->range().IsEquality()) {
+    for (const auto& hash_bucket_schema : partition_schema.hash_bucket_schemas_) {
+      string encoded_value;
+      bool cont = true;
+      for (vector<ColumnId>::const_iterator column_id = hash_bucket_schema.column_ids.begin();
+           cont && column_id != hash_bucket_schema.column_ids.end(); column_id++) {
+        const ColumnRangePredicate** predicate = FindOrNull(predicates, *column_id);
+        if (predicate != nullptr && (*predicate)->range().IsEquality()) {
 
-          } else {
-            buckets.push_back(-1);
-            break;
-          }
+        } else {
+          buckets.push_back(-1);
+          break;
         }
       }
     }
-
-
-
-
   }
-
-
-
-
-
-
-
-
-
-
-
 }
-
 } // namespace kudu

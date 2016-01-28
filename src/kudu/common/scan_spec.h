@@ -20,8 +20,9 @@
 #include <string>
 #include <vector>
 
-#include "kudu/common/scan_predicate.h"
 #include "kudu/common/encoded_key.h"
+#include "kudu/common/partition.h"
+#include "kudu/common/scan_predicate.h"
 
 namespace kudu {
 
@@ -100,6 +101,9 @@ class ScanSpec {
     cache_blocks_ = cache_blocks;
   }
 
+  const PartitionPruner& partition_pruner() const;
+  PartitionPruner* mutable_partition_pruner() const;
+
   std::string ToString() const;
   std::string ToStringWithSchema(const Schema& s) const;
 
@@ -108,6 +112,7 @@ class ScanSpec {
   std::string ToStringWithOptionalSchema(const Schema* s) const;
 
   vector<ColumnRangePredicate> predicates_;
+  PartitionPruner partition_pruner_;
   const EncodedKey* lower_bound_key_;
   const EncodedKey* exclusive_upper_bound_key_;
   std::string lower_bound_partition_key_;
