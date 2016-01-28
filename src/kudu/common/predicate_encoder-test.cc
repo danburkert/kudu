@@ -19,8 +19,8 @@
 #include <gtest/gtest.h>
 #include <vector>
 
-#include "kudu/common/schema.h"
 #include "kudu/common/predicate_encoder.h"
+#include "kudu/common/schema.h"
 #include "kudu/util/test_macros.h"
 #include "kudu/util/test_util.h"
 
@@ -66,7 +66,6 @@ class TestRangePredicateEncoder : public KuduTest {
     spec->AddPredicate(pred);
   }
 
-
  protected:
   Arena arena_;
   Schema schema_;
@@ -77,9 +76,9 @@ class CompositeIntKeysTest : public TestRangePredicateEncoder {
  public:
   CompositeIntKeysTest() :
     TestRangePredicateEncoder(
-        Schema({ ColumnSchema("a", UINT8),
-                 ColumnSchema("b", UINT8),
-                 ColumnSchema("c", UINT8) },
+        Schema({ ColumnSchema("a", INT8),
+                 ColumnSchema("b", INT8),
+                 ColumnSchema("c", INT8) },
                3)) {
   }
 };
@@ -88,54 +87,54 @@ class CompositeIntKeysTest : public TestRangePredicateEncoder {
 // RangePredicateEncoder::Simplify()
 TEST_F(CompositeIntKeysTest, TestSimplify) {
   ScanSpec spec;
-  AddPredicate<uint8_t>(&spec, "a", EQ, 255);
-  AddPredicate<uint8_t>(&spec, "b", GE, 3);
-  AddPredicate<uint8_t>(&spec, "b", LE, 255);
-  AddPredicate<uint8_t>(&spec, "b", LE, 200);
-  AddPredicate<uint8_t>(&spec, "c", LE, 128);
+  AddPredicate<int8_t>(&spec, "a", EQ, 127);
+  AddPredicate<int8_t>(&spec, "b", GE, 3);
+  AddPredicate<int8_t>(&spec, "b", LE, 127);
+  AddPredicate<int8_t>(&spec, "b", LE, 100);
+  AddPredicate<int8_t>(&spec, "c", LE, 64);
   SCOPED_TRACE(spec.ToStringWithSchema(schema_));
   vector<RangePredicateEncoder::SimplifiedBounds> bounds;
   enc_.SimplifyBounds(spec, &bounds);
   ASSERT_EQ(3, bounds.size());
-  ASSERT_EQ("(`a` BETWEEN 255 AND 255)",
+  ASSERT_EQ("(`a` BETWEEN 127 AND 127)",
             ColumnRangePredicate(schema_.column(0), bounds[0].lower, bounds[0].upper).ToString());
 
-  ASSERT_EQ("(`b` BETWEEN 3 AND 200)",
+  ASSERT_EQ("(`b` BETWEEN 3 AND 100)",
             ColumnRangePredicate(schema_.column(1), bounds[1].lower, bounds[1].upper).ToString());
-  ASSERT_EQ("(`c` <= 128)",
+  ASSERT_EQ("(`c` <= 64)",
             ColumnRangePredicate(schema_.column(2), bounds[2].lower, bounds[2].upper).ToString());
 }
 
 // Predicate: a == 128
 TEST_F(CompositeIntKeysTest, TestPrefixEquality) {
   ScanSpec spec;
-  AddPredicate<uint8_t>(&spec, "a", EQ, 128);
+  AddPredicate<int8_t>(&spec, "a", EQ, 64);
   SCOPED_TRACE(spec.ToStringWithSchema(schema_));
   ASSERT_NO_FATAL_FAILURE(enc_.EncodeRangePredicates(&spec, true));
-  // Expect: key >= (128, 0, 0) AND key < (129, 0, 0)
-  EXPECT_EQ("PK >= (uint8 a=128, uint8 b=0, uint8 c=0) AND "
-            "PK < (uint8 a=129, uint8 b=0, uint8 c=0)",
+  // Expect: key >= (64, -128, -128) AND key < (65, -128, -128)
+  EXPECT_EQ("PK >= (int8 a=64, int8 b=-128, int8 c=-128) AND "
+            "PK < (int8 a=65, int8 b=-128, int8 c=-128)",
             spec.ToStringWithSchema(schema_));
 }
 
-// Predicate: a <= 254
+// Predicate: a <= 126
 TEST_F(CompositeIntKeysTest, TestPrefixUpperBound) {
   ScanSpec spec;
-  AddPredicate<uint8_t>(&spec, "a", LE, 254);
+  AddPredicate<int8_t>(&spec, "a", LE, 126);
   SCOPED_TRACE(spec.ToStringWithSchema(schema_));
   ASSERT_NO_FATAL_FAILURE(enc_.EncodeRangePredicates(&spec, true));
-  EXPECT_EQ("PK < (uint8 a=255, uint8 b=0, uint8 c=0)",
+  EXPECT_EQ("PK < (int8 a=127, int8 b=-128, int8 c=-128)",
             spec.ToStringWithSchema(schema_));
 }
 
-// Predicate: a >= 254
+// Predicate: a >= 126
 TEST_F(CompositeIntKeysTest, TestPrefixLowerBound) {
-  // Predicate: a >= 254
+  // Predicate: a >= 126
   ScanSpec spec;
-  AddPredicate<uint8_t>(&spec, "a", GE, 254);
+  AddPredicate<int8_t>(&spec, "a", GE, 126);
   SCOPED_TRACE(spec.ToStringWithSchema(schema_));
   ASSERT_NO_FATAL_FAILURE(enc_.EncodeRangePredicates(&spec, true));
-  EXPECT_EQ("PK >= (uint8 a=254, uint8 b=0, uint8 c=0)", spec.ToStringWithSchema(schema_));
+  EXPECT_EQ("PK >= (int8 a=126, int8 b=-128, int8 c=-128)", spec.ToStringWithSchema(schema_));
 }
 
 // Test a predicate on a non-prefix part of the key. Can't be pushed.
@@ -143,11 +142,11 @@ TEST_F(CompositeIntKeysTest, TestPrefixLowerBound) {
 // Predicate: b == 128
 TEST_F(CompositeIntKeysTest, TestNonPrefix) {
   ScanSpec spec;
-  AddPredicate<uint8_t>(&spec, "b", EQ, 128);
+  AddPredicate<int8_t>(&spec, "b", EQ, 64);
   SCOPED_TRACE(spec.ToStringWithSchema(schema_));
   ASSERT_NO_FATAL_FAILURE(enc_.EncodeRangePredicates(&spec, true));
   // Expect: nothing pushed (predicate is still on `b`, not PK)
-  EXPECT_EQ("(`b` BETWEEN 128 AND 128)",
+  EXPECT_EQ("(`b` BETWEEN 64 AND 64)",
             spec.ToStringWithSchema(schema_));
 }
 
@@ -155,45 +154,45 @@ TEST_F(CompositeIntKeysTest, TestNonPrefix) {
 // value for the cell. In this case, the preceding cell is also at the maximum
 // value as well, so we eliminate the upper bound entirely.
 //
-// Predicate: a == 255 AND b BETWEEN 3 AND 255
+// Predicate: a == 127 AND b BETWEEN 3 AND 127
 TEST_F(CompositeIntKeysTest, TestRedundantUpperBound) {
   ScanSpec spec;
-  AddPredicate<uint8_t>(&spec, "a", EQ, 255);
-  AddPredicate<uint8_t>(&spec, "b", GE, 3);
-  AddPredicate<uint8_t>(&spec, "b", LE, 255);
+  AddPredicate<int8_t>(&spec, "a", EQ, 127);
+  AddPredicate<int8_t>(&spec, "b", GE, 3);
+  AddPredicate<int8_t>(&spec, "b", LE, 127);
   SCOPED_TRACE(spec.ToStringWithSchema(schema_));
   ASSERT_NO_FATAL_FAILURE(enc_.EncodeRangePredicates(&spec, true));
-  EXPECT_EQ("PK >= (uint8 a=255, uint8 b=3, uint8 c=0)", spec.ToStringWithSchema(schema_));
+  EXPECT_EQ("PK >= (int8 a=127, int8 b=3, int8 c=-128)", spec.ToStringWithSchema(schema_));
 }
 
 // A similar test, but in this case we still have an equality prefix
 // that needs to be accounted for, so we can't eliminate the upper bound
 // entirely.
 //
-// Predicate: a == 1 AND b BETWEEN 3 AND 255
+// Predicate: a == 1 AND b BETWEEN 3 AND 127
 TEST_F(CompositeIntKeysTest, TestRedundantUpperBound2) {
   ScanSpec spec;
-  AddPredicate<uint8_t>(&spec, "a", EQ, 1);
-  AddPredicate<uint8_t>(&spec, "b", GE, 3);
-  AddPredicate<uint8_t>(&spec, "b", LE, 255);
+  AddPredicate<int8_t>(&spec, "a", EQ, 1);
+  AddPredicate<int8_t>(&spec, "b", GE, 3);
+  AddPredicate<int8_t>(&spec, "b", LE, 127);
   SCOPED_TRACE(spec.ToStringWithSchema(schema_));
   ASSERT_NO_FATAL_FAILURE(enc_.EncodeRangePredicates(&spec, true));
-  EXPECT_EQ("PK >= (uint8 a=1, uint8 b=3, uint8 c=0) AND "
-            "PK < (uint8 a=2, uint8 b=0, uint8 c=0)",
+  EXPECT_EQ("PK >= (int8 a=1, int8 b=3, int8 c=-128) AND "
+            "PK < (int8 a=2, int8 b=-128, int8 c=-128)",
             spec.ToStringWithSchema(schema_));
 }
 
 // Test that, if so desired, pushed predicates are not erased.
 //
-// Predicate: a == 254
+// Predicate: a == 126
 TEST_F(CompositeIntKeysTest, TestNoErasePredicates) {
   ScanSpec spec;
-  AddPredicate<uint8_t>(&spec, "a", EQ, 254);
+  AddPredicate<int8_t>(&spec, "a", EQ, 126);
   SCOPED_TRACE(spec.ToStringWithSchema(schema_));
   ASSERT_NO_FATAL_FAILURE(enc_.EncodeRangePredicates(&spec, false));
-  EXPECT_EQ("PK >= (uint8 a=254, uint8 b=0, uint8 c=0) AND "
-            "PK < (uint8 a=255, uint8 b=0, uint8 c=0)\n"
-            "(`a` BETWEEN 254 AND 254)", spec.ToStringWithSchema(schema_));
+  EXPECT_EQ("PK >= (int8 a=126, int8 b=-128, int8 c=-128) AND "
+            "PK < (int8 a=127, int8 b=-128, int8 c=-128)\n"
+            "(`a` BETWEEN 126 AND 126)", spec.ToStringWithSchema(schema_));
 }
 
 // Test that, if pushed predicates are erased, that we don't
@@ -201,30 +200,30 @@ TEST_F(CompositeIntKeysTest, TestNoErasePredicates) {
 // Because we have no predicate on column 'b', we can't push a
 // a range predicate that includes 'c'.
 //
-// Predicate: a == 254 AND c == 254
+// Predicate: a == 126 AND c == 126
 TEST_F(CompositeIntKeysTest, TestNoErasePredicates2) {
   ScanSpec spec;
-  AddPredicate<uint8_t>(&spec, "a", EQ, 254);
-  AddPredicate<uint8_t>(&spec, "c", EQ, 254);
+  AddPredicate<int8_t>(&spec, "a", EQ, 126);
+  AddPredicate<int8_t>(&spec, "c", EQ, 126);
   SCOPED_TRACE(spec.ToStringWithSchema(schema_));
   ASSERT_NO_FATAL_FAILURE(enc_.EncodeRangePredicates(&spec, true));
   // The predicate on column A should be pushed while "c" remains.
-  EXPECT_EQ("PK >= (uint8 a=254, uint8 b=0, uint8 c=0) AND "
-            "PK < (uint8 a=255, uint8 b=0, uint8 c=0)\n"
-            "(`c` BETWEEN 254 AND 254)", spec.ToStringWithSchema(schema_));
+  EXPECT_EQ("PK >= (int8 a=126, int8 b=-128, int8 c=-128) AND "
+            "PK < (int8 a=127, int8 b=-128, int8 c=-128)\n"
+            "(`c` BETWEEN 126 AND 126)", spec.ToStringWithSchema(schema_));
 }
 
 // Test that predicates added out of key order are OK.
 //
-// Predicate: b == 254 AND a == 254
+// Predicate: b == 126 AND a == 126
 TEST_F(CompositeIntKeysTest, TestPredicateOrderDoesntMatter) {
   ScanSpec spec;
-  AddPredicate<uint8_t>(&spec, "b", EQ, 254);
-  AddPredicate<uint8_t>(&spec, "a", EQ, 254);
+  AddPredicate<int8_t>(&spec, "b", EQ, 126);
+  AddPredicate<int8_t>(&spec, "a", EQ, 126);
   SCOPED_TRACE(spec.ToStringWithSchema(schema_));
   ASSERT_NO_FATAL_FAILURE(enc_.EncodeRangePredicates(&spec, true));
-  EXPECT_EQ("PK >= (uint8 a=254, uint8 b=254, uint8 c=0) AND "
-            "PK < (uint8 a=254, uint8 b=255, uint8 c=0)",
+  EXPECT_EQ("PK >= (int8 a=126, int8 b=126, int8 c=-128) AND "
+            "PK < (int8 a=126, int8 b=127, int8 c=-128)",
             spec.ToStringWithSchema(schema_));
 }
 
@@ -234,7 +233,7 @@ class CompositeIntStringKeysTest : public TestRangePredicateEncoder {
  public:
   CompositeIntStringKeysTest() :
     TestRangePredicateEncoder(
-        Schema({ ColumnSchema("a", UINT8),
+        Schema({ ColumnSchema("a", INT8),
                  ColumnSchema("b", STRING),
                  ColumnSchema("c", STRING) },
                3)) {
@@ -245,24 +244,24 @@ class CompositeIntStringKeysTest : public TestRangePredicateEncoder {
 // Predicate: a == 128
 TEST_F(CompositeIntStringKeysTest, TestPrefixEquality) {
   ScanSpec spec;
-  AddPredicate<uint8_t>(&spec, "a", EQ, 128);
+  AddPredicate<int8_t>(&spec, "a", EQ, 64);
   SCOPED_TRACE(spec.ToStringWithSchema(schema_));
   ASSERT_NO_FATAL_FAILURE(enc_.EncodeRangePredicates(&spec, true));
-  // Expect: key >= (128, "", "") AND key < (129, "", "")
-  EXPECT_EQ("PK >= (uint8 a=128, string b=, string c=) AND "
-            "PK < (uint8 a=129, string b=, string c=)",
+  // Expect: key >= (64, "", "") AND key < (65, "", "")
+  EXPECT_EQ("PK >= (int8 a=64, string b=, string c=) AND "
+            "PK < (int8 a=65, string b=, string c=)",
             spec.ToStringWithSchema(schema_));
 }
 
 // Predicate: a == 128 AND b = "abc"
 TEST_F(CompositeIntStringKeysTest, TestPrefixEqualityWithString) {
   ScanSpec spec;
-  AddPredicate<uint8_t>(&spec, "a", EQ, 128);
+  AddPredicate<int8_t>(&spec, "a", EQ, 64);
   AddPredicate<Slice>(&spec, "b", EQ, Slice("abc"));
   SCOPED_TRACE(spec.ToString());
   ASSERT_NO_FATAL_FAILURE(enc_.EncodeRangePredicates(&spec, true));
-  EXPECT_EQ("PK >= (uint8 a=128, string b=abc, string c=) AND "
-            "PK < (uint8 a=128, string b=abc\\000, string c=)",
+  EXPECT_EQ("PK >= (int8 a=64, string b=abc, string c=) AND "
+            "PK < (int8 a=64, string b=abc\\000, string c=)",
             spec.ToStringWithSchema(schema_));
 }
 
@@ -272,26 +271,26 @@ class SingleIntKeyTest : public TestRangePredicateEncoder {
  public:
   SingleIntKeyTest() :
     TestRangePredicateEncoder(
-        Schema({ ColumnSchema("a", UINT8) }, 1)) {
+        Schema({ ColumnSchema("a", INT8) }, 1)) {
     }
 };
 
 TEST_F(SingleIntKeyTest, TestEquality) {
   ScanSpec spec;
-  AddPredicate<uint8_t>(&spec, "a", EQ, 128);
+  AddPredicate<int8_t>(&spec, "a", EQ, 64);
   SCOPED_TRACE(spec.ToString());
   ASSERT_NO_FATAL_FAILURE(enc_.EncodeRangePredicates(&spec, true));
-  EXPECT_EQ("PK >= (uint8 a=128) AND "
-            "PK < (uint8 a=129)",
+  EXPECT_EQ("PK >= (int8 a=64) AND "
+            "PK < (int8 a=65)",
             spec.ToStringWithSchema(schema_));
 }
 
 TEST_F(SingleIntKeyTest, TestRedundantUpperBound) {
   ScanSpec spec;
-  AddPredicate<uint8_t>(&spec, "a", EQ, 255);
+  AddPredicate<int8_t>(&spec, "a", EQ, 127);
   SCOPED_TRACE(spec.ToString());
   ASSERT_NO_FATAL_FAILURE(enc_.EncodeRangePredicates(&spec, true));
-  EXPECT_EQ("PK >= (uint8 a=255)",
+  EXPECT_EQ("PK >= (int8 a=127)",
             spec.ToStringWithSchema(schema_));
 }
 
