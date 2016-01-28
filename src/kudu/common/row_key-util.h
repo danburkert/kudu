@@ -68,6 +68,8 @@ bool IncrementKey(ContiguousRow* row, Arena* arena) WARN_UNUSED_RESULT;
 bool IncrementKeyPrefix(ContiguousRow* row, int prefix_len,
                         Arena* arena) WARN_UNUSED_RESULT;
 
+bool DecrementKey(ContiguousRow* row, Arena* arena) WARN_UNUSED_RESULT;
+
 } // namespace row_key_util
 } // namespace kudu
 #endif /* KUDU_COMMON_ROW_KEY_UTIL_H */

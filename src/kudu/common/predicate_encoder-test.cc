@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 #include <vector>
 
+#include "kudu/common/partial_row.h"
 #include "kudu/common/predicate_encoder.h"
 #include "kudu/common/schema.h"
 #include "kudu/util/test_macros.h"
@@ -66,7 +67,28 @@ class TestRangePredicateEncoder : public KuduTest {
     spec->AddPredicate(pred);
   }
 
+  // Set the lower bound of the spec to the provided row. The row must outlive
+  // the spec.
+  void SetLowerBound(ScanSpec* spec, const KuduPartialRow& row) {
+    CHECK(row.IsKeySet());
+    ConstContiguousRow cont_row(row.schema(), row.row_data_);
+    gscoped_ptr<EncodedKey> enc_key(EncodedKey::FromContiguousRow(cont_row));
+    spec->SetLowerBoundKey(enc_key.get());
+    pool_.Add(enc_key.release());
+  }
+
+  // Set the exclusive lower bound of the spec to the provided row. The row must
+  // outlive the spec.
+  void SetExclusiveUpperBound(ScanSpec* spec, const KuduPartialRow& row) {
+    CHECK(row.IsKeySet());
+    ConstContiguousRow cont_row(row.schema(), row.row_data_);
+    gscoped_ptr<EncodedKey> enc_key(EncodedKey::FromContiguousRow(cont_row));
+    spec->SetExclusiveUpperBoundKey(enc_key.get());
+    pool_.Add(enc_key.release());
+  }
+
  protected:
+  AutoReleasePool pool_;
   Arena arena_;
   Schema schema_;
   RangePredicateEncoder enc_;
@@ -94,7 +116,7 @@ TEST_F(CompositeIntKeysTest, TestSimplify) {
   AddPredicate<int8_t>(&spec, "c", LE, 64);
   SCOPED_TRACE(spec.ToStringWithSchema(schema_));
   vector<RangePredicateEncoder::SimplifiedBounds> bounds;
-  enc_.SimplifyBounds(spec, &bounds);
+  enc_.SimplifyPredicates(spec, &bounds);
   ASSERT_EQ(3, bounds.size());
   ASSERT_EQ("(`a` BETWEEN 127 AND 127)",
             ColumnRangePredicate(schema_.column(0), bounds[0].lower, bounds[0].upper).ToString());
@@ -227,6 +249,101 @@ TEST_F(CompositeIntKeysTest, TestPredicateOrderDoesntMatter) {
             spec.ToStringWithSchema(schema_));
 }
 
+// Test that implicit constraints specified in the primary key upper/lower
+// bounds are lifted into the set of simplified predicates.
+TEST_F(CompositeIntKeysTest, TestLiftPrimaryKeyBounds) {
+  {
+    ScanSpec spec;
+
+    KuduPartialRow lower_bound(&schema_);
+    CHECK_OK(lower_bound.SetInt8("a", 10));
+    CHECK_OK(lower_bound.SetInt8("b", INT8_MIN));
+    CHECK_OK(lower_bound.SetInt8("c", INT8_MIN));
+
+    KuduPartialRow upper_bound(&schema_);
+    CHECK_OK(upper_bound.SetInt8("a", 12));
+    CHECK_OK(upper_bound.SetInt8("b", INT8_MIN));
+    CHECK_OK(upper_bound.SetInt8("c", INT8_MIN));
+
+    SetLowerBound(&spec, lower_bound);
+    SetExclusiveUpperBound(&spec, upper_bound);
+
+    vector<RangePredicateEncoder::SimplifiedBounds> bounds;
+    enc_.SimplifyPredicates(spec, &bounds);
+    enc_.LiftPrimaryKeyBounds(spec, &bounds);
+    ASSERT_EQ(3, bounds.size());
+    ASSERT_EQ("(`a` BETWEEN 10 AND 11)",
+        ColumnRangePredicate(schema_.column(0), bounds[0].lower, bounds[0].upper).ToString());
+
+    ASSERT_EQ(nullptr, bounds[1].lower);
+    ASSERT_EQ(nullptr, bounds[1].upper);
+
+    ASSERT_EQ(nullptr, bounds[2].lower);
+    ASSERT_EQ(nullptr, bounds[2].upper);
+  }
+  {
+    ScanSpec spec;
+
+    KuduPartialRow lower_bound(&schema_);
+    CHECK_OK(lower_bound.SetInt8("a", 10));
+    CHECK_OK(lower_bound.SetInt8("b", 10));
+    CHECK_OK(lower_bound.SetInt8("c", INT8_MIN));
+
+    KuduPartialRow upper_bound(&schema_);
+    CHECK_OK(upper_bound.SetInt8("a", 10));
+    CHECK_OK(upper_bound.SetInt8("b", 21));
+    CHECK_OK(upper_bound.SetInt8("c", INT8_MIN));
+
+    SetLowerBound(&spec, lower_bound);
+    SetExclusiveUpperBound(&spec, upper_bound);
+
+    vector<RangePredicateEncoder::SimplifiedBounds> bounds;
+    enc_.SimplifyPredicates(spec, &bounds);
+    enc_.LiftPrimaryKeyBounds(spec, &bounds);
+    ASSERT_EQ(3, bounds.size());
+    ASSERT_EQ("(`a` BETWEEN 10 AND 10)",
+        ColumnRangePredicate(schema_.column(0), bounds[0].lower, bounds[0].upper).ToString());
+
+    ASSERT_EQ("(`b` BETWEEN 10 AND 20)",
+        ColumnRangePredicate(schema_.column(1), bounds[1].lower, bounds[1].upper).ToString());
+
+    ASSERT_EQ(nullptr, bounds[2].lower);
+    ASSERT_EQ(nullptr, bounds[2].upper);
+  }
+  { // Bounds with Predicates
+    ScanSpec spec;
+    AddPredicate<int8_t>(&spec, "b", GE, 3);
+    AddPredicate<int8_t>(&spec, "c", GE, 3);
+    AddPredicate<int8_t>(&spec, "c", LE, 100);
+
+    KuduPartialRow lower_bound(&schema_);
+    CHECK_OK(lower_bound.SetInt8("a", 10));
+    CHECK_OK(lower_bound.SetInt8("b", INT8_MIN));
+    CHECK_OK(lower_bound.SetInt8("c", INT8_MIN));
+
+    KuduPartialRow upper_bound(&schema_);
+    CHECK_OK(upper_bound.SetInt8("a", 10));
+    CHECK_OK(upper_bound.SetInt8("b", 90));
+    CHECK_OK(upper_bound.SetInt8("c", INT8_MIN));
+
+    SetLowerBound(&spec, lower_bound);
+    SetExclusiveUpperBound(&spec, upper_bound);
+
+    vector<RangePredicateEncoder::SimplifiedBounds> bounds;
+    enc_.SimplifyPredicates(spec, &bounds);
+    enc_.LiftPrimaryKeyBounds(spec, &bounds);
+    ASSERT_EQ(3, bounds.size());
+    ASSERT_EQ("(`a` BETWEEN 10 AND 10)",
+        ColumnRangePredicate(schema_.column(0), bounds[0].lower, bounds[0].upper).ToString());
+
+    ASSERT_EQ("(`b` BETWEEN 3 AND 89)",
+        ColumnRangePredicate(schema_.column(1), bounds[1].lower, bounds[1].upper).ToString());
+
+    ASSERT_EQ("(`c` BETWEEN 3 AND 100)",
+        ColumnRangePredicate(schema_.column(2), bounds[2].lower, bounds[2].upper).ToString());
+  }
+}
+
 // Tests for String parts in composite keys
 //------------------------------------------------------------
 class CompositeIntStringKeysTest : public TestRangePredicateEncoder {
@@ -239,7 +356,6 @@ class CompositeIntStringKeysTest : public TestRangePredicateEncoder {
                3)) {
   }
 };
-
 
 // Predicate: a == 128
 TEST_F(CompositeIntStringKeysTest, TestPrefixEquality) {

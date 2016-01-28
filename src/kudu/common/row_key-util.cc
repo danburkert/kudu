@@ -90,6 +90,70 @@ bool IncrementCell(const ColumnSchema& col, void* cell_ptr, Arena* arena) {
 #undef HANDLE_TYPE
 }
 
+template<DataType type>
+bool DecrementIntCell(void* cell_ptr) {
+  typedef DataTypeTraits<type> traits;
+  typedef typename traits::cpp_type cpp_type;
+
+  cpp_type orig;
+  memcpy(&orig, cell_ptr, sizeof(cpp_type));
+
+  if (orig == MathLimits<cpp_type>::kMin) {
+    return false;
+  } else {
+    orig--;
+    memcpy(cell_ptr, &orig, sizeof(cpp_type));
+    return true;
+  }
+}
+
+bool DecrementStringCell(void* cell_ptr, Arena* arena) {
+  Slice orig;
+  memcpy(&orig, cell_ptr, sizeof(orig));
+
+  // Empty strings can't be decremented any further.
+  if (orig.size() == 0) { return false; }
+
+  // If the string is not empty, then we decrement the final character, or
+  // remove it if it's null.
+  int size = orig.data()[orig.size() - 1] > 0 ? orig.size() : orig.size() - 1;
+  uint8_t* new_buf = CHECK_NOTNULL(static_cast<uint8_t*>(arena->AllocateBytes(size)));
+  if (size < orig.size()) {
+    new_buf[size - 1]--;
+  }
+
+  Slice dec(new_buf, size);
+  memcpy(cell_ptr, &dec, sizeof(dec));
+  return true;
+}
+
+bool DecrementCell(const ColumnSchema& col, void* cell_ptr, Arena* arena) {
+  DataType type = col.type_info()->physical_type();
+  switch (type) {
+#define HANDLE_TYPE(t) case t: return DecrementIntCell<t>(cell_ptr);
+    HANDLE_TYPE(UINT8);
+    HANDLE_TYPE(UINT16);
+    HANDLE_TYPE(UINT32);
+    HANDLE_TYPE(UINT64);
+    HANDLE_TYPE(INT8);
+    HANDLE_TYPE(INT16);
+    HANDLE_TYPE(INT32);
+    HANDLE_TYPE(TIMESTAMP);
+    HANDLE_TYPE(INT64);
+    case UNKNOWN_DATA:
+    case BOOL:
+    case FLOAT:
+    case DOUBLE:
+      LOG(FATAL) << "Unable to handle type " << type << " in row keys";
+    case STRING:
+    case BINARY:
+      return DecrementStringCell(cell_ptr, arena);
+    default: CHECK(false) << "Unknown data type: " << type;
+  }
+  return false; // unreachable
+#undef HANDLE_TYPE
+}
+
 } // anonymous namespace
 
 void SetKeyToMinValues(ContiguousRow* row) {
@@ -108,6 +172,15 @@ bool IncrementKeyPrefix(ContiguousRow* row, int prefix_len, Arena* arena) {
     if (IncrementCell(row->schema()->column(i),
                                 row->mutable_cell_ptr(i),
                                 arena)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool DecrementKey(ContiguousRow* row, Arena* arena) {
+  for (int i = row->schema()->num_key_columns() - 1; i >= 0; --i) {
+    if (DecrementCell(row->schema()->column(i), row->mutable_cell_ptr(i), arena)) {
       return true;
     }
   }
