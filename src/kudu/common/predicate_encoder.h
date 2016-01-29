@@ -69,6 +69,20 @@ class RangePredicateEncoder {
   Status SimplifyBounds(const ScanSpec& spec,
                         std::vector<SimplifiedBounds>* key_bounds) const;
 
+  Status ConvertUpperBoundsToExclusive(const ScanSpec& spec,
+                                       std::vector<SimplifiedBounds>* key_bounds) const;
+
+  Status LiftPrimaryKeyBounds(const ScanSpec& spec,
+                              std::vector<SimplifiedBounds>* key_bounds) const;
+
+  // Checks that the Primary Key and Partition Key bounds of the scan spec are
+  // coherent (lower < upper).
+  Status CheckBoundsCoherency(const ScanSpec& spec) const;
+
+  // Checks that the simplified predicate bounds are coherent (for each column,
+  // lower < upper).
+  Status CheckPredicateCoherency(const std::vector<SimplifiedBounds>& bounds) const;
+
   // Returns the number of contiguous equalities in the key prefix.
   int CountKeyPrefixEqualities(const std::vector<SimplifiedBounds>& bounds) const;
   int CountKeyPrefixEqualities(const EncodedKey& key_a,
@@ -76,8 +90,7 @@ class RangePredicateEncoder {
 
   // Erases any predicates we've encoded from the predicate list within the
   // ScanSpec.
-  void ErasePushedPredicates(
-      ScanSpec *spec, const std::vector<bool>& should_erase) const;
+  void ErasePushedPredicates(ScanSpec *spec, const std::vector<bool>& should_erase) const;
 
   const Schema* key_schema_;
   Arena* arena_;

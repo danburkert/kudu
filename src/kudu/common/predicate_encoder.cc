@@ -210,14 +210,17 @@ Status RangePredicateEncoder::SimplifyBounds(const ScanSpec& spec,
     }
   }
 
+  return Status::OK();
+}
+
   // Step 2: lift implicit predicates specified as part of the lower and upper
   // bound primary key constraints into the simplified predicate bounds.
   //
   // When the lower and exclusive upper bound primary keys have a prefix of
   // equal components, the components can be lifted into an equality predicate
-  // over their associated column. Optionally, a single range predicate can be
-  // lifted from the component following the prefix of equal components (if it
-  // exists).
+  // over their associated column. Optionally, a single (pair) of range
+  // predicates can be lifted from the key component following the prefix of
+  // equal components (if it exists).
 
   const EncodedKey* lower_bound_key = spec.lower_bound_key();
   const EncodedKey* exclusive_upper_bound_key = spec.exclusive_upper_bound_key();
