@@ -66,25 +66,36 @@ class RangePredicateEncoder {
     vector<int> orig_predicate_indexes;
   };
 
-  Status SimplifyBounds(const ScanSpec& spec,
-                        std::vector<SimplifiedBounds>* key_bounds) const;
+  // Simplifies the set of scan predicates into a SimplifiedBounds instance on
+  // each column.
+  Status SimplifyPredicates(const ScanSpec& spec,
+                            std::vector<SimplifiedBounds>* key_bounds) const;
 
-  Status ConvertUpperBoundsToExclusive(const ScanSpec& spec,
-                                       std::vector<SimplifiedBounds>* key_bounds) const;
-
+  // Lift implicit predicates specified as part of the lower and upper bound
+  // primary key constraints into the simplified predicate bounds.
+  //
+  // When the lower and exclusive upper bound primary keys have a prefix of
+  // equal components, the components can be lifted into an equality predicate
+  // over their associated column. Optionally, a single (pair) of range
+  // predicates can be lifted from the key component following the prefix of
+  // equal components.
   Status LiftPrimaryKeyBounds(const ScanSpec& spec,
                               std::vector<SimplifiedBounds>* key_bounds) const;
 
-  // Checks that the Primary Key and Partition Key bounds of the scan spec are
-  // coherent (lower < upper).
-  Status CheckBoundsCoherency(const ScanSpec& spec) const;
+  // Increments all upper bound predicates to convert them from an inclusive
+  // constraint to an exclusive constraint.
+  Status ConvertUpperBoundsToExclusive(const ScanSpec& spec,
+                                       std::vector<SimplifiedBounds>* key_bounds,
+                                       Arena* arena) const;
 
   // Checks that the simplified predicate bounds are coherent (for each column,
   // lower < upper).
-  Status CheckPredicateCoherency(const std::vector<SimplifiedBounds>& bounds) const;
+  Status CheckPredicateCoherence(const std::vector<SimplifiedBounds>& bounds) const;
 
   // Returns the number of contiguous equalities in the key prefix.
   int CountKeyPrefixEqualities(const std::vector<SimplifiedBounds>& bounds) const;
+
+  // Returns the number of contiguous equalities in the key prefix.
   int CountKeyPrefixEqualities(const EncodedKey& key_a,
                                const EncodedKey& key_b) const;
 

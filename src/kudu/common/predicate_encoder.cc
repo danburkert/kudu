@@ -40,7 +40,7 @@ Status RangePredicateEncoder::EncodeRangePredicates(ScanSpec *spec, bool erase_p
   // the tightest bounds are retained). In this step, we retain the original indexes
   // of the predicates that we've analyzed, so we can later remove them if necessary.
   vector<SimplifiedBounds> key_bounds;
-  RETURN_NOT_OK(SimplifyBounds(*spec, &key_bounds));
+  RETURN_NOT_OK(SimplifyPredicates(*spec, &key_bounds));
 
   // Step 2) Determine the length of the "equality" part of the key.
   //
@@ -171,12 +171,11 @@ Status RangePredicateEncoder::EncodeRangePredicates(ScanSpec *spec, bool erase_p
   return Status::OK();
 }
 
-Status RangePredicateEncoder::SimplifyBounds(const ScanSpec& spec,
-                                             vector<SimplifiedBounds>* key_bounds) const {
+Status RangePredicateEncoder::SimplifyPredicates(const ScanSpec& spec,
+                                                 vector<SimplifiedBounds>* key_bounds) const {
   key_bounds->clear();
   key_bounds->resize(key_schema_->num_key_columns());
 
-  // Step 1: simplify predicates
   for (int i = 0; i < spec.predicates().size(); i++) {
     const ColumnRangePredicate& pred = spec.predicates()[i];
     int idx = key_schema_->find_column(pred.column().name());
@@ -213,15 +212,8 @@ Status RangePredicateEncoder::SimplifyBounds(const ScanSpec& spec,
   return Status::OK();
 }
 
-  // Step 2: lift implicit predicates specified as part of the lower and upper
-  // bound primary key constraints into the simplified predicate bounds.
-  //
-  // When the lower and exclusive upper bound primary keys have a prefix of
-  // equal components, the components can be lifted into an equality predicate
-  // over their associated column. Optionally, a single (pair) of range
-  // predicates can be lifted from the key component following the prefix of
-  // equal components (if it exists).
-
+Status RangePredicateEncoder::LiftPrimaryKeyBounds(const ScanSpec& spec,
+                                                   vector<SimplifiedBounds>* key_bounds) const {
   const EncodedKey* lower_bound_key = spec.lower_bound_key();
   const EncodedKey* exclusive_upper_bound_key = spec.exclusive_upper_bound_key();
 
@@ -262,8 +254,28 @@ Status RangePredicateEncoder::SimplifyBounds(const ScanSpec& spec,
     }
   }
 
-  // Step 3: check that all predicate bounds are coherent
+  return Status::OK();
+}
 
+Status RangePredicateEncoder::ConvertUpperBoundsToExclusive(const Schema& schema,
+                                                            vector<SimplifiedBounds>* key_bounds,
+                                                            Arena* arena) const {
+
+  for (int idx = 0; idx < key_bounds->size(); idx++) {
+    SimplifiedBounds& bound = key_bounds->at(idx);
+    if (bound.upper) {
+
+      //if (!row_key_util::IncrementCell(schema.column(idx), bound.upper, arena)) {
+        //bound.upper = nullptr;
+      //}
+    }
+  }
+
+  return Status::OK();
+}
+
+Status RangePredicateEncoder::CheckPredicateCoherence(
+    const vector<SimplifiedBounds>& bounds) const {
   return Status::OK();
 }
 
