@@ -68,7 +68,27 @@ bool IncrementKey(ContiguousRow* row, Arena* arena) WARN_UNUSED_RESULT;
 bool IncrementKeyPrefix(ContiguousRow* row, int prefix_len,
                         Arena* arena) WARN_UNUSED_RESULT;
 
-bool DecrementKey(ContiguousRow* row, Arena* arena) WARN_UNUSED_RESULT;
+enum class DecrementResult {
+  // The decrement was successfull.
+  Success,
+
+  // The decrement was unssuccessful because the key was already the minimum value.
+  Minimum,
+
+  // The decrement was unsuccessful because the key is not decrementable
+  // (a variable-length field was encountered).
+  Failure,
+};
+
+// Decrements the primary key of the row to the greatest key which is smaller
+// than the current key, if possible.
+//
+// If decrementing the primary key is impossible (variable-length components can
+// not be decremented), then DecrementResult::Failure is returned.
+//
+// If the primary key is already the minimum possible value, then
+// DecrementResult::Minimum is returned.
+DecrementResult DecrementKey(ContiguousRow* row, Arena* arena) WARN_UNUSED_RESULT;
 
 } // namespace row_key_util
 } // namespace kudu

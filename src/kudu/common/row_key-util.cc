@@ -91,7 +91,7 @@ bool IncrementCell(const ColumnSchema& col, void* cell_ptr, Arena* arena) {
 }
 
 template<DataType type>
-bool DecrementIntCell(void* cell_ptr) {
+DecrementResult DecrementIntCell(void* cell_ptr) {
   typedef DataTypeTraits<type> traits;
   typedef typename traits::cpp_type cpp_type;
 
@@ -99,35 +99,15 @@ bool DecrementIntCell(void* cell_ptr) {
   memcpy(&orig, cell_ptr, sizeof(cpp_type));
 
   if (orig == MathLimits<cpp_type>::kMin) {
-    return false;
+    return DecrementResult::Minimum;
   } else {
     orig--;
     memcpy(cell_ptr, &orig, sizeof(cpp_type));
-    return true;
+    return DecrementResult::Success;
   }
 }
 
-bool DecrementStringCell(void* cell_ptr, Arena* arena) {
-  Slice orig;
-  memcpy(&orig, cell_ptr, sizeof(orig));
-
-  // Empty strings can't be decremented any further.
-  if (orig.size() == 0) { return false; }
-
-  // If the string is not empty, then we decrement the final character, or
-  // remove it if it's null.
-  int size = orig.data()[orig.size() - 1] > 0 ? orig.size() : orig.size() - 1;
-  uint8_t* new_buf = CHECK_NOTNULL(static_cast<uint8_t*>(arena->AllocateBytes(size)));
-  if (size < orig.size()) {
-    new_buf[size - 1]--;
-  }
-
-  Slice dec(new_buf, size);
-  memcpy(cell_ptr, &dec, sizeof(dec));
-  return true;
-}
-
-bool DecrementCell(const ColumnSchema& col, void* cell_ptr, Arena* arena) {
+DecrementResult DecrementCell(const ColumnSchema& col, void* cell_ptr, Arena* arena) {
   DataType type = col.type_info()->physical_type();
   switch (type) {
 #define HANDLE_TYPE(t) case t: return DecrementIntCell<t>(cell_ptr);
@@ -147,10 +127,10 @@ bool DecrementCell(const ColumnSchema& col, void* cell_ptr, Arena* arena) {
       LOG(FATAL) << "Unable to handle type " << type << " in row keys";
     case STRING:
     case BINARY:
-      return DecrementStringCell(cell_ptr, arena);
+      return DecrementResult::Failure;
     default: CHECK(false) << "Unknown data type: " << type;
   }
-  return false; // unreachable
+  return DecrementResult::Failure; // unreachable
 #undef HANDLE_TYPE
 }
 
@@ -178,13 +158,13 @@ bool IncrementKeyPrefix(ContiguousRow* row, int prefix_len, Arena* arena) {
   return false;
 }
 
-bool DecrementKey(ContiguousRow* row, Arena* arena) {
+DecrementResult DecrementKey(ContiguousRow* row, Arena* arena) {
   for (int i = row->schema()->num_key_columns() - 1; i >= 0; --i) {
-    if (DecrementCell(row->schema()->column(i), row->mutable_cell_ptr(i), arena)) {
-      return true;
-    }
+    DecrementResult result =
+      DecrementCell(row->schema()->column(i), row->mutable_cell_ptr(i), arena);
+    if (result != DecrementResult::Minimum) return result;
   }
-  return false;
+  return DecrementResult::Minimum;
 }
 
 } // namespace row_key_util
