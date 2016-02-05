@@ -48,7 +48,6 @@ set(COMMON_SRCS
   key_encoder.cc
   partial_row.cc
   partition.cc
-  predicate_encoder.cc
   rowblock.cc
   row_changelist.cc
   row_key-util.cc
@@ -85,10 +84,10 @@ ADD_KUDU_TEST(id_mapping-test)
 ADD_KUDU_TEST(partial_row-test)
 ADD_KUDU_TEST(partition-test)
 ADD_KUDU_TEST(predicate-test)
-ADD_KUDU_TEST(predicate_encoder-test)
 ADD_KUDU_TEST(row_changelist-test)
 ADD_KUDU_TEST(row_key-util-test)
 ADD_KUDU_TEST(row_operations-test)
+ADD_KUDU_TEST(scan_spec-test)
 ADD_KUDU_TEST(schema-test)
 ADD_KUDU_TEST(types-test)
 ADD_KUDU_TEST(wire_protocol-test)

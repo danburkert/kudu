@@ -957,7 +957,7 @@ Status KuduScanner::AddConjunctPredicate(KuduPredicate* pred) {
   if (data_->open_) {
     return Status::IllegalState("Predicate must be set before Open()");
   }
-  return pred->data_->AddToScanSpec(&data_->spec_);
+  return pred->data_->AddToScanSpec(&data_->spec_, &data_->arena_);
 }
 
 Status KuduScanner::AddLowerBound(const KuduPartialRow& key) {
@@ -1038,12 +1038,9 @@ struct CloseCallback {
 } // anonymous namespace
 
 string KuduScanner::ToString() const {
-  Slice start_key = data_->spec_.lower_bound_key() ?
-    data_->spec_.lower_bound_key()->encoded_key() : Slice("INF");
-  Slice end_key = data_->spec_.exclusive_upper_bound_key() ?
-    data_->spec_.exclusive_upper_bound_key()->encoded_key() : Slice("INF");
-  return strings::Substitute("$0: [$1,$2)", data_->table_->name(),
-                             start_key.ToDebugString(), end_key.ToDebugString());
+  return strings::Substitute("$0: $1",
+                             data_->table_->name(),
+                             data_->spec_.ToString(*data_->table_->schema().schema_));
 }
 
 Status KuduScanner::Open() {
@@ -1051,7 +1048,14 @@ Status KuduScanner::Open() {
   CHECK(data_->projection_ != nullptr) << "No projection provided";
 
   // Find the first tablet.
-  data_->spec_encoder_.EncodeRangePredicates(&data_->spec_, false);
+  data_->spec_.OptimizeScan(*data_->table_->schema().schema_, &data_->arena_, &data_->pool_, false);
+
+  if (data_->spec_.CanShortCircuit()) {
+    VLOG(1) << "Short circuting scan " << ToString();
+    data_->open_ = true;
+    data_->short_circuit_ = true;
+    return Status::OK();
+  }
 
   VLOG(1) << "Beginning scan " << ToString();
 
@@ -1107,6 +1111,10 @@ Status KuduScanner::KeepAlive() {
 
 void KuduScanner::Close() {
   if (!data_->open_) return;
+  if (data_->short_circuit_) {
+    data_->open_ = false;
+    return;
+  };
   CHECK(data_->proxy_);
 
   VLOG(1) << "Ending scan " << ToString();
@@ -1133,9 +1141,10 @@ void KuduScanner::Close() {
 
 bool KuduScanner::HasMoreRows() const {
   CHECK(data_->open_);
-  return data_->data_in_open_ || // more data in hand
-      data_->last_response_.has_more_results() || // more data in this tablet
-      data_->MoreTablets(); // more tablets to scan, possibly with more data
+  return !data_->short_circuit_ &&                 // The scan is not short circuited
+      (data_->data_in_open_ ||                     // more data in hand
+       data_->last_response_.has_more_results() || // more data in this tablet
+       data_->MoreTablets());                      // more tablets to scan, possibly with more data
 }
 
 Status KuduScanner::NextBatch(vector<KuduRowResult>* rows) {
@@ -1153,6 +1162,10 @@ Status KuduScanner::NextBatch(KuduScanBatch* result) {
   CHECK(data_->proxy_);
 
   result->data_->Clear();
+
+  if (data_->short_circuit_) {
+    return Status::OK();
+  }
 
   if (data_->data_in_open_) {
     // We have data from a previous scan.

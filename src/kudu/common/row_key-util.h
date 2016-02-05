@@ -66,8 +66,7 @@ bool IncrementKey(ContiguousRow* row, Arena* arena) WARN_UNUSED_RESULT;
 //
 // For example, for a composite primary key (int8, int8, int8) with value
 // (1,2,3), IncrementKeyPrefix(2) will return (1,3,3).
-bool IncrementKeyPrefix(ContiguousRow* row, int prefix_len,
-                        Arena* arena) WARN_UNUSED_RESULT;
+bool IncrementKeyPrefix(ContiguousRow* row, int prefix_len, Arena* arena) WARN_UNUSED_RESULT;
 
 // Increments the provided cell in place.
 bool IncrementCell(const ColumnSchema& col, void* cell_ptr, Arena* arena);

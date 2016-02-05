@@ -1158,7 +1158,6 @@ TEST_F(TabletServerTest, TestSnapshotScan_OpenScanner) {
   // This tests tablet server shutdown with an active scanner.
 }
 
-
 // Test retrying a snapshot scan using last_row.
 TEST_F(TabletServerTest, TestSnapshotScan_LastRow) {
   // Set the internal batching within the tserver to be small. Otherwise,

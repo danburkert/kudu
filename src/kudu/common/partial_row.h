@@ -194,6 +194,7 @@ class KUDU_EXPORT KuduPartialRow {
   friend class RowOperationsPBEncoder;
   friend class client::KuduWriteOperation;   // for row_data_.
   friend class PartitionSchema;
+  friend class TestScanSpec;
   template<typename KeyTypeWrapper> friend struct client::SliceKeysTestSetup;
   template<typename KeyTypeWrapper> friend struct client::IntKeysTestSetup;
 

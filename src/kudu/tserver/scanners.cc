@@ -218,6 +218,5 @@ void Scanner::GetIteratorStats(vector<IteratorStats>* stats) const {
   iter_->GetIteratorStats(stats);
 }
 
-
 } // namespace tserver
 } // namespace kudu
