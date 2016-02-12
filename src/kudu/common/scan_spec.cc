@@ -55,6 +55,12 @@ void ScanSpec::RemovePredicates() {
 }
 
 bool ScanSpec::CanShortCircuit() {
+  if (lower_bound_key_ &&
+      exclusive_upper_bound_key_ &&
+      lower_bound_key_->encoded_key().compare(exclusive_upper_bound_key_->encoded_key()) >= 0) {
+    return false;
+  }
+
   return any_of(predicates_.begin(), predicates_.end(),
                 [] (const pair<string, ColumnPredicate>& predicate) {
                   return predicate.second.predicate_type() == PredicateType::None;
@@ -107,8 +113,13 @@ void ScanSpec::OptimizeScan(const Schema& schema,
                             Arena* arena,
                             AutoReleasePool* pool,
                             bool remove_pushed_predicates) {
-  LiftPrimaryKeyBounds(schema, arena);
-  PushPredicatesIntoPrimaryKeyBounds(schema, arena, pool, remove_pushed_predicates);
+  // Don't bother if we can already short circuit the scan. This also let's us
+  // rely on lower_bound_key_ < exclusive_upper_bound_key_ and no None
+  // predicates in the optimization step.
+  if (!CanShortCircuit()) {
+    LiftPrimaryKeyBounds(schema, arena);
+    PushPredicatesIntoPrimaryKeyBounds(schema, arena, pool, remove_pushed_predicates);
+  }
 }
 
 void ScanSpec::PushPredicatesIntoPrimaryKeyBounds(const Schema& schema,
@@ -206,13 +217,8 @@ void ScanSpec::LiftPrimaryKeyBounds(const Schema& schema, Arena* arena) {
         ? nullptr : exclusive_upper_bound_key_->raw_keys()[col_idx];
 
       if (lower != nullptr && upper != nullptr && column.Compare(lower, upper) == 0) {
-        if (col_idx + 1 < num_key_columns) {
-          // We are still in the equality prefix of the bounds
-          AddPredicate(ColumnPredicate::Equality(column, lower));
-        } else {
-          // The lower and upper bounds are equal
-          AddPredicate(ColumnPredicate::None(column));
-        }
+        // We are still in the equality prefix of the bounds
+        AddPredicate(ColumnPredicate::Equality(column, lower));
       } else {
 
         // Determine if the upper bound column value is exclusive or inclusive.

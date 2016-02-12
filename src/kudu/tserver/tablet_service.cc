@@ -1281,7 +1281,7 @@ static Status SetupScanSpec(const NewScanRequestPB& scan_pb,
           RETURN_NOT_OK(ExtractPredicateValue(col, range.upper(), scanner->arena(), &upper));
         }
 
-        (*spec)->AddPredicate(ColumnPredicate::Range(col, lower, upper));
+        ret->AddPredicate(ColumnPredicate::Range(col, lower, upper));
         break;
       };
       case ColumnPredicatePB::kEquality: {
@@ -1292,7 +1292,7 @@ static Status SetupScanSpec(const NewScanRequestPB& scan_pb,
         }
         const void* value = nullptr;
         RETURN_NOT_OK(ExtractPredicateValue(col, equality.value(), scanner->arena(), &value));
-        (*spec)->AddPredicate(ColumnPredicate::Equality(col, value));
+        ret->AddPredicate(ColumnPredicate::Equality(col, value));
         break;
       };
       default: return Status::InvalidArgument("Unknown predicate type for column", col.name());
@@ -1426,6 +1426,12 @@ Status TabletServiceImpl::HandleNewScanRequest(TabletPeer* tablet_peer,
   VLOG(3) << "Before optimizing scan spec: " << spec->ToString(tablet_schema);
   spec->OptimizeScan(tablet_schema, scanner->arena(), scanner->autorelease_pool(), true);
   VLOG(3) << "After optimizing scan spec: " << spec->ToString(tablet_schema);
+
+  if (spec->CanShortCircuit()) {
+    VLOG(1) << "short-circuiting without creating a server-side scanner.";
+    *has_more_results = false;
+    return Status::OK();
+  }
 
   // Store the original projection.
   gscoped_ptr<Schema> orig_projection(new Schema(projection));
