@@ -93,10 +93,19 @@
 #define CHECK_OK_PREPEND      KUDU_CHECK_OK_PREPEND
 #define CHECK_OK              KUDU_CHECK_OK
 
+// Return the given status as a kudu_status_t if it is not OK.
+#define RETURN_NOT_OK_C(s) do { \
+    ::kudu::Status _s = (s); \
+    if (PREDICT_FALSE(!_s.ok())) return ::kudu::Status::into_kudu_status_t( \
+        ::std::move(_s)); \
+  } while (0);
+
 // These are standard glog macros.
 #define KUDU_LOG              LOG
 #define KUDU_CHECK            CHECK
 #endif
+
+struct kudu_status_t;
 
 namespace kudu {
 
@@ -114,6 +123,7 @@ class KUDU_EXPORT Status {
   // Move the specified status.
   Status(Status&& s);
   void operator=(Status&& s);
+  static const kudu_status_t* into_kudu_status_t(Status&&s);
 #endif
 
   // Return a success status.
@@ -353,6 +363,13 @@ inline void Status::operator=(Status&& s) {
     s.state_ = nullptr;
   }
 }
+
+inline const kudu_status_t* Status::into_kudu_status_t(Status&& s) {
+  const char* state = s.state_;
+  s.state_ = nullptr;
+  return reinterpret_cast<const kudu_status_t*>(state);
+}
+
 #endif
 
 }  // namespace kudu

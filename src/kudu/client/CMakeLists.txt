@@ -29,11 +29,12 @@ ADD_EXPORTABLE_LIBRARY(client_proto
 
 set(CLIENT_SRCS
   batcher.cc
+  c.cc
+  client-internal.cc
   client.cc
   client_builder-internal.cc
-  client-internal.cc
-  error_collector.cc
   error-internal.cc
+  error_collector.cc
   meta_cache.cc
   scan_batch.cc
   scan_configuration.cc
@@ -166,6 +167,7 @@ install(TARGETS kudu_client_exported
 
 # Headers: client
 install(FILES
+  c.h
   callbacks.h
   client.h
   row_result.h
