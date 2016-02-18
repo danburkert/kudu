@@ -102,8 +102,10 @@ void kudu_client_builder_destroy(kudu_client_builder* builder) {
   delete builder;
 }
 
-void kudu_client_builder_add_master_server_addr(kudu_client_builder* builder, const char* addr) {
-  builder->builder_.add_master_server_addr(addr);
+void kudu_client_builder_add_master_server_addr(kudu_client_builder* builder,
+                                                const char* addr,
+                                                size_t len) {
+  builder->builder_.add_master_server_addr(string(addr, len));
 }
 
 void kudu_client_builder_clear_master_server_addrs(kudu_client_builder* builder) {
@@ -142,9 +144,11 @@ size_t kudu_table_list_size(const kudu_table_list* list) {
 
 // Returns the null-terminated name of the table in the list. The name is valid
 // for the lifetime of the Kudu Table List.
-const char* kudu_table_listable_name(const kudu_table_list* list, size_t index) {
+const char* kudu_table_list_name(const kudu_table_list* list, size_t index, size_t* len) {
   CHECK(index < list->list_.size());
-  return list->list_[index].c_str();
+  const string& name = list->list_[index];
+  *len = name.size();
+  return name.data();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -177,11 +181,13 @@ void kudu_column_schema_destroy(kudu_column_schema* column) {
   delete column;
 }
 
-const char* kudu_column_schema_name(const kudu_column_schema* column) {
-  return column->column_.name().c_str();
+const char* kudu_column_schema_name(const kudu_column_schema* column, size_t* len) {
+  const string& name = column->column_.name();
+  *len = name.size();
+  return name.data();
 }
 
-bool kudu_column_schema_is_nullable(const kudu_column_schema* column) {
+int32_t kudu_column_schema_is_nullable(const kudu_column_schema* column) {
   return column->column_.is_nullable();
 }
 

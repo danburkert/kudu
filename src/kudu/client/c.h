@@ -99,7 +99,7 @@ void kudu_client_builder_destroy(kudu_client_builder*);
 
 // Adds the master with the provided RPC address to the cluster configuration.
 // The Client Builder does *not* take ownership of the address.
-void kudu_client_builder_add_master_server_addr(kudu_client_builder*, const char* addr);
+void kudu_client_builder_add_master_server_addr(kudu_client_builder*, const char* addr, size_t len);
 
 // Clears the cluster configuration of master addresses.
 void kudu_client_builder_clear_master_server_addrs(kudu_client_builder*);
@@ -131,9 +131,9 @@ void kudu_table_list_destroy(kudu_table_list*);
 // Returns the number of tables.
 size_t kudu_table_list_size(const kudu_table_list*);
 
-// Returns the null-terminated name of the table in the list. The name is valid
-// for the lifetime of the Kudu Table List.
-const char* kudu_table_listable_name(const kudu_table_list*, size_t index);
+// Returns the name of the table in the list. The name is valid for the lifetime
+// of the Kudu Table List.
+const char* kudu_table_list_name(const kudu_table_list*, size_t index, size_t* len);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Schema
@@ -153,11 +153,11 @@ kudu_column_schema* kudu_schema_column(const kudu_schema*, size_t idx);
 
 void kudu_column_schema_destroy(kudu_column_schema*);
 
-const char* kudu_column_schema_name(const kudu_column_schema*);
+const char* kudu_column_schema_name(const kudu_column_schema*, size_t* len);
 
-bool kudu_column_schema_is_nullable(const kudu_column_schema*);
+int32_t kudu_column_schema_is_nullable(const kudu_column_schema*);
 
-kudu_data_type kudu_column_schemaype(const kudu_column_schema*);
+kudu_data_type kudu_column_schema_type(const kudu_column_schema*);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Client
@@ -190,7 +190,7 @@ void kudu_client_destroy(kudu_client*);
 const kudu_status* kudu_client_list_tables(const kudu_client*, kudu_table_list** tables);
 
 const kudu_status* kudu_client_table_schema(const kudu_client*,
-                                            const char* table_name,
+                                            const char* table_name, size_t len,
                                             kudu_schema** schema);
 
 #ifdef __cplusplus
