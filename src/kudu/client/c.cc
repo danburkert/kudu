@@ -19,26 +19,41 @@
 
 #include <cstring>
 #include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "kudu/client/client.h"
+#include "kudu/client/schema.h"
 #include "kudu/client/shared_ptr.h"
 #include "kudu/util/monotime.h"
 #include "kudu/util/status.h"
 
 using std::memcpy;
+using std::move;
+using std::string;
 using std::unique_ptr;
+using std::vector;
 
 using kudu::client::KuduClient;
 using kudu::client::KuduClientBuilder;
+using kudu::client::KuduColumnSchema;
+using kudu::client::KuduSchema;
+using kudu::client::sp::shared_ptr;
 using kudu::MonoDelta;
 using kudu::Status;
-using kudu::client::sp::shared_ptr;
 
 extern "C" {
 
 struct kudu_client_builder_t { KuduClientBuilder builder_; };
 struct kudu_client_t { shared_ptr<KuduClient> client_; };
+struct kudu_schema_t { KuduSchema schema_; };
 struct kudu_table_list_t { vector<string> list_; };
+
+struct kudu_column_schema_t {
+  kudu_column_schema_t(KuduColumnSchema column) : column_(move(column)) {}
+  KuduColumnSchema column_;
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Status
@@ -133,6 +148,48 @@ const char* kudu_table_list_table_name(const kudu_table_list_t* list, size_t ind
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// Kudu Schema
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_schema_destroy(kudu_schema_t* schema) {
+  delete schema;
+}
+
+size_t kudu_schema_num_columns(const kudu_schema_t* schema) {
+  return schema->schema_.num_columns();
+}
+
+size_t kudu_schema_num_key_columns(const kudu_schema_t* schema) {
+  vector<int> v;
+  schema->schema_.GetPrimaryKeyColumnIndexes(&v);
+  return v.size();
+}
+
+kudu_column_schema_t* kudu_schema_column(const kudu_schema_t* schema, size_t idx) {
+  return new kudu_column_schema_t(schema->schema_.Column(idx));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Column Schema
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_column_schema_destroy(kudu_column_schema_t* column) {
+  delete column;
+}
+
+const char* kudu_column_schema_name(const kudu_column_schema_t* column) {
+  return column->column_.name().c_str();
+}
+
+bool kudu_column_schema_is_nullable(const kudu_column_schema_t* column) {
+  return column->column_.is_nullable();
+}
+
+kudu_data_type kudu_column_schema_type(const kudu_column_schema_t* column) {
+  return static_cast<kudu_data_type>(column->column_.type());
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // Kudu Client
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -149,4 +206,12 @@ const kudu_status_t* kudu_client_list_tables(const kudu_client_t* client,
   return nullptr;
 }
 
+const kudu_status_t* kudu_client_table_schema(const kudu_client_t* client,
+                                              const char* table_name,
+                                              kudu_schema_t** schema) {
+  unique_ptr<kudu_schema_t> s;
+  RETURN_NOT_OK_C(client->client_->GetTableSchema(table_name, &s->schema_));
+  *schema = s.release();
+  return nullptr;
+}
 }

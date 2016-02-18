@@ -26,8 +26,41 @@ extern "C" {
 
 typedef struct kudu_client_builder_t kudu_client_builder_t;
 typedef struct kudu_client_t kudu_client_t;
+typedef struct kudu_column_schema_t kudu_column_schema_t;
+typedef struct kudu_schema_t kudu_schema_t;
 typedef struct kudu_status_t kudu_status_t;
 typedef struct kudu_table_list_t kudu_table_list_t;
+
+typedef enum kudu_data_type {
+  KUDU_INT8 = 0,
+  KUDU_INT16 = 1,
+  KUDU_INT32 = 2,
+  KUDU_INT64 = 3,
+  KUDU_STRING = 4,
+  KUDU_BOOL = 5,
+  KUDU_FLOAT = 6,
+  KUDU_DOUBLE = 7,
+  KUDU_BINARY = 8,
+  KUDU_TIMESTAMP = 9
+} kudu_data_type;
+
+typedef enum kudu_compression_type {
+  KUDU_DEFAULT_COMPRESSION = 0,
+  KUDU_NO_COMPRESSION = 1,
+  KUDU_SNAPPY_COMPRESSION = 2,
+  KUDU_LZ4_COMPRESSION = 3,
+  KUDU_ZLIB_COMPRESSION = 4,
+} kudu_compression_type;
+
+typedef enum kudu_encoding_type {
+    KUDU_DEFAULT_ENCODING = 0,
+    KUDU_PLAIN_ENCODING = 1,
+    KUDU_PREFIX_ENCODING = 2,
+    KUDU_GROUP_VARINT_ENCODING = 3,
+    KUDU_RUN_LENGTH_ENCODING = 4,
+    KUDU_DICT_ENCODING = 5,
+    KUDU_BIT_SHUFFLE_ENCODING = 6
+} kudu_encoding_type;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Status
@@ -105,6 +138,30 @@ size_t kudu_table_list_size(const kudu_table_list_t*);
 const char* kudu_table_list_table_name(const kudu_table_list_t*, size_t index);
 
 ////////////////////////////////////////////////////////////////////////////////
+// Kudu Schema
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_schema_destroy(kudu_schema_t*);
+
+size_t kudu_schema_num_columns(const kudu_schema_t*);
+
+size_t kudu_schema_num_key_columns(const kudu_schema_t*);
+
+kudu_column_schema_t* kudu_schema_column(const kudu_schema_t*, size_t idx);
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Column Schema
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_column_schema_destroy(kudu_column_schema_t*);
+
+const char* kudu_column_schema_name(const kudu_column_schema_t*);
+
+bool kudu_column_schema_is_nullable(const kudu_column_schema_t*);
+
+kudu_data_type kudu_column_schema_type(const kudu_column_schema_t*);
+
+////////////////////////////////////////////////////////////////////////////////
 // Kudu Client
 //
 // The Kudu Client represents a connection to a cluster. From the user
@@ -133,6 +190,10 @@ void kudu_client_destroy(kudu_client_t*);
 
 // Returns the tables.
 const kudu_status_t* kudu_client_list_tables(const kudu_client_t*, kudu_table_list_t** tables);
+
+const kudu_status_t* kudu_client_table_schema(const kudu_client_t*,
+                                              const char* table_name,
+                                              kudu_schema_t** schema);
 
 #ifdef __cplusplus
 } // extern "C"
