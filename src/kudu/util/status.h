@@ -93,10 +93,10 @@
 #define CHECK_OK_PREPEND      KUDU_CHECK_OK_PREPEND
 #define CHECK_OK              KUDU_CHECK_OK
 
-// Return the given status as a kudu_status_t if it is not OK.
+// Return the given status as a kudu_status if it is not OK.
 #define RETURN_NOT_OK_C(s) do { \
     ::kudu::Status _s = (s); \
-    if (PREDICT_FALSE(!_s.ok())) return ::kudu::Status::into_kudu_status_t( \
+    if (PREDICT_FALSE(!_s.ok())) return ::kudu::Status::into_kudu_status( \
         ::std::move(_s)); \
   } while (0);
 
@@ -105,7 +105,7 @@
 #define KUDU_CHECK            CHECK
 #endif
 
-struct kudu_status_t;
+struct kudu_status;
 
 namespace kudu {
 
@@ -123,7 +123,7 @@ class KUDU_EXPORT Status {
   // Move the specified status.
   Status(Status&& s);
   void operator=(Status&& s);
-  static const kudu_status_t* into_kudu_status_t(Status&&s);
+  static const kudu_status* into_kudu_status(Status&&s);
 #endif
 
   // Return a success status.
@@ -364,10 +364,10 @@ inline void Status::operator=(Status&& s) {
   }
 }
 
-inline const kudu_status_t* Status::into_kudu_status_t(Status&& s) {
+inline const kudu_status* Status::into_kudu_status(Status&& s) {
   const char* state = s.state_;
   s.state_ = nullptr;
-  return reinterpret_cast<const kudu_status_t*>(state);
+  return reinterpret_cast<const kudu_status*>(state);
 }
 
 #endif

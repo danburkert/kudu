@@ -24,12 +24,12 @@
 extern "C" {
 #endif
 
-typedef struct kudu_client_builder_t kudu_client_builder_t;
-typedef struct kudu_client_t kudu_client_t;
-typedef struct kudu_column_schema_t kudu_column_schema_t;
-typedef struct kudu_schema_t kudu_schema_t;
-typedef struct kudu_status_t kudu_status_t;
-typedef struct kudu_table_list_t kudu_table_list_t;
+typedef struct kudu_client_builder kudu_client_builder;
+typedef struct kudu_client kudu_client;
+typedef struct kudu_column_schema kudu_column_schema;
+typedef struct kudu_schema kudu_schema;
+typedef struct kudu_status kudu_status;
+typedef struct kudu_table_list kudu_table_list;
 
 typedef enum kudu_data_type {
   KUDU_INT8 = 0,
@@ -71,17 +71,17 @@ typedef enum kudu_encoding_type {
 ////////////////////////////////////////////////////////////////////////////////
 
 // Kudu Status instances must be destroyed if they are not OK.
-void kudu_status_destroy(const kudu_status_t*);
+void kudu_status_destroy(const kudu_status*);
 
 // Get the Kudu error code associated with the Kudu Status.
-int8_t kudu_status_code(const kudu_status_t*);
+int8_t kudu_status_code(const kudu_status*);
 
 // Get the POSIX error code associated with the Kudu Status.
-int16_t kudu_status_posix_code(const kudu_status_t*);
+int16_t kudu_status_posix_code(const kudu_status*);
 
 // Get the error message associated with the Kudu Status.
 // The message is valid for the lifetime of the Kudu Status.
-const char* kudu_status_message(const kudu_status_t*, size_t* len);
+const char* kudu_status_message(const kudu_status*, size_t* len);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Client Builder
@@ -92,74 +92,72 @@ const char* kudu_status_message(const kudu_status_t*, size_t* len);
 
 // Creates a new Kudu Client Builder. Must be destroyed with
 // kudu_client_builder_destroy when no longer needed.
-kudu_client_builder_t* kudu_client_builder_create();
+kudu_client_builder* kudu_client_builder_create();
 
 // Destroys the Kudu Client Builder.
-void kudu_client_builder_destroy(kudu_client_builder_t*);
+void kudu_client_builder_destroy(kudu_client_builder*);
 
 // Adds the master with the provided RPC address to the cluster configuration.
 // The Client Builder does *not* take ownership of the address.
-void kudu_client_builder_add_master_server_addr(kudu_client_builder_t*,
-                                                const char* addr);
+void kudu_client_builder_add_master_server_addr(kudu_client_builder*, const char* addr);
 
 // Clears the cluster configuration of master addresses.
-void kudu_client_builder_clear_master_server_addrs(kudu_client_builder_t*);
+void kudu_client_builder_clear_master_server_addrs(kudu_client_builder*);
 
 // Sets the default timeout used for administrative operations (e.g.
 // CreateTable, AlterTable, ...). Optional.
 //
 // If not provided, defaults to 10 seconds.
-void kudu_client_builder_set_default_admin_operation_timeout(kudu_client_builder_t*,
+void kudu_client_builder_set_default_admin_operation_timeout(kudu_client_builder*,
                                                              int64_t timeout_millis);
 
 // Sets the default timeout for individual RPCs. Optional.
 //
 // If not provided, defaults to 5 seconds.
-void kudu_client_builder_set_default_rpc_timeout(kudu_client_builder_t*, int64_t timeout_millis);
+void kudu_client_builder_set_default_rpc_timeout(kudu_client_builder*, int64_t timeout_millis);
 
 // Creates the client.
 //
 // The return value may indicate an error in the create operation, or a misuse
 // of the builder; in the latter case, only the last error is returned.
-const kudu_status_t* kudu_client_builder_build(kudu_client_builder_t*,
-                                               kudu_client_t** client);
+const kudu_status* kudu_client_builder_build(kudu_client_builder*, kudu_client** client);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Table List
 ////////////////////////////////////////////////////////////////////////////////
 
-void kudu_table_list_destroy(kudu_table_list_t*);
+void kudu_table_list_destroy(kudu_table_list*);
 
 // Returns the number of tables.
-size_t kudu_table_list_size(const kudu_table_list_t*);
+size_t kudu_table_list_size(const kudu_table_list*);
 
 // Returns the null-terminated name of the table in the list. The name is valid
 // for the lifetime of the Kudu Table List.
-const char* kudu_table_list_table_name(const kudu_table_list_t*, size_t index);
+const char* kudu_table_listable_name(const kudu_table_list*, size_t index);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Schema
 ////////////////////////////////////////////////////////////////////////////////
 
-void kudu_schema_destroy(kudu_schema_t*);
+void kudu_schema_destroy(kudu_schema*);
 
-size_t kudu_schema_num_columns(const kudu_schema_t*);
+size_t kudu_schema_num_columns(const kudu_schema*);
 
-size_t kudu_schema_num_key_columns(const kudu_schema_t*);
+size_t kudu_schema_num_key_columns(const kudu_schema*);
 
-kudu_column_schema_t* kudu_schema_column(const kudu_schema_t*, size_t idx);
+kudu_column_schema* kudu_schema_column(const kudu_schema*, size_t idx);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Column Schema
 ////////////////////////////////////////////////////////////////////////////////
 
-void kudu_column_schema_destroy(kudu_column_schema_t*);
+void kudu_column_schema_destroy(kudu_column_schema*);
 
-const char* kudu_column_schema_name(const kudu_column_schema_t*);
+const char* kudu_column_schema_name(const kudu_column_schema*);
 
-bool kudu_column_schema_is_nullable(const kudu_column_schema_t*);
+bool kudu_column_schema_is_nullable(const kudu_column_schema*);
 
-kudu_data_type kudu_column_schema_type(const kudu_column_schema_t*);
+kudu_data_type kudu_column_schemaype(const kudu_column_schema*);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Client
@@ -186,14 +184,14 @@ kudu_data_type kudu_column_schema_type(const kudu_column_schema_t*);
 ////////////////////////////////////////////////////////////////////////////////
 
 // Destroys the Kudu Client.
-void kudu_client_destroy(kudu_client_t*);
+void kudu_client_destroy(kudu_client*);
 
 // Returns the tables.
-const kudu_status_t* kudu_client_list_tables(const kudu_client_t*, kudu_table_list_t** tables);
+const kudu_status* kudu_client_list_tables(const kudu_client*, kudu_table_list** tables);
 
-const kudu_status_t* kudu_client_table_schema(const kudu_client_t*,
-                                              const char* table_name,
-                                              kudu_schema_t** schema);
+const kudu_status* kudu_client_table_schema(const kudu_client*,
+                                            const char* table_name,
+                                            kudu_schema** schema);
 
 #ifdef __cplusplus
 } // extern "C"

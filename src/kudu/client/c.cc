@@ -45,42 +45,42 @@ using kudu::Status;
 
 extern "C" {
 
-struct kudu_client_builder_t { KuduClientBuilder builder_; };
-struct kudu_client_t { shared_ptr<KuduClient> client_; };
-struct kudu_schema_t { KuduSchema schema_; };
-struct kudu_table_list_t { vector<string> list_; };
+struct kudu_client_builder { KuduClientBuilder builder_; };
+struct kudu_client { shared_ptr<KuduClient> client_; };
+struct kudu_schema { KuduSchema schema_; };
+struct kudu_table_list { vector<string> list_; };
 
-struct kudu_column_schema_t {
-  kudu_column_schema_t(KuduColumnSchema column) : column_(move(column)) {}
+struct kudu_column_schema {
+  kudu_column_schema(KuduColumnSchema column) : column_(move(column)) {}
   KuduColumnSchema column_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Status
 //
-// kudu_status_t is an alias to a const char* with the same internal format as
+// kudu_status is an alias to a const char* with the same internal format as
 // Status::state_.
 ////////////////////////////////////////////////////////////////////////////////
 
-void kudu_status_destroy(const kudu_status_t* status) {
+void kudu_status_destroy(const kudu_status* status) {
   delete[] reinterpret_cast<const char*>(status);
 }
 
-int8_t kudu_status_code(const kudu_status_t* status) {
+int8_t kudu_status_code(const kudu_status* status) {
   if (status == nullptr) {
     return 0;
   }
   return reinterpret_cast<const int8_t*>(status)[4];
 }
 
-int16_t kudu_status_posix_code(const kudu_status_t* status) {
+int16_t kudu_status_posix_code(const kudu_status* status) {
   if (status == nullptr) {
     return 0;
   }
   return *reinterpret_cast<const int16_t*>(reinterpret_cast<const char*>(status)[5]);
 }
 
-const char* kudu_status_message(const kudu_status_t* status, size_t* len) {
+const char* kudu_status_message(const kudu_status* status, size_t* len) {
   if (status == nullptr) {
     *len = 0;
     return nullptr;
@@ -94,35 +94,35 @@ const char* kudu_status_message(const kudu_status_t* status, size_t* len) {
 // Kudu Client Builder
 ////////////////////////////////////////////////////////////////////////////////
 
-kudu_client_builder_t* kudu_client_builder_create() {
-  return new kudu_client_builder_t();
+kudu_client_builder* kudu_client_builder_create() {
+  return new kudu_client_builder();
 }
 
-void kudu_client_builder_destroy(kudu_client_builder_t* builder) {
+void kudu_client_builder_destroy(kudu_client_builder* builder) {
   delete builder;
 }
 
-void kudu_client_builder_add_master_server_addr(kudu_client_builder_t* builder, const char* addr) {
+void kudu_client_builder_add_master_server_addr(kudu_client_builder* builder, const char* addr) {
   builder->builder_.add_master_server_addr(addr);
 }
 
-void kudu_client_builder_clear_master_server_addrs(kudu_client_builder_t* builder) {
+void kudu_client_builder_clear_master_server_addrs(kudu_client_builder* builder) {
   builder->builder_.clear_master_server_addrs();
 }
 
-void kudu_client_builder_set_default_admin_operation_timeout(kudu_client_builder_t* builder,
+void kudu_client_builder_set_default_admin_operation_timeout(kudu_client_builder* builder,
                                                              int64_t timeout_millis) {
   builder->builder_.default_admin_operation_timeout(MonoDelta::FromMilliseconds(timeout_millis));
 }
 
-void kudu_client_builder_set_default_rpc_timeout(kudu_client_builder_t* builder,
+void kudu_client_builder_set_default_rpc_timeout(kudu_client_builder* builder,
                                                  int64_t timeout_millis) {
   builder->builder_.default_rpc_timeout(MonoDelta::FromMilliseconds(timeout_millis));
 }
 
-const kudu_status_t* kudu_client_builder_build(kudu_client_builder_t* builder,
-                                               kudu_client_t** client) {
-  unique_ptr<kudu_client_t> c(new kudu_client_t);
+const kudu_status* kudu_client_builder_build(kudu_client_builder* builder,
+                                             kudu_client** client) {
+  unique_ptr<kudu_client> c(new kudu_client);
   RETURN_NOT_OK_C(builder->builder_.Build(&c->client_));
   *client = c.release();
   return nullptr;
@@ -132,17 +132,17 @@ const kudu_status_t* kudu_client_builder_build(kudu_client_builder_t* builder,
 // Kudu Table List
 ////////////////////////////////////////////////////////////////////////////////
 
-void kudu_table_list_destroy(kudu_table_list_t* list) {
+void kudu_table_list_destroy(kudu_table_list* list) {
   delete list;
 }
 
-size_t kudu_table_list_size(const kudu_table_list_t* list) {
+size_t kudu_table_list_size(const kudu_table_list* list) {
   return list->list_.size();
 }
 
 // Returns the null-terminated name of the table in the list. The name is valid
 // for the lifetime of the Kudu Table List.
-const char* kudu_table_list_table_name(const kudu_table_list_t* list, size_t index) {
+const char* kudu_table_listable_name(const kudu_table_list* list, size_t index) {
   CHECK(index < list->list_.size());
   return list->list_[index].c_str();
 }
@@ -151,41 +151,41 @@ const char* kudu_table_list_table_name(const kudu_table_list_t* list, size_t ind
 // Kudu Schema
 ////////////////////////////////////////////////////////////////////////////////
 
-void kudu_schema_destroy(kudu_schema_t* schema) {
+void kudu_schema_destroy(kudu_schema* schema) {
   delete schema;
 }
 
-size_t kudu_schema_num_columns(const kudu_schema_t* schema) {
+size_t kudu_schema_num_columns(const kudu_schema* schema) {
   return schema->schema_.num_columns();
 }
 
-size_t kudu_schema_num_key_columns(const kudu_schema_t* schema) {
+size_t kudu_schema_num_key_columns(const kudu_schema* schema) {
   vector<int> v;
   schema->schema_.GetPrimaryKeyColumnIndexes(&v);
   return v.size();
 }
 
-kudu_column_schema_t* kudu_schema_column(const kudu_schema_t* schema, size_t idx) {
-  return new kudu_column_schema_t(schema->schema_.Column(idx));
+kudu_column_schema* kudu_schema_column(const kudu_schema* schema, size_t idx) {
+  return new kudu_column_schema(schema->schema_.Column(idx));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Column Schema
 ////////////////////////////////////////////////////////////////////////////////
 
-void kudu_column_schema_destroy(kudu_column_schema_t* column) {
+void kudu_column_schema_destroy(kudu_column_schema* column) {
   delete column;
 }
 
-const char* kudu_column_schema_name(const kudu_column_schema_t* column) {
+const char* kudu_column_schema_name(const kudu_column_schema* column) {
   return column->column_.name().c_str();
 }
 
-bool kudu_column_schema_is_nullable(const kudu_column_schema_t* column) {
+bool kudu_column_schema_is_nullable(const kudu_column_schema* column) {
   return column->column_.is_nullable();
 }
 
-kudu_data_type kudu_column_schema_type(const kudu_column_schema_t* column) {
+kudu_data_type kudu_column_schemaype(const kudu_column_schema* column) {
   return static_cast<kudu_data_type>(column->column_.type());
 }
 
@@ -193,23 +193,23 @@ kudu_data_type kudu_column_schema_type(const kudu_column_schema_t* column) {
 // Kudu Client
 ////////////////////////////////////////////////////////////////////////////////
 
-void kudu_client_destroy(kudu_client_t* client) {
+void kudu_client_destroy(kudu_client* client) {
   delete client;
 }
 
 // Returns the tables.
-const kudu_status_t* kudu_client_list_tables(const kudu_client_t* client,
-                                             kudu_table_list_t** tables) {
-  unique_ptr<kudu_table_list_t> list(new kudu_table_list_t);
+const kudu_status* kudu_client_list_tables(const kudu_client* client,
+                                           kudu_table_list** tables) {
+  unique_ptr<kudu_table_list> list(new kudu_table_list);
   RETURN_NOT_OK_C(client->client_->ListTables(&list->list_));
   *tables = list.release();
   return nullptr;
 }
 
-const kudu_status_t* kudu_client_table_schema(const kudu_client_t* client,
-                                              const char* table_name,
-                                              kudu_schema_t** schema) {
-  unique_ptr<kudu_schema_t> s;
+const kudu_status* kudu_clientable_schema(const kudu_client* client,
+                                          const char* table_name,
+                                          kudu_schema** schema) {
+  unique_ptr<kudu_schema> s;
   RETURN_NOT_OK_C(client->client_->GetTableSchema(table_name, &s->schema_));
   *schema = s.release();
   return nullptr;
