@@ -133,7 +133,7 @@ size_t kudu_table_list_size(const kudu_table_list*);
 
 // Returns the name of the table in the list. The name is valid for the lifetime
 // of the Kudu Table List.
-const char* kudu_table_list_name(const kudu_table_list*, size_t index, size_t* len);
+const char* kudu_table_list_table_name(const kudu_table_list*, size_t index, size_t* len);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Schema
