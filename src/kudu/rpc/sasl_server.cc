@@ -273,7 +273,14 @@ Status SaslServer::SendSaslError(ErrorStatusPB::RpcErrorCodePB code, const Statu
 Status SaslServer::HandleNegotiateRequest(const SaslMessagePB& request) {
   TRACE("SASL Server: Received NEGOTIATE request from client");
 
-  // Authentication mechanisms this server supports (i.e. plugins).
+  // Fill in the set of features supported by the client.
+  for (int flag : request.supported_features()) {
+    // We only add the features that our local build knows about.
+    if (RpcFeatureFlag_IsValid(flag)) {
+      client_features_.insert(static_cast<RpcFeatureFlag>(flag));
+    }
+  }
+
   set<string> server_mechs = helper_.LocalMechs();
   if (PREDICT_FALSE(server_mechs.empty())) {
     // This will happen if no mechanisms are enabled before calling Init()
@@ -300,6 +307,11 @@ Status SaslServer::SendNegotiateResponse(const set<string>& server_mechs) {
     // consider removing it and breaking compatibility with Kudu <=0.6.
     auth->set_method("");
     auth->set_mechanism(mech);
+  }
+
+  // Tell the client which features we support.
+  for (RpcFeatureFlag feature : kSupportedRpcFeatureFlags) {
+    response.add_supported_features(feature);
   }
 
   RETURN_NOT_OK(SendSaslMessage(response));

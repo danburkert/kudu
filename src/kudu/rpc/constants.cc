@@ -17,12 +17,15 @@
 
 #include "kudu/rpc/constants.h"
 
+using std::vector;
+
 namespace kudu {
 namespace rpc {
 
 const char* const kMagicNumber = "hrpc";
 const char* const kSaslAppName = "Kudu";
 const char* const kSaslProtoName = "kudu";
+const vector<RpcFeatureFlag> kSupportedRpcFeatureFlags = { TMP_TEST_FEATURE_FLAG };
 
 } // namespace rpc
 } // namespace kudu

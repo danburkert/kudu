@@ -61,6 +61,12 @@ class SaslServer {
   // Call after Negotiate().
   SaslMechanism::Type negotiated_mechanism() const;
 
+  // Return the set of RPC system features supported by the remote client.
+  // Call after Negotiate().
+  const std::set<RpcFeatureFlag>& client_features() const {
+    return client_features_;
+  }
+
   // Name of the user that authenticated using plain auth.
   // Call after Negotiate() and only if the negotiated mechanism was PLAIN.
   const std::string& plain_auth_user() const;
@@ -143,6 +149,10 @@ class SaslServer {
 
   // Authentication store used for PLAIN authentication.
   gscoped_ptr<AuthStore> authstore_;
+
+  // The set of features that the client supports. Filled in
+  // after we receive the NEGOTIATE request from the client.
+  std::set<RpcFeatureFlag> client_features_;
 
   // The successfully-authenticated user, if applicable.
   string plain_auth_user_;

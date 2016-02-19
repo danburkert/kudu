@@ -25,6 +25,7 @@
 #include <sasl/sasl.h>
 
 #include "kudu/gutil/gscoped_ptr.h"
+#include "kudu/rpc/rpc_header.pb.h"
 #include "kudu/rpc/sasl_common.h"
 #include "kudu/rpc/sasl_helper.h"
 #include "kudu/util/monotime.h"
@@ -59,6 +60,12 @@ class SaslClient {
   // Returns mechanism negotiated by this connection.
   // Call after Negotiate().
   SaslMechanism::Type negotiated_mechanism() const;
+
+  // Return the set of RPC system features supported by the remote server.
+  // Call after Negotiate().
+  const std::set<RpcFeatureFlag>& server_features() const {
+    return server_features_;
+  }
 
   // Specify IP:port of local side of connection.
   // Call before Init(). Required for some mechanisms.
@@ -145,6 +152,9 @@ class SaslClient {
   string plain_auth_user_;
   string plain_pass_;
   gscoped_ptr<sasl_secret_t, FreeDeleter> psecret_;
+
+  // The set of features supported by the server.
+  std::set<RpcFeatureFlag> server_features_;
 
   SaslNegotiationState::Type client_state_;
 
