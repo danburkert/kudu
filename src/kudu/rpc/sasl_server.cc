@@ -310,7 +310,7 @@ Status SaslServer::SendNegotiateResponse(const set<string>& server_mechs) {
   }
 
   // Tell the client which features we support.
-  for (RpcFeatureFlag feature : kSupportedRpcFeatureFlags) {
+  for (RpcFeatureFlag feature : kSupportedServerRpcFeatureFlags) {
     response.add_supported_features(feature);
   }
 

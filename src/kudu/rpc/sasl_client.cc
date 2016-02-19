@@ -258,7 +258,7 @@ Status SaslClient::SendNegotiateMessage() {
   msg.set_state(SaslMessagePB::NEGOTIATE);
 
   // Advertise our supported features.
-  for (RpcFeatureFlag feature : kSupportedRpcFeatureFlags) {
+  for (RpcFeatureFlag feature : kSupportedClientRpcFeatureFlags) {
     msg.add_supported_features(feature);
   }
 

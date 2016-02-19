@@ -25,7 +25,8 @@ namespace rpc {
 const char* const kMagicNumber = "hrpc";
 const char* const kSaslAppName = "Kudu";
 const char* const kSaslProtoName = "kudu";
-const vector<RpcFeatureFlag> kSupportedRpcFeatureFlags = { TMP_TEST_FEATURE_FLAG };
+vector<RpcFeatureFlag> kSupportedServerRpcFeatureFlags = { APPLICATION_FEATURE_FLAGS };
+vector<RpcFeatureFlag> kSupportedClientRpcFeatureFlags = { APPLICATION_FEATURE_FLAGS };
 
 } // namespace rpc
 } // namespace kudu

@@ -49,8 +49,13 @@ static const uint8_t kHeaderFlagsLength = 3;
 // There is a 4-byte length prefix before any packet.
 static const uint8_t kMsgLengthPrefixLength = 4;
 
-// The set of RPC features that this build supports.
-extern const std::vector<RpcFeatureFlag> kSupportedRpcFeatureFlags;
+// The set of RPC features that this server build supports.
+// Non-const for testing.
+extern std::vector<RpcFeatureFlag> kSupportedServerRpcFeatureFlags;
+
+// The set of RPC features that this client build supports.
+// Non-const for testing.
+extern std::vector<RpcFeatureFlag> kSupportedClientRpcFeatureFlags;
 
 } // namespace rpc
 } // namespace kudu
