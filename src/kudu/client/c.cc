@@ -80,14 +80,13 @@ int16_t kudu_status_posix_code(const kudu_status* status) {
   return *reinterpret_cast<const int16_t*>(reinterpret_cast<const char*>(status)[5]);
 }
 
-const char* kudu_status_message(const kudu_status* status, size_t* len) {
+kudu_slice kudu_status_message(const kudu_status* status) {
   if (status == nullptr) {
-    *len = 0;
-    return nullptr;
+    return kudu_slice { .data = nullptr, .len = 0 };
   }
   const char* data = reinterpret_cast<const char*>(status);
-  *len = static_cast<size_t>(*reinterpret_cast<const uint32_t*>(data));
-  return &data[7];
+  size_t len = static_cast<size_t>(*reinterpret_cast<const uint32_t*>(data));
+  return kudu_slice { .data = reinterpret_cast<const uint8_t*>(&data[7]), .len = len };
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -103,9 +102,9 @@ void kudu_client_builder_destroy(kudu_client_builder* builder) {
 }
 
 void kudu_client_builder_add_master_server_addr(kudu_client_builder* builder,
-                                                const char* addr,
-                                                size_t len) {
-  builder->builder_.add_master_server_addr(string(addr, len));
+                                                kudu_slice addr) {
+  builder->builder_.add_master_server_addr(string(reinterpret_cast<const char*>(addr.data),
+                                                  addr.len));
 }
 
 void kudu_client_builder_clear_master_server_addrs(kudu_client_builder* builder) {
@@ -144,11 +143,11 @@ size_t kudu_table_list_size(const kudu_table_list* list) {
 
 // Returns the null-terminated name of the table in the list. The name is valid
 // for the lifetime of the Kudu Table List.
-const char* kudu_table_list_table_name(const kudu_table_list* list, size_t index, size_t* len) {
+kudu_slice kudu_table_list_table_name(const kudu_table_list* list, size_t index) {
   CHECK(index < list->list_.size());
   const string& name = list->list_[index];
-  *len = name.size();
-  return name.data();
+  const uint8_t* data = reinterpret_cast<const uint8_t*>(name.data());
+  return kudu_slice { .data = data, .len = name.size() };
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -181,17 +180,17 @@ void kudu_column_schema_destroy(kudu_column_schema* column) {
   delete column;
 }
 
-const char* kudu_column_schema_name(const kudu_column_schema* column, size_t* len) {
+kudu_slice kudu_column_schema_name(const kudu_column_schema* column) {
   const string& name = column->column_.name();
-  *len = name.size();
-  return name.data();
+  const uint8_t* data = reinterpret_cast<const uint8_t*>(name.data());
+  return kudu_slice { .data = data, .len = name.size() };
 }
 
 int32_t kudu_column_schema_is_nullable(const kudu_column_schema* column) {
   return column->column_.is_nullable();
 }
 
-kudu_data_type kudu_column_schemaype(const kudu_column_schema* column) {
+kudu_data_type kudu_column_schema_type(const kudu_column_schema* column) {
   return static_cast<kudu_data_type>(column->column_.type());
 }
 
@@ -212,11 +211,13 @@ const kudu_status* kudu_client_list_tables(const kudu_client* client,
   return nullptr;
 }
 
-const kudu_status* kudu_clientable_schema(const kudu_client* client,
-                                          const char* table_name,
-                                          kudu_schema** schema) {
-  unique_ptr<kudu_schema> s;
-  RETURN_NOT_OK_C(client->client_->GetTableSchema(table_name, &s->schema_));
+const kudu_status* kudu_client_table_schema(const kudu_client* client,
+                                            kudu_slice table_name,
+                                            kudu_schema** schema) {
+  unique_ptr<kudu_schema> s(new kudu_schema);
+  RETURN_NOT_OK_C(client->client_->GetTableSchema(
+        string(reinterpret_cast<const char*>(table_name.data), table_name.len),
+        &s.get()->schema_));
   *schema = s.release();
   return nullptr;
 }

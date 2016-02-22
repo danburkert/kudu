@@ -24,8 +24,8 @@
 extern "C" {
 #endif
 
-typedef struct kudu_client_builder kudu_client_builder;
 typedef struct kudu_client kudu_client;
+typedef struct kudu_client_builder kudu_client_builder;
 typedef struct kudu_column_schema kudu_column_schema;
 typedef struct kudu_schema kudu_schema;
 typedef struct kudu_status kudu_status;
@@ -63,6 +63,33 @@ typedef enum kudu_encoding_type {
 } kudu_encoding_type;
 
 ////////////////////////////////////////////////////////////////////////////////
+// Kudu Slice
+//
+// A Kudu Slice holds an immutable (const) reference to a chunk of data with
+// fixed length.
+//
+// The lifetime of the slice and the format of the data (e.g. UTF-8) should be
+// specified in the interface which produces or consumes the slice. Unless
+// otherwise specified, functions which take a slice as an argument do not take
+// ownership of the data, and do not require that the data live longer than the
+// function call. Functions which return a slice should document the lifetime of
+// the data.
+//
+// The data pointed to by the slice must not be modified during the lifetime of
+// the slice.
+//
+// Slice instances may be freely copied, but copies must not outlive the
+// original slice.
+//
+// The data need not be null terminated.
+////////////////////////////////////////////////////////////////////////////////
+
+typedef struct kudu_slice {
+  const uint8_t* data;
+  size_t len;
+} kudu_slice;
+
+////////////////////////////////////////////////////////////////////////////////
 // Kudu Status
 //
 // Kudu Status represents the result of an operation which may fail. Operations
@@ -79,9 +106,9 @@ int8_t kudu_status_code(const kudu_status*);
 // Get the POSIX error code associated with the Kudu Status.
 int16_t kudu_status_posix_code(const kudu_status*);
 
-// Get the error message associated with the Kudu Status.
-// The message is valid for the lifetime of the Kudu Status.
-const char* kudu_status_message(const kudu_status*, size_t* len);
+// Get the error message associated with the Kudu Status as a UTF-8 encoded
+// string slice. The message is valid for the lifetime of the Kudu Status.
+kudu_slice kudu_status_message(const kudu_status*);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Client Builder
@@ -98,8 +125,7 @@ kudu_client_builder* kudu_client_builder_create();
 void kudu_client_builder_destroy(kudu_client_builder*);
 
 // Adds the master with the provided RPC address to the cluster configuration.
-// The Client Builder does *not* take ownership of the address.
-void kudu_client_builder_add_master_server_addr(kudu_client_builder*, const char* addr, size_t len);
+void kudu_client_builder_add_master_server_addr(kudu_client_builder*, kudu_slice addr);
 
 // Clears the cluster configuration of master addresses.
 void kudu_client_builder_clear_master_server_addrs(kudu_client_builder*);
@@ -131,9 +157,9 @@ void kudu_table_list_destroy(kudu_table_list*);
 // Returns the number of tables.
 size_t kudu_table_list_size(const kudu_table_list*);
 
-// Returns the name of the table in the list. The name is valid for the lifetime
-// of the Kudu Table List.
-const char* kudu_table_list_table_name(const kudu_table_list*, size_t index, size_t* len);
+// Returns the name of the table in the list as a UTF-8 encoded string slice.
+// The returned slice is valid for the lifetime of the table list.
+kudu_slice kudu_table_list_table_name(const kudu_table_list*, size_t index);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Schema
@@ -141,10 +167,13 @@ const char* kudu_table_list_table_name(const kudu_table_list*, size_t index, siz
 
 void kudu_schema_destroy(kudu_schema*);
 
+// Returns the number of columns in the schema.
 size_t kudu_schema_num_columns(const kudu_schema*);
 
-size_t kudu_schema_num_key_columns(const kudu_schema*);
+// Returns the number of primary key columns in the schema.
+size_t kudu_schema_num_primary_key_columns(const kudu_schema*);
 
+// Returns the column schema for the column at the specified index.
 kudu_column_schema* kudu_schema_column(const kudu_schema*, size_t idx);
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -153,10 +182,14 @@ kudu_column_schema* kudu_schema_column(const kudu_schema*, size_t idx);
 
 void kudu_column_schema_destroy(kudu_column_schema*);
 
-const char* kudu_column_schema_name(const kudu_column_schema*, size_t* len);
+// Returns the name of the column as a UTF-8 encoded string slice.
+// The returned slice is valid for the lifetime of the column schema.
+kudu_slice kudu_column_schema_name(const kudu_column_schema*);
 
+// Returns true if the column is nullable.
 int32_t kudu_column_schema_is_nullable(const kudu_column_schema*);
 
+// Returns the type of the column.
 kudu_data_type kudu_column_schema_type(const kudu_column_schema*);
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -186,11 +219,14 @@ kudu_data_type kudu_column_schema_type(const kudu_column_schema*);
 // Destroys the Kudu Client.
 void kudu_client_destroy(kudu_client*);
 
-// Returns the tables.
+// Returns the list of tables in the Kudu cluster storing the result in tables,
+// or returns an error status.
 const kudu_status* kudu_client_list_tables(const kudu_client*, kudu_table_list** tables);
 
+// Retrieves the schema for the table with the given name storing the result in
+// schema, or returns an error status.
 const kudu_status* kudu_client_table_schema(const kudu_client*,
-                                            const char* table_name, size_t len,
+                                            kudu_slice table_name,
                                             kudu_schema** schema);
 
 #ifdef __cplusplus
