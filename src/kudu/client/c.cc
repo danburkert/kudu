@@ -190,15 +190,15 @@ int32_t kudu_column_schema_is_nullable(const kudu_column_schema* column) {
   return column->column_.is_nullable();
 }
 
-kudu_data_type kudu_column_schema_type(const kudu_column_schema* column) {
+kudu_data_type kudu_column_schema_data_type(const kudu_column_schema* column) {
   return static_cast<kudu_data_type>(column->column_.type());
 }
 
-kudu_encoding_type kudu_column_encoding_type(const kudu_column_schema* column) {
+kudu_encoding_type kudu_column_schema_encoding_type(const kudu_column_schema* column) {
   return static_cast<kudu_encoding_type>(column->column_.encoding_type());
 }
 
-kudu_compression_type kudu_column_compression_type(const kudu_column_schema* column) {
+kudu_compression_type kudu_column_schema_compression_type(const kudu_column_schema* column) {
   return static_cast<kudu_compression_type>(column->column_.compression_type());
 }
 

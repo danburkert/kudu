@@ -190,11 +190,11 @@ kudu_slice kudu_column_schema_name(const kudu_column_schema*);
 int32_t kudu_column_schema_is_nullable(const kudu_column_schema*);
 
 // Returns the type of the column.
-kudu_data_type kudu_column_schema_type(const kudu_column_schema*);
+kudu_data_type kudu_column_schema_data_type(const kudu_column_schema*);
 
-kudu_encoding_type kudu_column_encoding_type(const kudu_column_schema*);
+kudu_encoding_type kudu_column_schema_encoding_type(const kudu_column_schema*);
 
-kudu_compression_type kudu_column_compression_type(const kudu_column_schema*);
+kudu_compression_type kudu_column_schema_compression_type(const kudu_column_schema*);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Client
