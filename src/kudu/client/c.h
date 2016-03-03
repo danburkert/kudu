@@ -194,6 +194,8 @@ kudu_data_type kudu_column_schema_type(const kudu_column_schema*);
 
 kudu_encoding_type kudu_column_encoding_type(const kudu_column_schema*);
 
+kudu_compression_type kudu_column_compression_type(const kudu_column_schema*);
+
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Client
 //

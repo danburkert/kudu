@@ -198,6 +198,10 @@ kudu_encoding_type kudu_column_encoding_type(const kudu_column_schema* column) {
   return static_cast<kudu_encoding_type>(column->column_.encoding_type());
 }
 
+kudu_compression_type kudu_column_compression_type(const kudu_column_schema* column) {
+  return static_cast<kudu_compression_type>(column->column_.compression_type());
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Client
 ////////////////////////////////////////////////////////////////////////////////

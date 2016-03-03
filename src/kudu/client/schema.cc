@@ -449,6 +449,10 @@ KuduColumnStorageAttributes::EncodingType KuduColumnSchema::encoding_type() cons
   return FromInternalEncodingType(DCHECK_NOTNULL(col_)->attributes().encoding);
 }
 
+KuduColumnStorageAttributes::CompressionType KuduColumnSchema::compression_type() const {
+  return FromInternalCompressionType(DCHECK_NOTNULL(col_)->attributes().compression);
+}
+
 KuduColumnSchema::DataType KuduColumnSchema::type() const {
   return FromInternalDataType(DCHECK_NOTNULL(col_)->type_info()->type());
 }

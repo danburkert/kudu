@@ -137,6 +137,8 @@ class KUDU_EXPORT KuduColumnSchema {
 
   KuduColumnStorageAttributes::EncodingType encoding_type() const;
 
+  KuduColumnStorageAttributes::CompressionType compression_type() const;
+
   // TODO: Expose default column value and attributes?
 
  private:
