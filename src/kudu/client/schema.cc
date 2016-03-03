@@ -445,6 +445,10 @@ bool KuduColumnSchema::is_nullable() const {
   return DCHECK_NOTNULL(col_)->is_nullable();
 }
 
+KuduColumnStorageAttributes::EncodingType KuduColumnSchema::encoding_type() const {
+  return FromInternalEncodingType(DCHECK_NOTNULL(col_)->attributes().encoding);
+}
+
 KuduColumnSchema::DataType KuduColumnSchema::type() const {
   return FromInternalDataType(DCHECK_NOTNULL(col_)->type_info()->type());
 }
