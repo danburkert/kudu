@@ -30,6 +30,9 @@ typedef struct kudu_column_schema kudu_column_schema;
 typedef struct kudu_schema kudu_schema;
 typedef struct kudu_status kudu_status;
 typedef struct kudu_table_list kudu_table_list;
+typedef struct kudu_schema_builder kudu_schema_builder;
+typedef struct kudu_column_schema_builder kudu_column_schema_builder;
+typedef struct kudu_table_creator kudu_table_creator;
 
 typedef enum kudu_data_type {
   KUDU_INT8 = 0,
@@ -62,11 +65,7 @@ typedef enum kudu_encoding_type {
     KUDU_BIT_SHUFFLE_ENCODING = 6
 } kudu_encoding_type;
 
-////////////////////////////////////////////////////////////////////////////////
-// Kudu Slice
-//
-// A Kudu Slice holds an immutable (const) reference to a chunk of data with
-// fixed length.
+// An immutable (const) reference to a chunk of data with a fixed length.
 //
 // The lifetime of the slice and the format of the data (e.g. UTF-8) should be
 // specified in the interface which produces or consumes the slice. Unless
@@ -82,12 +81,19 @@ typedef enum kudu_encoding_type {
 // original slice.
 //
 // The data need not be null terminated.
-////////////////////////////////////////////////////////////////////////////////
-
 typedef struct kudu_slice {
   const uint8_t* data;
   size_t len;
 } kudu_slice;
+
+// An array of Kudu Slices and the length of the array.
+//
+// The same lifetime and mutability restrictions that apply to Kudu Slice
+// instances also apply to Kudu Slice List instances.
+typedef struct kudu_slice_list {
+  const kudu_slice* data;
+  size_t len;
+} kudu_slice_list;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Status
@@ -197,6 +203,47 @@ kudu_encoding_type kudu_column_schema_encoding_type(const kudu_column_schema*);
 kudu_compression_type kudu_column_schema_compression_type(const kudu_column_schema*);
 
 ////////////////////////////////////////////////////////////////////////////////
+// Kudu Schema Builder
+////////////////////////////////////////////////////////////////////////////////
+
+// Creates a new schema builder.
+kudu_schema_builder* kudu_schema_builder_create();
+
+// Destroys a schema builder.
+void kudu_schema_builder_destroy(kudu_schema_builder*);
+
+// Adds a column to the schema. The returned column schema builder is valid for
+// the lifetime of the schema builder.
+kudu_column_schema_builder* kudu_schema_builder_add_column(kudu_schema_builder*, kudu_slice name);
+
+// Sets the primary key of the schema to the columns
+void kudu_schema_builder_set_primary_key_columns(kudu_schema_builder*,
+                                                 kudu_slice_list column_names);
+
+// Builds the schema.
+const kudu_status* kudu_schema_builder_build(kudu_schema_builder*, kudu_schema** schema);
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Column Schema Builder
+////////////////////////////////////////////////////////////////////////////////
+
+// Sets the column data type.
+void kudu_column_schema_builder_data_type(kudu_column_schema_builder*, kudu_data_type);
+
+// Sets the column encoding type.
+void kudu_column_schema_builder_encoding_type(kudu_column_schema_builder*, kudu_encoding_type);
+
+// Sets the column compression type.
+void kudu_column_schema_builder_compression_type(kudu_column_schema_builder*,
+                                                 kudu_compression_type);
+
+// Sets the column block size.
+void kudu_column_schema_builder_block_size(kudu_column_schema_builder*, int32_t);
+
+// Sets the column to be nullable or non-nullable.
+void kudu_column_schema_builder_nullable(kudu_column_schema_builder*, int32_t/*bool*/ nullable);
+
+////////////////////////////////////////////////////////////////////////////////
 // Kudu Client
 //
 // The Kudu Client represents a connection to a cluster. From the user
@@ -232,6 +279,36 @@ const kudu_status* kudu_client_list_tables(const kudu_client*, kudu_table_list**
 const kudu_status* kudu_client_table_schema(const kudu_client*,
                                             kudu_slice table_name,
                                             kudu_schema** schema);
+
+kudu_table_creator* kudu_client_new_table_creator(kudu_client*);
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Table Creator
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_table_creator_destroy(kudu_table_creator*);
+
+// Sets the new tables name. Required.
+void kudu_table_creator_table_name(kudu_table_creator*, kudu_slice table_name);
+
+// Sets the table schema. The caller retains ownership of the schema. The schema
+// must outlive the table creator. Required.
+void kudu_table_creator_schema(kudu_table_creator*, const kudu_schema* schema);
+
+void kudu_table_creator_add_hash_partitions(kudu_table_creator*,
+                                            kudu_slice_list columns,
+                                            int32_t num_buckets,
+                                            int32_t seed);
+
+void kudu_table_creator_set_range_partition_columns(kudu_table_creator*, kudu_slice_list columns);
+
+void kudu_table_creator_num_replicas(kudu_table_creator*, int32_t num_replicas);
+
+void kudu_table_creator_timeout(kudu_table_creator*, int64_t timeout_ms);
+
+void kudu_table_creator_wait(kudu_table_creator*, int32_t/*bool*/ wait);
+
+const kudu_status* kudu_table_creator_create(kudu_table_creator*);
 
 #ifdef __cplusplus
 } // extern "C"
