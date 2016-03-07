@@ -25,12 +25,13 @@
  */
 package org.kududb.client;
 
+import com.google.common.base.Preconditions;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.ZeroCopyLiteralByteString;
-import org.kududb.annotations.InterfaceAudience;
-import org.kududb.util.Slice;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.util.CharsetUtil;
+import org.kududb.annotations.InterfaceAudience;
+import org.kududb.util.Slice;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -1080,7 +1081,7 @@ public final class Bytes {
   }
 
   /**
-   * Utility methd to write a byte array to a data output. Equivalent of doing a writeInt of the
+   * Utility method to write a byte array to a data output. Equivalent of doing a writeInt of the
    * length followed by a write of the byte array. Convert back with {@link #readByteArray}
    * @param dataOutput
    * @param b
@@ -1089,6 +1090,22 @@ public final class Bytes {
   public static void writeByteArray(DataOutput dataOutput, byte[] b) throws IOException {
     dataOutput.writeInt(b.length);
     dataOutput.write(b);
+  }
+
+  /**
+  * Utility method to write a buffer to a data output. Equivalent of doing a writeInt
+  * of the length followed by a write of the byte buffer. Convert back with
+  * {@link #readByteArray}. The byte buffer position and limit are not changed.
+  * @param dataOutput the output stream
+  * @param b a byte buffer of binary input
+  * @throws IOException
+  */
+  public static void writeByteBuffer(DataOutput dataOutput, ByteBuffer b) throws IOException {
+    b.mark();
+    byte[] buf = new byte[b.limit() - b.position()];
+    b.get(buf);
+    b.reset();
+    writeByteArray(dataOutput, buf);
   }
 
   /**
