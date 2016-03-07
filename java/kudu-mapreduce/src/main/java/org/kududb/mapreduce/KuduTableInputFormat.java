@@ -17,13 +17,8 @@ package org.kududb.mapreduce;
 import com.google.common.base.Objects;
 import com.google.common.base.Splitter;
 import com.google.common.collect.Lists;
+import com.google.common.primitives.UnsignedBytes;
 import org.apache.commons.net.util.Base64;
-import org.kududb.Schema;
-import org.kududb.annotations.InterfaceAudience;
-import org.kududb.annotations.InterfaceStability;
-import org.kududb.client.*;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.NullWritable;
@@ -34,18 +29,37 @@ import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hadoop.net.DNS;
+import org.kududb.Common;
+import org.kududb.Schema;
+import org.kududb.annotations.InterfaceAudience;
+import org.kududb.annotations.InterfaceStability;
+import org.kududb.client.AsyncKuduClient;
+import org.kududb.client.Bytes;
+import org.kududb.client.KuduClient;
+import org.kududb.client.KuduPredicate;
+import org.kududb.client.KuduScanner;
+import org.kududb.client.KuduTable;
+import org.kududb.client.LocatedTablet;
+import org.kududb.client.RowResult;
+import org.kududb.client.RowResultIterator;
+import org.kududb.client.ScanToken;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import javax.naming.NamingException;
+import java.io.ByteArrayInputStream;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.naming.NamingException;
 
 /**
  * <p>
@@ -65,9 +79,7 @@ import java.util.Map;
 public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
     implements Configurable {
 
-  private static final Log LOG = LogFactory.getLog(KuduTableInputFormat.class);
-
-  private static final long SLEEP_TIME_FOR_RETRIES_MS = 1000;
+  private static final Logger LOG = LoggerFactory.getLogger(KuduTableInputFormat.class);
 
   /** Job parameter that specifies the input table. */
   static final String INPUT_TABLE_KEY = "kudu.mapreduce.input.table";
@@ -84,9 +96,9 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
   /** Job parameter that specifies the address for the name server. */
   static final String NAME_SERVER_KEY = "kudu.mapreduce.name.server";
 
-  /** Job parameter that specifies the encoded column range predicates (may be empty). */
-  static final String ENCODED_COLUMN_RANGE_PREDICATES_KEY =
-      "kudu.mapreduce.encoded.column.range.predicates";
+  /** Job parameter that specifies the encoded column predicates (may be empty). */
+  static final String ENCODED_PREDICATES_KEY =
+      "kudu.mapreduce.encoded.predicates";
 
   /**
    * Job parameter that specifies the column projection as a comma-separated list of column names.
@@ -102,7 +114,7 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
    * The reverse DNS lookup cache mapping: address from Kudu => hostname for Hadoop. This cache is
    * used in order to not do DNS lookups multiple times for each tablet server.
    */
-  private final Map<String, String> reverseDNSCacheMap = new HashMap<String, String>();
+  private final Map<String, String> reverseDNSCacheMap = new HashMap<>();
 
   private Configuration conf;
   private KuduClient client;
@@ -111,7 +123,7 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
   private String nameServer;
   private boolean cacheBlocks;
   private List<String> projectedCols;
-  private byte[] rawPredicates;
+  private List<KuduPredicate> predicates;
 
   @Override
   public List<InputSplit> getSplits(JobContext jobContext)
@@ -120,57 +132,29 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
       if (table == null) {
         throw new IOException("No table was provided");
       }
-      List<InputSplit> splits;
-      DeadlineTracker deadline = new DeadlineTracker();
-      deadline.setDeadline(operationTimeoutMs);
-      // If the job is started while a leader election is running, we might not be able to find a
-      // leader right away. We'll wait as long as the user is willing to wait with the operation
-      // timeout, and once we've waited long enough we just start picking the first replica we see
-      // for those tablets that don't have a leader. The client will later try to find the leader
-      // and it might fail, in which case the task will get retried.
-      retryloop:
-      while (true) {
-        List<LocatedTablet> locations;
-        try {
-          locations = table.getTabletsLocations(operationTimeoutMs);
-        } catch (Exception e) {
-          throw new IOException("Could not get the tablets locations", e);
-        }
 
-        if (locations.isEmpty()) {
-          throw new IOException("The requested table has 0 tablets, cannot continue");
-        }
+      ScanToken.ScanTokenBuilder builder = client.newScanTokenBuilder(table);
+      builder.setProjectedColumnNames(projectedCols);
+      ScanToken.ScanTokenBuilder tokenBuilder =
+          client.newScanTokenBuilder(table)
+                .setProjectedColumnNames(projectedCols)
+                .cacheBlocks(cacheBlocks)
+                .setTimeout(operationTimeoutMs);
 
-        // For the moment we only pass the leader since that's who we read from.
-        // If we've been trying to get a leader for each tablet for too long, we stop looping
-        // and just finish with what we have.
-        splits = new ArrayList<InputSplit>(locations.size());
-        for (LocatedTablet locatedTablet : locations) {
-          List<String> addresses = Lists.newArrayList();
-          LocatedTablet.Replica replica = locatedTablet.getLeaderReplica();
-          if (replica == null) {
-            if (deadline.wouldSleepingTimeout(SLEEP_TIME_FOR_RETRIES_MS)) {
-              LOG.debug("We ran out of retries, picking a non-leader replica for this tablet: " +
-                  locatedTablet.toString());
-              // We already checked it's not empty.
-              replica = locatedTablet.getReplicas().get(0);
-            } else {
-              LOG.debug("Retrying creating the splits because this tablet is missing a leader: " +
-                  locatedTablet.toString());
-              Thread.sleep(SLEEP_TIME_FOR_RETRIES_MS);
-              continue retryloop;
-            }
-          }
-          addresses.add(reverseDNS(replica.getRpcHost(), replica.getRpcPort()));
-          String[] addressesArray = addresses.toArray(new String[addresses.size()]);
-          Partition partition = locatedTablet.getPartition();
-          TableSplit split = new TableSplit(partition.getPartitionKeyStart(),
-                                            partition.getPartitionKeyEnd(),
-                                            addressesArray);
-          splits.add(split);
-        }
-        return splits;
+      for (KuduPredicate predicate : predicates) {
+        tokenBuilder.addPredicate(predicate);
       }
+      List<ScanToken> tokens = tokenBuilder.build();
+
+      List<InputSplit> splits = new ArrayList<>(tokens.size());
+      for (ScanToken token : tokens) {
+        List<String> locations = new ArrayList<>(token.getTablet().getReplicas().size());
+        for (LocatedTablet.Replica replica : token.getTablet().getReplicas()) {
+          locations.add(reverseDNS(replica.getRpcHost(), replica.getRpcPort()));
+        }
+        splits.add(new ScanTokenSplit(token, locations.toArray(new String[locations.size()])));
+      }
+      return splits;
     } finally {
       shutdownClient();
     }
@@ -226,13 +210,13 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
     String tableName = conf.get(INPUT_TABLE_KEY);
     String masterAddresses = conf.get(MASTER_ADDRESSES_KEY);
     this.operationTimeoutMs = conf.getLong(OPERATION_TIMEOUT_MS_KEY,
-        AsyncKuduClient.DEFAULT_OPERATION_TIMEOUT_MS);
+                                           AsyncKuduClient.DEFAULT_OPERATION_TIMEOUT_MS);
     this.nameServer = conf.get(NAME_SERVER_KEY);
     this.cacheBlocks = conf.getBoolean(SCAN_CACHE_BLOCKS, false);
 
     this.client = new KuduClient.KuduClientBuilder(masterAddresses)
-        .defaultOperationTimeoutMs(operationTimeoutMs)
-        .build();
+                                .defaultOperationTimeoutMs(operationTimeoutMs)
+                                .build();
     try {
       this.table = client.openTable(tableName);
     } catch (Exception ex) {
@@ -259,8 +243,17 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
       }
     }
 
-    String encodedPredicates = conf.get(ENCODED_COLUMN_RANGE_PREDICATES_KEY, "");
-    rawPredicates = Base64.decodeBase64(encodedPredicates);
+    this.predicates = new ArrayList<>();
+    try {
+      InputStream is =
+          new ByteArrayInputStream(Base64.decodeBase64(conf.get(ENCODED_PREDICATES_KEY, "")));
+      while (is.available() > 0) {
+        this.predicates.add(KuduPredicate.fromPB(table.getSchema(),
+                                                 Common.ColumnPredicatePB.parseDelimitedFrom(is)));
+      }
+    } catch (IOException e) {
+      throw new RuntimeException("unable to deserialize predicates from the configuration", e);
+    }
   }
 
   /**
@@ -282,17 +275,18 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
     return conf;
   }
 
-  static class TableSplit extends InputSplit implements Writable, Comparable<TableSplit> {
+  static class ScanTokenSplit extends InputSplit implements Writable, Comparable<ScanTokenSplit> {
 
-    private byte[] startPartitionKey;
-    private byte[] endPartitionKey;
+    private ByteBuffer token;
+    private byte[] partitionKey;
     private String[] locations;
 
-    public TableSplit() { } // Writable
+    public ScanTokenSplit() { } // Writable
 
-    public TableSplit(byte[] startPartitionKey, byte[] endPartitionKey, String[] locations) {
-      this.startPartitionKey = startPartitionKey;
-      this.endPartitionKey = endPartitionKey;
+    public ScanTokenSplit(ScanToken token, String[] locations) throws IOException {
+      this.token = token.serialize();
+      this.token.rewind();
+      this.partitionKey = token.getTablet().getPartition().getPartitionKeyStart();
       this.locations = locations;
     }
 
@@ -307,23 +301,15 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
       return locations;
     }
 
-    public byte[] getStartPartitionKey() {
-      return startPartitionKey;
-    }
-
-    public byte[] getEndPartitionKey() {
-      return endPartitionKey;
-    }
-
     @Override
-    public int compareTo(TableSplit tableSplit) {
-      return Bytes.memcmp(startPartitionKey, tableSplit.getStartPartitionKey());
+    public int compareTo(ScanTokenSplit other) {
+      return UnsignedBytes.lexicographicalComparator().compare(partitionKey, other.partitionKey);
     }
 
     @Override
     public void write(DataOutput dataOutput) throws IOException {
-      Bytes.writeByteArray(dataOutput, startPartitionKey);
-      Bytes.writeByteArray(dataOutput, endPartitionKey);
+      Bytes.writeByteBuffer(dataOutput, token);
+      Bytes.writeByteArray(dataOutput, partitionKey);
       dataOutput.writeInt(locations.length);
       for (String location : locations) {
         byte[] str = Bytes.fromString(location);
@@ -333,8 +319,8 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
 
     @Override
     public void readFields(DataInput dataInput) throws IOException {
-      startPartitionKey = Bytes.readByteArray(dataInput);
-      endPartitionKey = Bytes.readByteArray(dataInput);
+      token = ByteBuffer.wrap(Bytes.readByteArray(dataInput));
+      partitionKey = Bytes.readByteArray(dataInput);
       locations = new String[dataInput.readInt()];
       for (int i = 0; i < locations.length; i++) {
         byte[] str = Bytes.readByteArray(dataInput);
@@ -345,7 +331,7 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
     @Override
     public int hashCode() {
       // We currently just care about the row key since we're within the same table
-      return Arrays.hashCode(startPartitionKey);
+      return Arrays.hashCode(partitionKey);
     }
 
     @Override
@@ -353,7 +339,7 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
       if (this == o) return true;
       if (o == null || getClass() != o.getClass()) return false;
 
-      TableSplit that = (TableSplit) o;
+      ScanTokenSplit that = (ScanTokenSplit) o;
 
       return this.compareTo(that) == 0;
     }
@@ -361,8 +347,7 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
     @Override
     public String toString() {
       return Objects.toStringHelper(this)
-                    .add("startPartitionKey", Bytes.pretty(startPartitionKey))
-                    .add("endPartitionKey", Bytes.pretty(endPartitionKey))
+                    .add("partitionKey", Bytes.pretty(partitionKey))
                     .add("locations", Arrays.toString(locations))
                     .toString();
     }
@@ -374,22 +359,21 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
     private RowResult currentValue;
     private RowResultIterator iterator;
     private KuduScanner scanner;
-    private TableSplit split;
+    private ScanTokenSplit split;
 
     @Override
     public void initialize(InputSplit inputSplit, TaskAttemptContext taskAttemptContext) throws IOException, InterruptedException {
-      if (!(inputSplit instanceof TableSplit)) {
-        throw new IllegalArgumentException("TableSplit is the only accepted input split");
+      if (!(inputSplit instanceof ScanTokenSplit)) {
+        throw new IllegalArgumentException("ScanTokenSplit is the only accepted input split");
       }
 
-      split = (TableSplit) inputSplit;
-      scanner = client.newScannerBuilder(table)
-          .setProjectedColumnNames(projectedCols)
-          .lowerBoundPartitionKeyRaw(split.getStartPartitionKey())
-          .exclusiveUpperBoundPartitionKeyRaw(split.getEndPartitionKey())
-          .cacheBlocks(cacheBlocks)
-          .addColumnRangePredicatesRaw(rawPredicates)
-          .build();
+      split = (ScanTokenSplit) inputSplit;
+
+      try {
+        scanner = ScanToken.deserializeIntoScanner(split.token, client);
+      } catch (Exception e) {
+        throw new IOException(e);
+      }
 
       // Calling this now to set iterator.
       tryRefreshIterator();

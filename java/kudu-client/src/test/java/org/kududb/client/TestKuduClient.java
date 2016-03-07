@@ -28,15 +28,24 @@ import static org.kududb.client.RowResult.timestampToString;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterators;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.kududb.ColumnSchema;
 import org.kududb.Schema;
 import org.kududb.Type;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class TestKuduClient extends BaseKuduTest {
+  private static final Logger LOG = LoggerFactory.getLogger(TestKuduClient.class);
   private String tableName;
 
   @Before
@@ -306,6 +315,67 @@ public class TestKuduClient extends BaseKuduTest {
         KuduPredicate.newComparisonPredicate(schema.getColumn("c2"), GREATER, "c2_30"),
         KuduPredicate.newComparisonPredicate(schema.getColumn("c2"), LESS, "c2_20")
     ).size());
+  }
+
+  @Test
+  public void testScanTokens() throws Exception {
+    Schema schema = createManyStringsSchema();
+    CreateTableOptions createOptions = new CreateTableOptions();
+    createOptions.addHashPartitions(ImmutableList.of("key"), 8);
+
+    PartialRow splitRow = schema.newPartialRow();
+    splitRow.addString("key", "key_50");
+    createOptions.addSplitRow(splitRow);
+
+    syncClient.createTable(tableName, schema, createOptions);
+
+    KuduSession session = syncClient.newSession();
+    session.setFlushMode(SessionConfiguration.FlushMode.AUTO_FLUSH_BACKGROUND);
+    KuduTable table = syncClient.openTable(tableName);
+    for (int i = 0; i < 100; i++) {
+      Insert insert = table.newInsert();
+      PartialRow row = insert.getRow();
+      row.addString("key", String.format("key_%02d", i));
+      row.addString("c1", "c1_" + i);
+      row.addString("c2", "c2_" + i);
+      session.apply(insert);
+    }
+    session.flush();
+
+    ScanToken.ScanTokenBuilder tokenBuilder = syncClient.newScanTokenBuilder(table);
+    tokenBuilder.setProjectedColumnIndexes(ImmutableList.<Integer>of());
+    List<ScanToken> tokens = tokenBuilder.build();
+    Assert.assertEquals(16, tokens.size());
+
+
+    final AtomicInteger count = new AtomicInteger(0);
+    final CountDownLatch latch = new CountDownLatch(tokens.size());
+    for (final ScanToken token : tokens) {
+      new Thread(new Runnable() {
+        @Override
+        public void run() {
+          try {
+            KuduScanner scanner = token.intoScanner(syncClient);
+            try {
+              int localCount = 0;
+              while (scanner.hasMoreRows()) {
+                localCount += Iterators.size(scanner.nextRows());
+              }
+              count.addAndGet(localCount);
+            } finally {
+              scanner.close();
+            }
+          } catch (Exception e) {
+            LOG.error("exception in parallel token scanner", e);
+          } finally {
+            latch.countDown();
+          }
+        }
+      }).run();
+    }
+
+    latch.await(10, TimeUnit.SECONDS);
+    Assert.assertEquals(100, count.get());
   }
 
   /**

@@ -424,7 +424,8 @@ public class KuduPredicate {
    * Convert the predicate to the protobuf representation.
    * @return the protobuf message for this predicate.
    */
-  Common.ColumnPredicatePB toPB() {
+  @InterfaceAudience.Private
+  public Common.ColumnPredicatePB toPB() {
     Common.ColumnPredicatePB.Builder builder = Common.ColumnPredicatePB.newBuilder();
     builder.setColumn(column.getName());
 
@@ -459,7 +460,8 @@ public class KuduPredicate {
    * Convert a column predicate protobuf message into a predicate.
    * @return a predicate
    */
-  static KuduPredicate fromPB(Schema schema, Common.ColumnPredicatePB pb) {
+  @InterfaceAudience.Private
+  public static KuduPredicate fromPB(Schema schema, Common.ColumnPredicatePB pb) {
     ColumnSchema column = schema.getColumn(pb.getColumn());
     switch (pb.getPredicateCase()) {
       case EQUALITY: {
