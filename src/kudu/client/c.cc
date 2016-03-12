@@ -67,6 +67,24 @@ namespace {
     }
     return v;
   }
+
+  // kudu_table_creator, kudu_column_schema_builder, kudu_status, and
+  // kudu_partial_row are all undefined types which are only used as an opaque
+  // pointer to an internal class. The following helper functions take care of
+  // the casts.
+
+  KuduTableCreator* to_internal(kudu_table_creator* creator) {
+      return reinterpret_cast<KuduTableCreator*>(creator);
+  }
+  KuduPartialRow* to_internal(kudu_partial_row* row) {
+      return reinterpret_cast<KuduPartialRow*>(row);
+  }
+  const KuduPartialRow* to_internal(const kudu_partial_row* row) {
+      return reinterpret_cast<const KuduPartialRow*>(row);
+  }
+  KuduColumnSpec* to_internal(kudu_column_schema_builder* builder) {
+      return reinterpret_cast<KuduColumnSpec*>(builder);
+  }
 } // anonymous namespace
 
 extern "C" {
@@ -82,7 +100,6 @@ struct kudu_column_schema {
 };
 
 struct kudu_schema_builder { KuduSchemaBuilder builder_; };
-struct kudu_partial_row { KuduPartialRow row_; };
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Status
@@ -200,6 +217,10 @@ kudu_column_schema* kudu_schema_column(const kudu_schema* schema, size_t idx) {
   return new kudu_column_schema(schema->schema_.Column(idx));
 }
 
+kudu_partial_row* kudu_schema_new_row(const kudu_schema* schema) {
+  return reinterpret_cast<kudu_partial_row*>(schema->schema_.NewRow());
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Column Schema
 ////////////////////////////////////////////////////////////////////////////////
@@ -262,40 +283,35 @@ kudu_status* kudu_schema_builder_build(kudu_schema_builder* builder, kudu_schema
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Column Schema Builder
-//
-// kudu_column_schema_builder is an uninhabited type. Instead, we use a
-// KuduColumnSpec.
 ////////////////////////////////////////////////////////////////////////////////
 
 void kudu_column_schema_builder_data_type(kudu_column_schema_builder* builder,
                                           kudu_data_type data_type) {
-  auto spec = reinterpret_cast<KuduColumnSpec*>(builder);
-  spec->Type(static_cast<KuduColumnSchema::DataType>(data_type));
+  to_internal(builder)->Type(static_cast<KuduColumnSchema::DataType>(data_type));
 }
 
 void kudu_column_schema_builder_encoding_type(kudu_column_schema_builder* builder,
                                               kudu_encoding_type encoding_type) {
-  auto spec = reinterpret_cast<KuduColumnSpec*>(builder);
-  spec->Encoding(static_cast<KuduColumnStorageAttributes::EncodingType>(encoding_type));
+  to_internal(builder)->Encoding(
+      static_cast<KuduColumnStorageAttributes::EncodingType>(encoding_type));
 }
 
 void kudu_column_schema_builder_compression_type(kudu_column_schema_builder* builder,
                                                  kudu_compression_type compression_type) {
-  auto spec = reinterpret_cast<KuduColumnSpec*>(builder);
-  spec->Compression(static_cast<KuduColumnStorageAttributes::CompressionType>(compression_type));
+  to_internal(builder)->Compression(
+      static_cast<KuduColumnStorageAttributes::CompressionType>(compression_type));
 }
 
 void kudu_column_schema_builder_block_size(kudu_column_schema_builder* builder,
                                            int32_t block_size) {
-  auto spec = reinterpret_cast<KuduColumnSpec*>(builder);
-  spec->BlockSize(block_size);
+  to_internal(builder)->BlockSize(block_size);
 }
 
 void kudu_column_schema_builder_nullable(kudu_column_schema_builder* builder, int32_t nullable) {
   if (nullable) {
-    reinterpret_cast<KuduColumnSpec*>(builder)->Nullable();
+    to_internal(builder)->Nullable();
   } else {
-    reinterpret_cast<KuduColumnSpec*>(builder)->NotNull();
+    to_internal(builder)->NotNull();
   }
 }
 
@@ -330,53 +346,51 @@ kudu_table_creator* kudu_client_new_table_creator(kudu_client* client) {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Table Creator
-//
-// kudu_table_creator is an uninhabited type. Instead, we use a
-// KuduTableCreator.
 ////////////////////////////////////////////////////////////////////////////////
 
 void kudu_table_creator_destroy(kudu_table_creator* creator) {
-  delete reinterpret_cast<KuduTableCreator*>(creator);
+  delete to_internal(creator);
 }
 
 void kudu_table_creator_table_name(kudu_table_creator* creator,
                                    kudu_slice table_name) {
-  reinterpret_cast<KuduTableCreator*>(creator)->table_name(slice_to_string(table_name));
+  to_internal(creator)->table_name(slice_to_string(table_name));
 }
 
 void kudu_table_creator_schema(kudu_table_creator* creator, const kudu_schema* schema) {
-  reinterpret_cast<KuduTableCreator*>(creator)->schema(&schema->schema_);
+  to_internal(creator)->schema(&schema->schema_);
 }
 
 void kudu_table_creator_add_hash_partitions(kudu_table_creator* creator,
                                             kudu_slice_list columns,
                                             int32_t num_buckets,
                                             int32_t seed) {
-  reinterpret_cast<KuduTableCreator*>(creator)->add_hash_partitions(slice_list_to_vector(columns),
-                                                                    num_buckets,
-                                                                    seed);
+  to_internal(creator)->add_hash_partitions(slice_list_to_vector(columns), num_buckets, seed);
 }
 
 void kudu_table_creator_set_range_partition_columns(kudu_table_creator* creator,
                                                     kudu_slice_list columns) {
-  reinterpret_cast<KuduTableCreator*>(creator)
-      ->set_range_partition_columns(slice_list_to_vector(columns));
+  to_internal(creator)->set_range_partition_columns(slice_list_to_vector(columns));
+}
+
+void kudu_table_creator_add_split_row(kudu_table_creator* creator, kudu_partial_row* split_row) {
+  to_internal(creator)->add_split_row(to_internal(split_row));
 }
 
 void kudu_table_creator_num_replicas(kudu_table_creator* creator, int32_t num_replicas) {
-  reinterpret_cast<KuduTableCreator*>(creator)->num_replicas(num_replicas);
+  to_internal(creator)->num_replicas(num_replicas);
 }
 
 void kudu_table_creator_timeout(kudu_table_creator* creator, int64_t timeout_ms) {
-  reinterpret_cast<KuduTableCreator*>(creator)->timeout(MonoDelta::FromMilliseconds(timeout_ms));
+  to_internal(creator)->timeout(MonoDelta::FromMilliseconds(timeout_ms));
 }
 
 void kudu_table_creator_wait(kudu_table_creator* creator, int32_t wait) {
-  reinterpret_cast<KuduTableCreator*>(creator)->wait(wait);
+  to_internal(creator)->wait(wait);
 }
 
 kudu_status* kudu_table_creator_create(kudu_table_creator* creator) {
-  return Status::into_kudu_status(reinterpret_cast<KuduTableCreator*>(creator)->Create());
+  return Status::into_kudu_status(to_internal(creator)->Create());
 }
 
 
@@ -385,202 +399,202 @@ kudu_status* kudu_table_creator_create(kudu_table_creator* creator) {
 ////////////////////////////////////////////////////////////////////////////////
 
 void kudu_partial_row_destroy(kudu_partial_row* row) {
-  delete row;
+  delete to_internal(row);
 }
 
 int32_t/*bool*/ kudu_partial_row_is_primary_key_set(const kudu_partial_row* row) {
-  return row->row_.IsKeySet();
+  return to_internal(row)->IsKeySet();
 }
 int32_t/*bool*/ kudu_partial_row_all_columns_set(const kudu_partial_row* row) {
-  return row->row_.IsKeySet();
+  return to_internal(row)->IsKeySet();
 }
 
 kudu_status* kudu_partial_row_set_bool_by_name(kudu_partial_row* row,
                                                kudu_slice column_name,
                                                int32_t/*bool*/ val) {
-  return Status::into_kudu_status(row->row_.SetBool(slice_to_Slice(column_name), val));
+  return Status::into_kudu_status(to_internal(row)->SetBool(slice_to_Slice(column_name), val));
 }
 kudu_status* kudu_partial_row_set_int8_by_name(kudu_partial_row* row,
                                                kudu_slice column_name,
                                                int8_t val) {
-  return Status::into_kudu_status(row->row_.SetInt8(slice_to_Slice(column_name), val));
+  return Status::into_kudu_status(to_internal(row)->SetInt8(slice_to_Slice(column_name), val));
 }
 kudu_status* kudu_partial_row_set_int16_by_name(kudu_partial_row* row,
                                                 kudu_slice column_name,
                                                 int16_t val) {
-  return Status::into_kudu_status(row->row_.SetInt16(slice_to_Slice(column_name), val));
+  return Status::into_kudu_status(to_internal(row)->SetInt16(slice_to_Slice(column_name), val));
 }
 kudu_status* kudu_partial_row_set_int32_by_name(kudu_partial_row* row,
                                                 kudu_slice column_name,
                                                 int32_t val) {
-  return Status::into_kudu_status(row->row_.SetInt32(slice_to_Slice(column_name), val));
+  return Status::into_kudu_status(to_internal(row)->SetInt32(slice_to_Slice(column_name), val));
 }
 kudu_status* kudu_partial_row_set_int64_by_name(kudu_partial_row* row,
                                                 kudu_slice column_name,
                                                 int64_t val) {
-  return Status::into_kudu_status(row->row_.SetInt64(slice_to_Slice(column_name), val));
+  return Status::into_kudu_status(to_internal(row)->SetInt64(slice_to_Slice(column_name), val));
 }
 kudu_status* kudu_partial_row_set_timestamp_by_name(kudu_partial_row* row,
                                                     kudu_slice column_name,
                                                     int64_t val) {
-  return Status::into_kudu_status(row->row_.SetTimestamp(slice_to_Slice(column_name), val));
+  return Status::into_kudu_status(to_internal(row)->SetTimestamp(slice_to_Slice(column_name), val));
 }
 kudu_status* kudu_partial_row_set_float_by_name(kudu_partial_row* row,
                                                 kudu_slice column_name,
                                                 float val) {
-  return Status::into_kudu_status(row->row_.SetFloat(slice_to_Slice(column_name), val));
+  return Status::into_kudu_status(to_internal(row)->SetFloat(slice_to_Slice(column_name), val));
 }
 kudu_status* kudu_partial_row_set_double_by_name(kudu_partial_row* row,
                                                  kudu_slice column_name,
                                                  double val) {
-  return Status::into_kudu_status(row->row_.SetDouble(slice_to_Slice(column_name), val));
+  return Status::into_kudu_status(to_internal(row)->SetDouble(slice_to_Slice(column_name), val));
 }
 kudu_status* kudu_partial_row_set_string_by_name(kudu_partial_row* row,
                                                  kudu_slice column_name,
                                                  kudu_slice val) {
-  return Status::into_kudu_status(row->row_.SetString(slice_to_Slice(column_name),
+  return Status::into_kudu_status(to_internal(row)->SetString(slice_to_Slice(column_name),
                                                       slice_to_Slice(val)));
 }
 kudu_status* kudu_partial_row_set_string_copy_by_name(kudu_partial_row* row,
                                                       kudu_slice column_name,
                                                       kudu_slice val) {
-  return Status::into_kudu_status(row->row_.SetStringCopy(slice_to_Slice(column_name),
-                                                          slice_to_Slice(val)));
+  return Status::into_kudu_status(to_internal(row)->SetStringCopy(slice_to_Slice(column_name),
+                                                                  slice_to_Slice(val)));
 }
 kudu_status* kudu_partial_row_set_binary_by_name(kudu_partial_row* row,
                                                  kudu_slice column_name,
                                                  kudu_slice val) {
-  return Status::into_kudu_status(row->row_.SetBinary(slice_to_Slice(column_name),
-                                                      slice_to_Slice(val)));
+  return Status::into_kudu_status(to_internal(row)->SetBinary(slice_to_Slice(column_name),
+                                                              slice_to_Slice(val)));
 }
 kudu_status* kudu_partial_row_set_binary_copy_by_name(kudu_partial_row* row,
                                                       kudu_slice column_name,
                                                       kudu_slice val) {
-  return Status::into_kudu_status(row->row_.SetBinaryCopy(slice_to_Slice(column_name),
-                                                          slice_to_Slice(val)));
+  return Status::into_kudu_status(to_internal(row)->SetBinaryCopy(slice_to_Slice(column_name),
+                                                                  slice_to_Slice(val)));
 }
 kudu_status* kudu_partial_row_set_null_by_name(kudu_partial_row* row, kudu_slice column_name) {
-  return Status::into_kudu_status(row->row_.SetNull(slice_to_Slice(column_name)));
+  return Status::into_kudu_status(to_internal(row)->SetNull(slice_to_Slice(column_name)));
 }
 kudu_status* kudu_partial_row_unset_by_name(kudu_partial_row* row, kudu_slice column_name) {
-  return Status::into_kudu_status(row->row_.Unset(slice_to_Slice(column_name)));
+  return Status::into_kudu_status(to_internal(row)->Unset(slice_to_Slice(column_name)));
 }
 
 kudu_status* kudu_partial_row_set_bool(kudu_partial_row* row,
                                        int32_t column_idx,
                                        int32_t/*bool*/ val) {
-  return Status::into_kudu_status(row->row_.SetBool(column_idx, val));
+  return Status::into_kudu_status(to_internal(row)->SetBool(column_idx, val));
 }
 kudu_status* kudu_partial_row_set_int8(kudu_partial_row* row,
                                        int32_t column_idx,
                                        int8_t val) {
-  return Status::into_kudu_status(row->row_.SetInt8(column_idx, val));
+  return Status::into_kudu_status(to_internal(row)->SetInt8(column_idx, val));
 }
 kudu_status* kudu_partial_row_set_int16(kudu_partial_row* row,
                                         int32_t column_idx,
                                         int16_t val) {
-  return Status::into_kudu_status(row->row_.SetInt16(column_idx, val));
+  return Status::into_kudu_status(to_internal(row)->SetInt16(column_idx, val));
 }
 kudu_status* kudu_partial_row_set_int32(kudu_partial_row* row,
                                         int32_t column_idx,
                                         int32_t val) {
-  return Status::into_kudu_status(row->row_.SetInt32(column_idx, val));
+  return Status::into_kudu_status(to_internal(row)->SetInt32(column_idx, val));
 }
 kudu_status* kudu_partial_row_set_int64(kudu_partial_row* row,
                                         int32_t column_idx,
                                         int64_t val) {
-  return Status::into_kudu_status(row->row_.SetInt64(column_idx, val));
+  return Status::into_kudu_status(to_internal(row)->SetInt64(column_idx, val));
 }
 kudu_status* kudu_partial_row_set_timestamp(kudu_partial_row* row,
                                             int32_t column_idx,
                                             int64_t val) {
-  return Status::into_kudu_status(row->row_.SetTimestamp(column_idx, val));
+  return Status::into_kudu_status(to_internal(row)->SetTimestamp(column_idx, val));
 }
 kudu_status* kudu_partial_row_set_float(kudu_partial_row* row,
                                         int32_t column_idx,
                                         float val) {
-  return Status::into_kudu_status(row->row_.SetFloat(column_idx, val));
+  return Status::into_kudu_status(to_internal(row)->SetFloat(column_idx, val));
 }
 kudu_status* kudu_partial_row_set_double(kudu_partial_row* row,
                                          int32_t column_idx,
                                          double val) {
-  return Status::into_kudu_status(row->row_.SetDouble(column_idx, val));
+  return Status::into_kudu_status(to_internal(row)->SetDouble(column_idx, val));
 }
 kudu_status* kudu_partial_row_set_string(kudu_partial_row* row,
                                          int32_t column_idx,
                                          kudu_slice val) {
-  return Status::into_kudu_status(row->row_.SetString(column_idx, slice_to_Slice(val)));
+  return Status::into_kudu_status(to_internal(row)->SetString(column_idx, slice_to_Slice(val)));
 }
 kudu_status* kudu_partial_row_set_string_copy(kudu_partial_row* row,
                                               int32_t column_idx,
                                               kudu_slice val) {
-  return Status::into_kudu_status(row->row_.SetStringCopy(column_idx, slice_to_Slice(val)));
+  return Status::into_kudu_status(to_internal(row)->SetStringCopy(column_idx, slice_to_Slice(val)));
 }
 kudu_status* kudu_partial_row_set_binary(kudu_partial_row* row,
                                          int32_t column_idx,
                                          kudu_slice val) {
-  return Status::into_kudu_status(row->row_.SetBinary(column_idx, slice_to_Slice(val)));
+  return Status::into_kudu_status(to_internal(row)->SetBinary(column_idx, slice_to_Slice(val)));
 }
 kudu_status* kudu_partial_row_set_binary_copy(kudu_partial_row* row,
                                               int32_t column_idx,
                                               kudu_slice val) {
-  return Status::into_kudu_status(row->row_.SetBinaryCopy(column_idx, slice_to_Slice(val)));
+  return Status::into_kudu_status(to_internal(row)->SetBinaryCopy(column_idx, slice_to_Slice(val)));
 }
 kudu_status* kudu_partial_row_set_null(kudu_partial_row* row, int32_t column_idx) {
-  return Status::into_kudu_status(row->row_.SetNull(column_idx));
+  return Status::into_kudu_status(to_internal(row)->SetNull(column_idx));
 }
 kudu_status* kudu_partial_row_unset(kudu_partial_row* row, int32_t column_idx) {
-  return Status::into_kudu_status(row->row_.Unset(column_idx));
+  return Status::into_kudu_status(to_internal(row)->Unset(column_idx));
 }
 
 kudu_status* kudu_partial_row_get_bool_by_name(const kudu_partial_row* row,
                                                kudu_slice column_name,
                                                int32_t/*bool*/* val) {
   bool b;
-  RETURN_NOT_OK_C(row->row_.GetBool(slice_to_Slice(column_name), &b));
+  RETURN_NOT_OK_C(to_internal(row)->GetBool(slice_to_Slice(column_name), &b));
   *val = b;
   return nullptr;
 }
 kudu_status* kudu_partial_row_get_int8_by_name(const kudu_partial_row* row,
                                                kudu_slice column_name,
                                                int8_t* val) {
-  return Status::into_kudu_status(row->row_.GetInt8(slice_to_Slice(column_name), val));
+  return Status::into_kudu_status(to_internal(row)->GetInt8(slice_to_Slice(column_name), val));
 }
 kudu_status* kudu_partial_row_get_int16_by_name(const kudu_partial_row* row,
                                                 kudu_slice column_name,
                                                 int16_t* val) {
-  return Status::into_kudu_status(row->row_.GetInt16(slice_to_Slice(column_name), val));
+  return Status::into_kudu_status(to_internal(row)->GetInt16(slice_to_Slice(column_name), val));
 }
 kudu_status* kudu_partial_row_get_int32_by_name(const kudu_partial_row* row,
                                                 kudu_slice column_name,
                                                 int32_t* val) {
-  return Status::into_kudu_status(row->row_.GetInt32(slice_to_Slice(column_name), val));
+  return Status::into_kudu_status(to_internal(row)->GetInt32(slice_to_Slice(column_name), val));
 }
 kudu_status* kudu_partial_row_get_int64_by_name(const kudu_partial_row* row,
                                                 kudu_slice column_name,
                                                 int64_t* val) {
-  return Status::into_kudu_status(row->row_.GetInt64(slice_to_Slice(column_name), val));
+  return Status::into_kudu_status(to_internal(row)->GetInt64(slice_to_Slice(column_name), val));
 }
 kudu_status* kudu_partial_row_get_timestamp_by_name(const kudu_partial_row* row,
                                                     kudu_slice column_name,
                                                     int64_t* val) {
-  return Status::into_kudu_status(row->row_.GetTimestamp(slice_to_Slice(column_name), val));
+  return Status::into_kudu_status(to_internal(row)->GetTimestamp(slice_to_Slice(column_name), val));
 }
 kudu_status* kudu_partial_row_get_float_by_name(const kudu_partial_row* row,
                                                 kudu_slice column_name,
                                                 float* val) {
-  return Status::into_kudu_status(row->row_.GetFloat(slice_to_Slice(column_name), val));
+  return Status::into_kudu_status(to_internal(row)->GetFloat(slice_to_Slice(column_name), val));
 }
 kudu_status* kudu_partial_row_get_double_by_name(const kudu_partial_row* row,
                                                  kudu_slice column_name,
                                                  double* val) {
-  return Status::into_kudu_status(row->row_.GetDouble(slice_to_Slice(column_name), val));
+  return Status::into_kudu_status(to_internal(row)->GetDouble(slice_to_Slice(column_name), val));
 }
 kudu_status* kudu_partial_row_get_string_by_name(const kudu_partial_row* row,
                                                  kudu_slice column_name,
                                                  kudu_slice* val) {
   Slice s;
-  RETURN_NOT_OK_C(row->row_.GetString(slice_to_Slice(column_name), &s));
+  RETURN_NOT_OK_C(to_internal(row)->GetString(slice_to_Slice(column_name), &s));
   val->data = s.data();
   val->len = s.size();
   return nullptr;
@@ -589,66 +603,66 @@ kudu_status* kudu_partial_row_get_binary_by_name(const kudu_partial_row* row,
                                                  kudu_slice column_name,
                                                  kudu_slice* val) {
   Slice s;
-  RETURN_NOT_OK_C(row->row_.GetBinary(slice_to_Slice(column_name), &s));
+  RETURN_NOT_OK_C(to_internal(row)->GetBinary(slice_to_Slice(column_name), &s));
   val->data = s.data();
   val->len = s.size();
   return nullptr;
 }
 int32_t/*bool*/ kudu_partial_row_is_null_by_name(const kudu_partial_row* row, kudu_slice column_name) {
-  return row->row_.IsNull(slice_to_Slice(column_name));
+  return to_internal(row)->IsNull(slice_to_Slice(column_name));
 }
 int32_t/*bool*/ kudu_partial_row_is_set_by_name(const kudu_partial_row* row, kudu_slice column_name) {
-  return row->row_.IsColumnSet(slice_to_Slice(column_name));
+  return to_internal(row)->IsColumnSet(slice_to_Slice(column_name));
 }
 
 kudu_status* kudu_partial_row_get_bool(const kudu_partial_row* row,
                                        int32_t column_idx,
                                        int32_t/*bool*/* val) {
   bool b;
-  RETURN_NOT_OK_C(row->row_.GetBool(column_idx, &b));
+  RETURN_NOT_OK_C(to_internal(row)->GetBool(column_idx, &b));
   *val = b;
   return nullptr;
 }
 kudu_status* kudu_partial_row_get_int8(const kudu_partial_row* row,
                                        int32_t column_idx,
                                        int8_t* val) {
-  return Status::into_kudu_status(row->row_.GetInt8(column_idx, val));
+  return Status::into_kudu_status(to_internal(row)->GetInt8(column_idx, val));
 }
 kudu_status* kudu_partial_row_get_int16(const kudu_partial_row* row,
                                         int32_t column_idx,
                                         int16_t* val) {
-  return Status::into_kudu_status(row->row_.GetInt16(column_idx, val));
+  return Status::into_kudu_status(to_internal(row)->GetInt16(column_idx, val));
 }
 kudu_status* kudu_partial_row_get_int32(const kudu_partial_row* row,
                                         int32_t column_idx,
                                         int32_t* val) {
-  return Status::into_kudu_status(row->row_.GetInt32(column_idx, val));
+  return Status::into_kudu_status(to_internal(row)->GetInt32(column_idx, val));
 }
 kudu_status* kudu_partial_row_get_int64(const kudu_partial_row* row,
                                         int32_t column_idx,
                                         int64_t* val) {
-  return Status::into_kudu_status(row->row_.GetInt64(column_idx, val));
+  return Status::into_kudu_status(to_internal(row)->GetInt64(column_idx, val));
 }
 kudu_status* kudu_partial_row_get_timestamp(const kudu_partial_row* row,
                                             int32_t column_idx,
                                             int64_t* val) {
-  return Status::into_kudu_status(row->row_.GetTimestamp(column_idx, val));
+  return Status::into_kudu_status(to_internal(row)->GetTimestamp(column_idx, val));
 }
 kudu_status* kudu_partial_row_get_float(const kudu_partial_row* row,
                                         int32_t column_idx,
                                         float* val) {
-  return Status::into_kudu_status(row->row_.GetFloat(column_idx, val));
+  return Status::into_kudu_status(to_internal(row)->GetFloat(column_idx, val));
 }
 kudu_status* kudu_partial_row_get_double(const kudu_partial_row* row,
                                          int32_t column_idx,
                                          double* val) {
-  return Status::into_kudu_status(row->row_.GetDouble(column_idx, val));
+  return Status::into_kudu_status(to_internal(row)->GetDouble(column_idx, val));
 }
 kudu_status* kudu_partial_row_get_string(const kudu_partial_row* row,
                                          int32_t column_idx,
                                          kudu_slice* val) {
   Slice s;
-  RETURN_NOT_OK_C(row->row_.GetString(column_idx, &s));
+  RETURN_NOT_OK_C(to_internal(row)->GetString(column_idx, &s));
   val->data = s.data();
   val->len = s.size();
   return nullptr;
@@ -657,16 +671,16 @@ kudu_status* kudu_partial_row_get_binary(const kudu_partial_row* row,
                                          int32_t column_idx,
                                          kudu_slice* val) {
   Slice s;
-  RETURN_NOT_OK_C(row->row_.GetBinary(column_idx, &s));
+  RETURN_NOT_OK_C(to_internal(row)->GetBinary(column_idx, &s));
   val->data = s.data();
   val->len = s.size();
   return nullptr;
 }
 int32_t/*bool*/ kudu_partial_row_is_null(const kudu_partial_row* row, int32_t column_idx) {
-  return row->row_.IsColumnSet(column_idx);
+  return to_internal(row)->IsColumnSet(column_idx);
 }
 int32_t/*bool*/ kudu_partial_row_is_set(const kudu_partial_row* row, int32_t column_idx) {
-  return row->row_.IsNull(column_idx);
+  return to_internal(row)->IsNull(column_idx);
 }
 
 } // extern "C"

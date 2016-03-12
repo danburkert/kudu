@@ -311,6 +311,8 @@ void kudu_table_creator_add_hash_partitions(kudu_table_creator*,
 
 void kudu_table_creator_set_range_partition_columns(kudu_table_creator*, kudu_slice_list columns);
 
+void kudu_table_creator_add_split_row(kudu_table_creator*, kudu_partial_row* split_row);
+
 void kudu_table_creator_num_replicas(kudu_table_creator*, int32_t num_replicas);
 
 void kudu_table_creator_timeout(kudu_table_creator*, int64_t timeout_ms);
