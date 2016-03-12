@@ -123,7 +123,7 @@ class KUDU_EXPORT Status {
   // Move the specified status.
   Status(Status&& s);
   void operator=(Status&& s);
-  static const kudu_status* into_kudu_status(Status&&s);
+  static kudu_status* into_kudu_status(Status&&s);
 #endif
 
   // Return a success status.
@@ -364,10 +364,10 @@ inline void Status::operator=(Status&& s) {
   }
 }
 
-inline const kudu_status* Status::into_kudu_status(Status&& s) {
+inline kudu_status* Status::into_kudu_status(Status&& s) {
   const char* state = s.state_;
   s.state_ = nullptr;
-  return reinterpret_cast<const kudu_status*>(state);
+  return const_cast<kudu_status*>(reinterpret_cast<const kudu_status*>(state));
 }
 
 #endif
