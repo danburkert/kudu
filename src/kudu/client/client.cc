@@ -468,6 +468,11 @@ KuduTableCreator& KuduTableCreator::split_rows(const vector<const KuduPartialRow
   return *this;
 }
 
+KuduTableCreator& KuduTableCreator::add_split_row(const KuduPartialRow* split_row) {
+  data_->split_rows_.push_back(split_row);
+  return *this;
+}
+
 KuduTableCreator& KuduTableCreator::num_replicas(int num_replicas) {
   data_->num_replicas_ = num_replicas;
   return *this;

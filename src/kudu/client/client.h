@@ -357,6 +357,11 @@ class KUDU_EXPORT KuduTableCreator {
   // Optional.
   KuduTableCreator& split_rows(const std::vector<const KuduPartialRow*>& split_rows);
 
+  // Adds the row to the set of split rows for the table.
+  //
+  // Takes ownership of the row.
+  KuduTableCreator& add_split_row(const KuduPartialRow* split_row);
+
   // Sets the number of replicas for each tablet in the table.
   // This should be an odd number. Optional.
   //
