@@ -370,43 +370,43 @@ kudu_status* kudu_partial_row_set_null_by_name(kudu_partial_row*, kudu_slice col
 kudu_status* kudu_partial_row_unset_by_name(kudu_partial_row*, kudu_slice column_name);
 
 kudu_status* kudu_partial_row_set_bool(kudu_partial_row*,
-                                       int32_t column_idx,
+                                       size_t column_idx,
                                        int32_t/*bool*/ val);
 kudu_status* kudu_partial_row_set_int8(kudu_partial_row*,
-                                       int32_t column_idx,
+                                       size_t column_idx,
                                        int8_t val);
 kudu_status* kudu_partial_row_set_int16(kudu_partial_row*,
-                                        int32_t column_idx,
+                                        size_t column_idx,
                                         int16_t val);
 kudu_status* kudu_partial_row_set_int32(kudu_partial_row*,
-                                        int32_t column_idx,
+                                        size_t column_idx,
                                         int32_t val);
 kudu_status* kudu_partial_row_set_int64(kudu_partial_row*,
-                                        int32_t column_idx,
+                                        size_t column_idx,
                                         int64_t val);
 kudu_status* kudu_partial_row_set_timestamp(kudu_partial_row*,
-                                            int32_t column_idx,
+                                            size_t column_idx,
                                             int64_t val);
 kudu_status* kudu_partial_row_set_float(kudu_partial_row*,
-                                        int32_t column_idx,
+                                        size_t column_idx,
                                         float val);
 kudu_status* kudu_partial_row_set_double(kudu_partial_row*,
-                                         int32_t column_idx,
+                                         size_t column_idx,
                                          double val);
 kudu_status* kudu_partial_row_set_string(kudu_partial_row*,
-                                         int32_t column_idx,
+                                         size_t column_idx,
                                          kudu_slice val);
 kudu_status* kudu_partial_row_set_string_copy(kudu_partial_row*,
-                                              int32_t column_idx,
+                                              size_t column_idx,
                                               kudu_slice val);
 kudu_status* kudu_partial_row_set_binary(kudu_partial_row*,
-                                         int32_t column_idx,
+                                         size_t column_idx,
                                          kudu_slice val);
 kudu_status* kudu_partial_row_set_binary_copy(kudu_partial_row*,
-                                              int32_t column_idx,
+                                              size_t column_idx,
                                               kudu_slice val);
-kudu_status* kudu_partial_row_set_null(kudu_partial_row*, int32_t column_idx);
-kudu_status* kudu_partial_row_unset(kudu_partial_row*, int32_t column_idx);
+kudu_status* kudu_partial_row_set_null(kudu_partial_row*, size_t column_idx);
+kudu_status* kudu_partial_row_unset(kudu_partial_row*, size_t column_idx);
 
 kudu_status* kudu_partial_row_get_bool_by_name(const kudu_partial_row*,
                                                kudu_slice column_name,
@@ -435,50 +435,44 @@ kudu_status* kudu_partial_row_get_double_by_name(const kudu_partial_row*,
 kudu_status* kudu_partial_row_get_string_by_name(const kudu_partial_row*,
                                                  kudu_slice column_name,
                                                  kudu_slice* val);
-kudu_status* kudu_partial_row_get_string_copy_by_name(const kudu_partial_row*,
-                                                      kudu_slice column_name,
-                                                      kudu_slice* val);
 kudu_status* kudu_partial_row_get_binary_by_name(const kudu_partial_row*,
                                                  kudu_slice column_name,
                                                  kudu_slice* val);
 int32_t/*bool*/ kudu_partial_row_is_null_by_name(const kudu_partial_row*, kudu_slice column_name);
-int32_t/*bool*/ kudu_partial_row_is_set(const kudu_partial_row*, int32_t column_idx);
+int32_t/*bool*/ kudu_partial_row_is_set_by_name(const kudu_partial_row*, kudu_slice column_name);
 
 kudu_status* kudu_partial_row_get_bool(const kudu_partial_row*,
-                                       int32_t column_idx,
+                                       size_t column_idx,
                                        int32_t/*bool*/* val);
 kudu_status* kudu_partial_row_get_int8(const kudu_partial_row*,
-                                       int32_t column_idx,
+                                       size_t column_idx,
                                        int8_t* val);
 kudu_status* kudu_partial_row_get_int16(const kudu_partial_row*,
-                                        int32_t column_idx,
+                                        size_t column_idx,
                                         int16_t* val);
 kudu_status* kudu_partial_row_get_int32(const kudu_partial_row*,
-                                        int32_t column_idx,
+                                        size_t column_idx,
                                         int32_t* val);
 kudu_status* kudu_partial_row_get_int64(const kudu_partial_row*,
-                                        int32_t column_idx,
+                                        size_t column_idx,
                                         int64_t* val);
 kudu_status* kudu_partial_row_get_timestamp(const kudu_partial_row*,
-                                            int32_t column_idx,
+                                            size_t column_idx,
                                             int64_t* val);
 kudu_status* kudu_partial_row_get_float(const kudu_partial_row*,
-                                        int32_t column_idx,
+                                        size_t column_idx,
                                         float* val);
 kudu_status* kudu_partial_row_get_double(const kudu_partial_row*,
-                                         int32_t column_idx,
+                                         size_t column_idx,
                                          double* val);
 kudu_status* kudu_partial_row_get_string(const kudu_partial_row*,
-                                         int32_t column_idx,
+                                         size_t column_idx,
                                          kudu_slice* val);
-kudu_status* kudu_partial_row_get_string_copy(const kudu_partial_row*,
-                                              int32_t column_idx,
-                                              kudu_slice* val);
 kudu_status* kudu_partial_row_get_binary(const kudu_partial_row*,
-                                         int32_t column_idx,
+                                         size_t column_idx,
                                          kudu_slice* val);
-int32_t/*bool*/ kudu_partial_row_is_null(const kudu_partial_row*, int32_t column_idx);
-int32_t/*bool*/ kudu_partial_row_is_set(const kudu_partial_row*, int32_t column_idx);
+int32_t/*bool*/ kudu_partial_row_is_null(const kudu_partial_row*, size_t column_idx);
+int32_t/*bool*/ kudu_partial_row_is_set(const kudu_partial_row*, size_t column_idx);
 
 #ifdef __cplusplus
 } // extern "C"
