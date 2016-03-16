@@ -27,13 +27,15 @@ extern "C" {
 typedef struct kudu_client kudu_client;
 typedef struct kudu_client_builder kudu_client_builder;
 typedef struct kudu_column_schema kudu_column_schema;
-typedef struct kudu_schema kudu_schema;
-typedef struct kudu_status kudu_status;
-typedef struct kudu_table_list kudu_table_list;
-typedef struct kudu_schema_builder kudu_schema_builder;
 typedef struct kudu_column_schema_builder kudu_column_schema_builder;
-typedef struct kudu_table_creator kudu_table_creator;
 typedef struct kudu_partial_row kudu_partial_row;
+typedef struct kudu_schema kudu_schema;
+typedef struct kudu_schema_builder kudu_schema_builder;
+typedef struct kudu_status kudu_status;
+typedef struct kudu_table_creator kudu_table_creator;
+typedef struct kudu_table_list kudu_table_list;
+typedef struct kudu_tablet_server kudu_tablet_server;
+typedef struct kudu_tablet_server_list kudu_tablet_server_list;
 
 typedef enum kudu_data_type {
   KUDU_INT8 = 0,
@@ -153,7 +155,7 @@ void kudu_client_builder_set_default_rpc_timeout(kudu_client_builder*, int64_t t
 //
 // The return value may indicate an error in the create operation, or a misuse
 // of the builder; in the latter case, only the last error is returned.
-kudu_status* kudu_client_builder_build(kudu_client_builder*, kudu_client** client);
+kudu_status* kudu_client_builder_build(kudu_client_builder*, kudu_client**const client);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Table List
@@ -167,6 +169,30 @@ size_t kudu_table_list_size(const kudu_table_list*);
 // Returns the name of the table in the list as a UTF-8 encoded string slice.
 // The returned slice is valid for the lifetime of the table list.
 kudu_slice kudu_table_list_table_name(const kudu_table_list*, size_t index);
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Tablet Server List
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_tablet_server_list_destroy(kudu_tablet_server_list*);
+
+// Returns the number of tablet servers in the list.
+size_t kudu_tablet_server_list_size(const kudu_tablet_server_list*);
+
+// Returns the tablet server at the provided index in the list.
+const kudu_tablet_server* kudu_tablet_server_list_get(const kudu_tablet_server_list*, size_t idx);
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Tablet Server
+////////////////////////////////////////////////////////////////////////////////
+
+// Returns the hostname of the tablet server.
+// The returned slice is valid for the lifetime of the tablet server.
+kudu_slice kudu_tablet_server_hostname(const kudu_tablet_server*);
+
+// Return the UUID of the tablet server.
+// The returned slice is valid for the lifetime of the tablet server.
+kudu_slice kudu_tablet_server_uuid(const kudu_tablet_server*);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Schema
@@ -230,7 +256,7 @@ void kudu_schema_builder_set_primary_key_columns(kudu_schema_builder*,
                                                  kudu_slice_list column_names);
 
 // Builds the schema.
-kudu_status* kudu_schema_builder_build(kudu_schema_builder*, kudu_schema** schema);
+kudu_status* kudu_schema_builder_build(kudu_schema_builder*, kudu_schema**const schema);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Column Schema Builder
@@ -279,17 +305,20 @@ void kudu_column_schema_builder_nullable(kudu_column_schema_builder*, int32_t/*b
 // Destroys the Kudu Client.
 void kudu_client_destroy(kudu_client*);
 
-// Returns the list of tables in the Kudu cluster storing the result in tables,
-// or returns an error status.
-kudu_status* kudu_client_list_tables(const kudu_client*, kudu_table_list** tables);
+// Creates a new table creator.
+kudu_table_creator* kudu_client_new_table_creator(kudu_client*);
 
 // Retrieves the schema for the table with the given name storing the result in
 // schema, or returns an error status.
-kudu_status* kudu_client_table_schema(const kudu_client*,
-                                            kudu_slice table_name,
-                                            kudu_schema** schema);
+kudu_status* kudu_client_get_table_schema(kudu_client*, kudu_slice table_name, kudu_schema**const schema);
 
-kudu_table_creator* kudu_client_new_table_creator(kudu_client*);
+// Returns the list of tables in the Kudu cluster whose names pass a substring
+// match on 'filter' storing the result in tables, or returns an error status.
+kudu_status* kudu_client_list_tables(kudu_client*, kudu_slice filter, kudu_table_list**const tables);
+
+// Return the list of tablet servers in the Kudu cluster, or returns an error
+// status.
+kudu_status* kudu_client_list_tablet_servers(kudu_client*, kudu_tablet_server_list**const tservers);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Table Creator
