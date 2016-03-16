@@ -45,6 +45,7 @@ using kudu::client::KuduColumnStorageAttributes;
 using kudu::client::KuduSchema;
 using kudu::client::KuduSchemaBuilder;
 using kudu::client::KuduTableCreator;
+using kudu::client::KuduTabletServer;
 using kudu::client::sp::shared_ptr;
 using kudu::KuduPartialRow;
 using kudu::MonoDelta;
@@ -57,6 +58,10 @@ namespace {
   }
   Slice slice_to_Slice(kudu_slice slice) {
     return Slice(slice.data, slice.len);
+  }
+
+  kudu_slice string_to_slice(const string& s) {
+    return kudu_slice { .data = reinterpret_cast<const uint8_t*>(s.data()), .len = s.size() };
   }
 
   vector<string> slice_list_to_vector(kudu_slice_list list) {
@@ -85,6 +90,9 @@ namespace {
   KuduColumnSpec* to_internal(kudu_column_schema_builder* builder) {
       return reinterpret_cast<KuduColumnSpec*>(builder);
   }
+  const KuduTabletServer* to_internal(const kudu_tablet_server* tserver) {
+    return reinterpret_cast<const KuduTabletServer*>(tserver);
+  }
 } // anonymous namespace
 
 extern "C" {
@@ -93,6 +101,7 @@ struct kudu_client_builder { KuduClientBuilder builder_; };
 struct kudu_client { shared_ptr<KuduClient> client_; };
 struct kudu_schema { KuduSchema schema_; };
 struct kudu_table_list { vector<string> list_; };
+struct kudu_tablet_server_list { vector<KuduTabletServer*> list_; };
 
 struct kudu_column_schema {
   kudu_column_schema(KuduColumnSchema column) : column_(move(column)) {}
@@ -167,7 +176,7 @@ void kudu_client_builder_set_default_rpc_timeout(kudu_client_builder* builder,
 }
 
 kudu_status* kudu_client_builder_build(kudu_client_builder* builder,
-                                       kudu_client** client) {
+                                       kudu_client**const client) {
   unique_ptr<kudu_client> c(new kudu_client);
   RETURN_NOT_OK_C(builder->builder_.Build(&c->client_));
   *client = c.release();
@@ -190,9 +199,39 @@ size_t kudu_table_list_size(const kudu_table_list* list) {
 // for the lifetime of the Kudu Table List.
 kudu_slice kudu_table_list_table_name(const kudu_table_list* list, size_t index) {
   CHECK(index < list->list_.size());
-  const string& name = list->list_[index];
-  const uint8_t* data = reinterpret_cast<const uint8_t*>(name.data());
-  return kudu_slice { .data = data, .len = name.size() };
+  return string_to_slice(list->list_[index]);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Tablet Server
+////////////////////////////////////////////////////////////////////////////////
+
+kudu_slice kudu_tablet_server_hostname(const kudu_tablet_server* tserver) {
+  return string_to_slice(to_internal(tserver)->hostname());
+}
+
+kudu_slice kudu_tablet_server_uuid(const kudu_tablet_server* tserver) {
+  return string_to_slice(to_internal(tserver)->uuid());
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Tablet Server List
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_tablet_server_list_destroy(kudu_tablet_server_list* list) {
+    for (auto tserver : list->list_) {
+        delete tserver;
+    }
+    delete list;
+}
+
+size_t kudu_tablet_server_list_size(const kudu_tablet_server_list* list) {
+  return list->list_.size();
+}
+
+const kudu_tablet_server* kudu_tablet_server_list_get(const kudu_tablet_server_list* list,
+                                                      size_t idx) {
+  return reinterpret_cast<const kudu_tablet_server*>(list->list_[idx]);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -230,9 +269,7 @@ void kudu_column_schema_destroy(kudu_column_schema* column) {
 }
 
 kudu_slice kudu_column_schema_name(const kudu_column_schema* column) {
-  const string& name = column->column_.name();
-  const uint8_t* data = reinterpret_cast<const uint8_t*>(name.data());
-  return kudu_slice { .data = data, .len = name.size() };
+  return string_to_slice(column->column_.name());
 }
 
 int32_t kudu_column_schema_is_nullable(const kudu_column_schema* column) {
@@ -274,7 +311,7 @@ void kudu_schema_builder_set_primary_key_columns(kudu_schema_builder* builder,
   builder->builder_.SetPrimaryKey(slice_list_to_vector(column_names));
 }
 
-kudu_status* kudu_schema_builder_build(kudu_schema_builder* builder, kudu_schema** schema) {
+kudu_status* kudu_schema_builder_build(kudu_schema_builder* builder, kudu_schema**const schema) {
   unique_ptr<kudu_schema> s(new kudu_schema);
   RETURN_NOT_OK_C(builder->builder_.Build(&s->schema_));
   *schema = s.release();
@@ -323,25 +360,32 @@ void kudu_client_destroy(kudu_client* client) {
   delete client;
 }
 
-// Returns the tables.
-kudu_status* kudu_client_list_tables(const kudu_client* client, kudu_table_list** tables) {
-  unique_ptr<kudu_table_list> list(new kudu_table_list);
-  RETURN_NOT_OK_C(client->client_->ListTables(&list->list_));
-  *tables = list.release();
-  return nullptr;
+kudu_table_creator* kudu_client_new_table_creator(kudu_client* client) {
+  return reinterpret_cast<kudu_table_creator*>(client->client_->NewTableCreator());
 }
 
-kudu_status* kudu_client_table_schema(const kudu_client* client,
-                                      kudu_slice table_name,
-                                      kudu_schema** schema) {
+kudu_status* kudu_client_get_table_schema(kudu_client* client,
+                                          kudu_slice table_name,
+                                          kudu_schema**const schema) {
   unique_ptr<kudu_schema> s(new kudu_schema);
   RETURN_NOT_OK_C(client->client_->GetTableSchema(slice_to_string(table_name), &s.get()->schema_));
   *schema = s.release();
   return nullptr;
 }
 
-kudu_table_creator* kudu_client_new_table_creator(kudu_client* client) {
-  return reinterpret_cast<kudu_table_creator*>(client->client_->NewTableCreator());
+kudu_status* kudu_client_list_tables(kudu_client* client, kudu_slice filter, kudu_table_list**const tables) {
+  unique_ptr<kudu_table_list> list(new kudu_table_list);
+  RETURN_NOT_OK_C(client->client_->ListTables(&list->list_, slice_to_string(filter)));
+  *tables = list.release();
+  return nullptr;
+}
+
+kudu_status* kudu_client_list_tablet_servers(kudu_client* client,
+                                             kudu_tablet_server_list**const tservers) {
+    unique_ptr<kudu_tablet_server_list> list(new kudu_tablet_server_list);
+    RETURN_NOT_OK_C(client->client_->ListTabletServers(&list->list_));
+    *tservers = list.release();
+    return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -677,10 +721,10 @@ kudu_status* kudu_partial_row_get_binary(const kudu_partial_row* row,
   return nullptr;
 }
 int32_t/*bool*/ kudu_partial_row_is_null(const kudu_partial_row* row, size_t column_idx) {
-  return to_internal(row)->IsColumnSet(column_idx);
+  return to_internal(row)->IsNull(column_idx);
 }
 int32_t/*bool*/ kudu_partial_row_is_set(const kudu_partial_row* row, size_t column_idx) {
-  return to_internal(row)->IsNull(column_idx);
+  return to_internal(row)->IsColumnSet(column_idx);
 }
 
 } // extern "C"
