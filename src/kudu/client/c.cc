@@ -256,6 +256,10 @@ kudu_column_schema* kudu_schema_column(const kudu_schema* schema, size_t idx) {
   return new kudu_column_schema(schema->schema_.Column(idx));
 }
 
+kudu_status* kudu_schema_find_column(const kudu_schema* schema, kudu_slice column_name, size_t* idx) {
+  return Status::into_kudu_status(schema->schema_.FindColumn(slice_to_Slice(column_name), idx));
+}
+
 kudu_partial_row* kudu_schema_new_row(const kudu_schema* schema) {
   return reinterpret_cast<kudu_partial_row*>(schema->schema_.NewRow());
 }
@@ -364,6 +368,10 @@ kudu_table_creator* kudu_client_new_table_creator(kudu_client* client) {
   return reinterpret_cast<kudu_table_creator*>(client->client_->NewTableCreator());
 }
 
+kudu_status* kudu_client_delete_table(kudu_client* client, kudu_slice table_name) {
+  return Status::into_kudu_status(client->client_->DeleteTable(slice_to_string(table_name)));
+}
+
 kudu_status* kudu_client_get_table_schema(kudu_client* client,
                                           kudu_slice table_name,
                                           kudu_schema**const schema) {
@@ -449,6 +457,7 @@ void kudu_partial_row_destroy(kudu_partial_row* row) {
 int32_t/*bool*/ kudu_partial_row_is_primary_key_set(const kudu_partial_row* row) {
   return to_internal(row)->IsKeySet();
 }
+
 int32_t/*bool*/ kudu_partial_row_all_columns_set(const kudu_partial_row* row) {
   return to_internal(row)->IsKeySet();
 }

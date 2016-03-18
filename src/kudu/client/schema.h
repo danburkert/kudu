@@ -324,6 +324,8 @@ class KUDU_EXPORT KuduSchema {
   // The caller takes ownership of the created row.
   KuduPartialRow* NewRow() const;
 
+  Status FindColumn(const Slice column_name, size_t* idx) const;
+
  private:
   friend class KuduClient;
   friend class KuduScanner;
