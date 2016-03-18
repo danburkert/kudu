@@ -727,7 +727,7 @@ class KUDU_EXPORT KuduSession : public sp::enable_shared_from_this<KuduSession> 
   // is malformed, the write_op is stored in the session's error collector which
   // may be retrieved at any time.
   //
-  // This is thread safe.
+  // This is thread-safe.
   Status Apply(KuduWriteOperation* write_op) WARN_UNUSED_RESULT;
 
   // Similar to the above, except never blocks. Even in the flush modes that

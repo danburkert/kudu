@@ -42,10 +42,16 @@ using kudu::client::KuduClientBuilder;
 using kudu::client::KuduColumnSchema;
 using kudu::client::KuduColumnSpec;
 using kudu::client::KuduColumnStorageAttributes;
+using kudu::client::KuduDelete;
+using kudu::client::KuduInsert;
+using kudu::client::KuduPredicate;
 using kudu::client::KuduSchema;
 using kudu::client::KuduSchemaBuilder;
+using kudu::client::KuduSession;
+using kudu::client::KuduTable;
 using kudu::client::KuduTableCreator;
 using kudu::client::KuduTabletServer;
+using kudu::client::KuduUpdate;
 using kudu::client::sp::shared_ptr;
 using kudu::KuduPartialRow;
 using kudu::MonoDelta;
@@ -93,13 +99,33 @@ namespace {
   const KuduTabletServer* to_internal(const kudu_tablet_server* tserver) {
     return reinterpret_cast<const KuduTabletServer*>(tserver);
   }
+  const KuduInsert* to_internal(const kudu_insert* insert) {
+    return reinterpret_cast<const KuduInsert*>(insert);
+  }
+  KuduInsert* to_internal(kudu_insert* insert) {
+    return reinterpret_cast<KuduInsert*>(insert);
+  }
+  const KuduUpdate* to_internal(const kudu_update* update) {
+    return reinterpret_cast<const KuduUpdate*>(update);
+  }
+  KuduUpdate* to_internal(kudu_update* update) {
+    return reinterpret_cast<KuduUpdate*>(update);
+  }
+  const KuduDelete* to_internal(const kudu_delete* del) {
+    return reinterpret_cast<const KuduDelete*>(del);
+  }
+  KuduDelete* to_internal(kudu_delete* del) {
+    return reinterpret_cast<KuduDelete*>(del);
+  }
 } // anonymous namespace
 
 extern "C" {
 
-struct kudu_client_builder { KuduClientBuilder builder_; };
 struct kudu_client { shared_ptr<KuduClient> client_; };
+struct kudu_client_builder { KuduClientBuilder builder_; };
 struct kudu_schema { KuduSchema schema_; };
+struct kudu_session { shared_ptr<KuduSession> session_; };
+struct kudu_table { shared_ptr<KuduTable> table_; };
 struct kudu_table_list { vector<string> list_; };
 struct kudu_tablet_server_list { vector<KuduTabletServer*> list_; };
 
@@ -176,7 +202,7 @@ void kudu_client_builder_set_default_rpc_timeout(kudu_client_builder* builder,
 }
 
 kudu_status* kudu_client_builder_build(kudu_client_builder* builder,
-                                       kudu_client**const client) {
+                                       kudu_client** client) {
   unique_ptr<kudu_client> c(new kudu_client);
   RETURN_NOT_OK_C(builder->builder_.Build(&c->client_));
   *client = c.release();
@@ -315,7 +341,7 @@ void kudu_schema_builder_set_primary_key_columns(kudu_schema_builder* builder,
   builder->builder_.SetPrimaryKey(slice_list_to_vector(column_names));
 }
 
-kudu_status* kudu_schema_builder_build(kudu_schema_builder* builder, kudu_schema**const schema) {
+kudu_status* kudu_schema_builder_build(kudu_schema_builder* builder, kudu_schema** schema) {
   unique_ptr<kudu_schema> s(new kudu_schema);
   RETURN_NOT_OK_C(builder->builder_.Build(&s->schema_));
   *schema = s.release();
@@ -374,14 +400,14 @@ kudu_status* kudu_client_delete_table(kudu_client* client, kudu_slice table_name
 
 kudu_status* kudu_client_get_table_schema(kudu_client* client,
                                           kudu_slice table_name,
-                                          kudu_schema**const schema) {
+                                          kudu_schema** schema) {
   unique_ptr<kudu_schema> s(new kudu_schema);
   RETURN_NOT_OK_C(client->client_->GetTableSchema(slice_to_string(table_name), &s.get()->schema_));
   *schema = s.release();
   return nullptr;
 }
 
-kudu_status* kudu_client_list_tables(kudu_client* client, kudu_slice filter, kudu_table_list**const tables) {
+kudu_status* kudu_client_list_tables(kudu_client* client, kudu_slice filter, kudu_table_list** tables) {
   unique_ptr<kudu_table_list> list(new kudu_table_list);
   RETURN_NOT_OK_C(client->client_->ListTables(&list->list_, slice_to_string(filter)));
   *tables = list.release();
@@ -389,11 +415,26 @@ kudu_status* kudu_client_list_tables(kudu_client* client, kudu_slice filter, kud
 }
 
 kudu_status* kudu_client_list_tablet_servers(kudu_client* client,
-                                             kudu_tablet_server_list**const tservers) {
+                                             kudu_tablet_server_list** tservers) {
     unique_ptr<kudu_tablet_server_list> list(new kudu_tablet_server_list);
     RETURN_NOT_OK_C(client->client_->ListTabletServers(&list->list_));
     *tservers = list.release();
     return nullptr;
+}
+
+kudu_status* kudu_client_open_table(kudu_client* client,
+                                    kudu_slice table_name,
+                                    kudu_table** table) {
+    unique_ptr<kudu_table> t(new kudu_table);
+    RETURN_NOT_OK_C(client->client_->OpenTable(slice_to_string(table_name), &t->table_));
+    *table = t.release();
+    return nullptr;
+}
+
+kudu_session* kudu_client_new_session(kudu_client* client) {
+  kudu_session* session = new kudu_session;
+  session->session_ = client->client_->NewSession();
+  return session;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -445,6 +486,134 @@ kudu_status* kudu_table_creator_create(kudu_table_creator* creator) {
   return Status::into_kudu_status(to_internal(creator)->Create());
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Session
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_session_destroy(kudu_session* session) {
+  delete session;
+}
+
+kudu_status* kudu_session_set_flush_mode(kudu_session* session, kudu_flush_mode mode) {
+  return Status::into_kudu_status(session->session_->SetFlushMode(static_cast<KuduSession::FlushMode>(mode)));
+}
+
+kudu_status* kudu_session_set_external_consistency_mode(kudu_session* session,
+                                                        kudu_external_consistency_mode mode) {
+  return Status::into_kudu_status(session->session_->SetExternalConsistencyMode(static_cast<KuduSession::ExternalConsistencyMode>(mode)));
+}
+
+void kudu_session_set_timeout_millis(kudu_session* session, int32_t millis) {
+  session->session_->SetTimeoutMillis(millis);
+}
+
+kudu_status* kudu_session_insert(kudu_session* session, kudu_insert* insert) {
+  return Status::into_kudu_status(session->session_->Apply(to_internal(insert)));
+}
+
+kudu_status* kudu_session_update(kudu_session* session, kudu_update* update) {
+  return Status::into_kudu_status(session->session_->Apply(to_internal(update)));
+}
+
+kudu_status* kudu_session_delete(kudu_session* session, kudu_delete* del) {
+  return Status::into_kudu_status(session->session_->Apply(to_internal(del)));
+}
+
+kudu_status* kudu_session_flush(kudu_session* session) {
+  return Status::into_kudu_status(session->session_->Flush());
+}
+
+kudu_status* kudu_session_close(kudu_session* session) {
+  return Status::into_kudu_status(session->session_->Close());
+}
+
+int32_t/*bool*/ kudu_session_has_pending_operations(const kudu_session* session) {
+  return session->session_->HasPendingOperations();
+}
+
+int32_t kudu_session_count_buffered_operations(const kudu_session* session) {
+  return session->session_->CountBufferedOperations();
+}
+
+int32_t kudu_session_count_pending_errors(const kudu_session* session) {
+  return session->session_->CountPendingErrors();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Table
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_table_destroy(kudu_table* table) {
+  delete table;
+}
+
+kudu_slice kudu_table_name(const kudu_table* table) {
+  return string_to_slice(table->table_->name());
+}
+
+kudu_slice kudu_table_id(const kudu_table* table) {
+  return string_to_slice(table->table_->id());
+}
+
+kudu_insert* kudu_table_new_insert(kudu_table* table) {
+  return reinterpret_cast<kudu_insert*>(table->table_->NewInsert());
+}
+
+kudu_update* kudu_table_new_update(kudu_table* table) {
+  return reinterpret_cast<kudu_update*>(table->table_->NewUpdate());
+}
+
+kudu_delete* kudu_table_new_delete(kudu_table* table) {
+  return reinterpret_cast<kudu_delete*>(table->table_->NewDelete());
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Insert
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_insert_destroy(kudu_insert* insert) {
+  delete to_internal(insert);
+}
+
+const kudu_partial_row* kudu_insert_row(const kudu_insert* insert) {
+  return reinterpret_cast<const kudu_partial_row*>(&to_internal(insert)->row());
+}
+
+kudu_partial_row* kudu_insert_mutable_row(kudu_insert* insert) {
+  return reinterpret_cast<kudu_partial_row*>(to_internal(insert)->mutable_row());
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Update
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_update_destroy(kudu_update* update) {
+  delete to_internal(update);
+}
+
+const kudu_partial_row* kudu_update_row(const kudu_update* update) {
+  return reinterpret_cast<const kudu_partial_row*>(&to_internal(update)->row());
+}
+
+kudu_partial_row* kudu_update_mutable_row(kudu_update* update) {
+  return reinterpret_cast<kudu_partial_row*>(to_internal(update)->mutable_row());
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Delete
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_delete_destroy(kudu_delete* del) {
+  delete to_internal(del);
+}
+
+const kudu_partial_row* kudu_delete_row(const kudu_delete* del) {
+  return reinterpret_cast<const kudu_partial_row*>(&to_internal(del)->row());
+}
+
+kudu_partial_row* kudu_delete_mutable_row(kudu_delete* del) {
+  return reinterpret_cast<kudu_partial_row*>(to_internal(del)->mutable_row());
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Partial Row
