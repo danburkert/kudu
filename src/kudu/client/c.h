@@ -28,14 +28,20 @@ typedef struct kudu_client kudu_client;
 typedef struct kudu_client_builder kudu_client_builder;
 typedef struct kudu_column_schema kudu_column_schema;
 typedef struct kudu_column_schema_builder kudu_column_schema_builder;
+typedef struct kudu_delete kudu_delete;
+typedef struct kudu_insert kudu_insert;
 typedef struct kudu_partial_row kudu_partial_row;
+typedef struct kudu_predicate kudu_predicate;
 typedef struct kudu_schema kudu_schema;
 typedef struct kudu_schema_builder kudu_schema_builder;
+typedef struct kudu_session kudu_session;
 typedef struct kudu_status kudu_status;
+typedef struct kudu_table kudu_table;
 typedef struct kudu_table_creator kudu_table_creator;
 typedef struct kudu_table_list kudu_table_list;
 typedef struct kudu_tablet_server kudu_tablet_server;
 typedef struct kudu_tablet_server_list kudu_tablet_server_list;
+typedef struct kudu_update kudu_update;
 
 typedef enum kudu_data_type {
   KUDU_INT8 = 0,
@@ -67,6 +73,17 @@ typedef enum kudu_encoding_type {
     KUDU_DICT_ENCODING = 5,
     KUDU_BIT_SHUFFLE_ENCODING = 6
 } kudu_encoding_type;
+
+typedef enum kudu_flush_mode {
+  KUDU_AUTO_FLUSH_SYNC,
+  KUDU_AUTO_FLUSH_BACKGROUND,
+  KUDU_MANUAL_FLUSH,
+} kudu_flush_mode;
+
+typedef enum kudu_external_consistency_mode {
+  KUDU_CLIENT_PROPOGATED,
+  KUDU_COMMIT_WAIT,
+} kudu_external_consistency_mode;
 
 // An immutable (const) reference to a chunk of data with a fixed length.
 //
@@ -155,7 +172,7 @@ void kudu_client_builder_set_default_rpc_timeout(kudu_client_builder*, int64_t t
 //
 // The return value may indicate an error in the create operation, or a misuse
 // of the builder; in the latter case, only the last error is returned.
-kudu_status* kudu_client_builder_build(kudu_client_builder*, kudu_client**const client);
+kudu_status* kudu_client_builder_build(kudu_client_builder*, kudu_client** client);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Table List
@@ -264,7 +281,7 @@ void kudu_schema_builder_set_primary_key_columns(kudu_schema_builder*,
                                                  kudu_slice_list column_names);
 
 // Builds the schema.
-kudu_status* kudu_schema_builder_build(kudu_schema_builder*, kudu_schema**const schema);
+kudu_status* kudu_schema_builder_build(kudu_schema_builder*, kudu_schema** schema);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Column Schema Builder
@@ -321,15 +338,21 @@ kudu_status* kudu_client_delete_table(kudu_client*, kudu_slice table_name);
 
 // Retrieves the schema for the table with the given name storing the result in
 // schema, or returns an error status.
-kudu_status* kudu_client_get_table_schema(kudu_client*, kudu_slice table_name, kudu_schema**const schema);
+kudu_status* kudu_client_get_table_schema(kudu_client*, kudu_slice table_name, kudu_schema** schema);
 
 // Returns the list of tables in the Kudu cluster whose names pass a substring
 // match on 'filter' storing the result in tables, or returns an error status.
-kudu_status* kudu_client_list_tables(kudu_client*, kudu_slice filter, kudu_table_list**const tables);
+kudu_status* kudu_client_list_tables(kudu_client*, kudu_slice filter, kudu_table_list** tables);
 
 // Return the list of tablet servers in the Kudu cluster, or returns an error
 // status.
-kudu_status* kudu_client_list_tablet_servers(kudu_client*, kudu_tablet_server_list**const tservers);
+kudu_status* kudu_client_list_tablet_servers(kudu_client*, kudu_tablet_server_list** tservers);
+
+kudu_session* kudu_client_new_session(kudu_client*);
+
+kudu_status* kudu_client_open_table(kudu_client* client,
+                                    kudu_slice table_name,
+                                    kudu_table** table);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Table Creator
@@ -360,6 +383,63 @@ void kudu_table_creator_timeout(kudu_table_creator*, int64_t timeout_ms);
 void kudu_table_creator_wait(kudu_table_creator*, int32_t/*bool*/ wait);
 
 kudu_status* kudu_table_creator_create(kudu_table_creator*);
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Session
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_session_destroy(kudu_session* session);
+
+kudu_status* kudu_session_set_flush_mode(kudu_session* session, kudu_flush_mode mode);
+
+kudu_status* kudu_session_set_external_consistency_mode(kudu_session* session,
+                                                        kudu_external_consistency_mode mode);
+
+void kudu_session_set_timeout_millis(kudu_session* session, int32_t millis);
+
+kudu_status* kudu_session_insert(kudu_session* session, kudu_insert* insert);
+kudu_status* kudu_session_update(kudu_session* session, kudu_update* update);
+kudu_status* kudu_session_delete(kudu_session* session, kudu_delete* del);
+kudu_status* kudu_session_flush(kudu_session* session);
+kudu_status* kudu_session_close(kudu_session* session);
+int32_t/*bool*/ kudu_session_has_pending_operations(const kudu_session* session);
+int32_t kudu_session_count_buffered_operations(const kudu_session* session);
+int32_t kudu_session_count_pending_errors(const kudu_session* session);
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Table
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_table_destroy(kudu_table* table);
+kudu_slice kudu_table_name(const kudu_table* table);
+kudu_slice kudu_table_id(const kudu_table* table);
+kudu_insert* kudu_table_new_insert(kudu_table* table);
+kudu_update* kudu_table_new_update(kudu_table* table);
+kudu_delete* kudu_table_new_delete(kudu_table* table);
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Insert
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_insert_destroy(kudu_insert* insert);
+const kudu_partial_row* kudu_insert_row(const kudu_insert* insert);
+kudu_partial_row* kudu_insert_mutable_row(kudu_insert* insert);
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Update
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_update_destroy(kudu_update* update);
+const kudu_partial_row* kudu_update_row(const kudu_update* update);
+kudu_partial_row* kudu_update_mutable_row(kudu_update* update);
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Delete
+////////////////////////////////////////////////////////////////////////////////
+
+void kudu_delete_destroy(kudu_delete* del);
+const kudu_partial_row* kudu_delete_row(const kudu_delete* del);
+kudu_partial_row* kudu_delete_mutable_row(kudu_delete* del);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Partial Row
