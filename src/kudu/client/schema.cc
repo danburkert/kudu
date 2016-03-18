@@ -522,6 +522,17 @@ KuduPartialRow* KuduSchema::NewRow() const {
   return new KuduPartialRow(schema_);
 }
 
+Status KuduSchema::FindColumn(const Slice column_name, size_t* idx) const {
+  StringPiece name(reinterpret_cast<const char*>(column_name.data()), column_name.size());
+  int i = schema_->find_column(name);
+  if (i == Schema::kColumnNotFound) {
+    return Status::NotFound(strings::Substitute("unable to find column '$0' in the schema", name));
+  } else {
+    *idx = i;
+    return Status::OK();
+  }
+}
+
 size_t KuduSchema::num_columns() const {
   return schema_->num_columns();
 }

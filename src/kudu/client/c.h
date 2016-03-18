@@ -207,7 +207,15 @@ size_t kudu_schema_num_columns(const kudu_schema*);
 size_t kudu_schema_num_primary_key_columns(const kudu_schema*);
 
 // Returns the column schema for the column at the specified index.
+//
+// TODO: this should return a kudu_status, since it can fail.
 kudu_column_schema* kudu_schema_column(const kudu_schema*, size_t idx);
+
+// Returns the index of the column in `idx`, or returns an error status if the
+// column is not found.
+kudu_status* kudu_schema_find_column(const kudu_schema*,
+                                     kudu_slice column_name,
+                                     size_t* idx);
 
 // Returns a new row corresponding to this schema.
 //
@@ -307,6 +315,9 @@ void kudu_client_destroy(kudu_client*);
 
 // Creates a new table creator.
 kudu_table_creator* kudu_client_new_table_creator(kudu_client*);
+
+// Drops the table.
+kudu_status* kudu_client_delete_table(kudu_client*, kudu_slice table_name);
 
 // Retrieves the schema for the table with the given name storing the result in
 // schema, or returns an error status.
