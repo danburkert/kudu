@@ -32,6 +32,8 @@ typedef struct kudu_delete kudu_delete;
 typedef struct kudu_insert kudu_insert;
 typedef struct kudu_partial_row kudu_partial_row;
 typedef struct kudu_predicate kudu_predicate;
+typedef struct kudu_scan_batch kudu_scan_batch;
+typedef struct kudu_scanner kudu_scanner;
 typedef struct kudu_schema kudu_schema;
 typedef struct kudu_schema_builder kudu_schema_builder;
 typedef struct kudu_session kudu_session;
@@ -42,6 +44,11 @@ typedef struct kudu_table_list kudu_table_list;
 typedef struct kudu_tablet_server kudu_tablet_server;
 typedef struct kudu_tablet_server_list kudu_tablet_server_list;
 typedef struct kudu_update kudu_update;
+
+typedef struct kudu_scan_batch_row_ptr {
+  const void* schema;
+  const void* data;
+} kudu_scan_batch_row_ptr;
 
 typedef enum kudu_data_type {
   KUDU_INT8 = 0,
@@ -84,6 +91,16 @@ typedef enum kudu_external_consistency_mode {
   KUDU_CLIENT_PROPOGATED,
   KUDU_COMMIT_WAIT,
 } kudu_external_consistency_mode;
+
+typedef enum kudu_read_mode {
+  KUDU_READ_LATEST,
+  KUDU_READ_AT_SNAPSHOT,
+} kudu_read_mode;
+
+typedef enum kudu_order_mode {
+  KUDU_UNORDERED,
+  KUDU_ORDERED,
+} kudu_order_mode;
 
 // An immutable (const) reference to a chunk of data with a fixed length.
 //
@@ -388,58 +405,161 @@ kudu_status* kudu_table_creator_create(kudu_table_creator*);
 // Kudu Session
 ////////////////////////////////////////////////////////////////////////////////
 
-void kudu_session_destroy(kudu_session* session);
+void kudu_session_destroy(kudu_session*);
 
-kudu_status* kudu_session_set_flush_mode(kudu_session* session, kudu_flush_mode mode);
+kudu_status* kudu_session_set_flush_mode(kudu_session*, kudu_flush_mode mode);
 
-kudu_status* kudu_session_set_external_consistency_mode(kudu_session* session,
+kudu_status* kudu_session_set_external_consistency_mode(kudu_session*,
                                                         kudu_external_consistency_mode mode);
 
-void kudu_session_set_timeout_millis(kudu_session* session, int32_t millis);
+void kudu_session_set_timeout_millis(kudu_session*, int32_t millis);
 
-kudu_status* kudu_session_insert(kudu_session* session, kudu_insert* insert);
-kudu_status* kudu_session_update(kudu_session* session, kudu_update* update);
-kudu_status* kudu_session_delete(kudu_session* session, kudu_delete* del);
-kudu_status* kudu_session_flush(kudu_session* session);
-kudu_status* kudu_session_close(kudu_session* session);
-int32_t/*bool*/ kudu_session_has_pending_operations(const kudu_session* session);
-int32_t kudu_session_count_buffered_operations(const kudu_session* session);
-int32_t kudu_session_count_pending_errors(const kudu_session* session);
+kudu_status* kudu_session_insert(kudu_session*, kudu_insert* insert);
+kudu_status* kudu_session_update(kudu_session*, kudu_update* update);
+kudu_status* kudu_session_delete(kudu_session*, kudu_delete* del);
+kudu_status* kudu_session_flush(kudu_session*);
+kudu_status* kudu_session_close(kudu_session*);
+int32_t/*bool*/ kudu_session_has_pending_operations(const kudu_session*);
+int32_t kudu_session_count_buffered_operations(const kudu_session*);
+int32_t kudu_session_count_pending_errors(const kudu_session*);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Table
 ////////////////////////////////////////////////////////////////////////////////
 
-void kudu_table_destroy(kudu_table* table);
-kudu_slice kudu_table_name(const kudu_table* table);
-kudu_slice kudu_table_id(const kudu_table* table);
-kudu_insert* kudu_table_new_insert(kudu_table* table);
-kudu_update* kudu_table_new_update(kudu_table* table);
-kudu_delete* kudu_table_new_delete(kudu_table* table);
+void kudu_table_destroy(kudu_table*);
+kudu_slice kudu_table_name(const kudu_table*);
+kudu_slice kudu_table_id(const kudu_table*);
+kudu_insert* kudu_table_new_insert(kudu_table*);
+kudu_update* kudu_table_new_update(kudu_table*);
+kudu_delete* kudu_table_new_delete(kudu_table*);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Insert
 ////////////////////////////////////////////////////////////////////////////////
 
-void kudu_insert_destroy(kudu_insert* insert);
-const kudu_partial_row* kudu_insert_row(const kudu_insert* insert);
-kudu_partial_row* kudu_insert_mutable_row(kudu_insert* insert);
+void kudu_insert_destroy(kudu_insert*);
+const kudu_partial_row* kudu_insert_row(const kudu_insert*);
+kudu_partial_row* kudu_insert_mutable_row(kudu_insert*);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Update
 ////////////////////////////////////////////////////////////////////////////////
 
-void kudu_update_destroy(kudu_update* update);
-const kudu_partial_row* kudu_update_row(const kudu_update* update);
-kudu_partial_row* kudu_update_mutable_row(kudu_update* update);
+void kudu_update_destroy(kudu_update*);
+const kudu_partial_row* kudu_update_row(const kudu_update*);
+kudu_partial_row* kudu_update_mutable_row(kudu_update*);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Delete
 ////////////////////////////////////////////////////////////////////////////////
 
-void kudu_delete_destroy(kudu_delete* del);
-const kudu_partial_row* kudu_delete_row(const kudu_delete* del);
-kudu_partial_row* kudu_delete_mutable_row(kudu_delete* del);
+void kudu_delete_destroy(kudu_delete*);
+const kudu_partial_row* kudu_delete_row(const kudu_delete*);
+kudu_partial_row* kudu_delete_mutable_row(kudu_delete*);
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Scanner
+////////////////////////////////////////////////////////////////////////////////
+
+kudu_scanner* kudu_scanner_create(kudu_table*);
+void kudu_scanner_destroy(kudu_scanner*);
+kudu_status* kudu_scanner_set_projected_column_names(kudu_scanner*, kudu_slice_list col_names);
+kudu_status* kudu_scanner_set_projected_column_indexes(kudu_scanner*, const size_t* indexes, size_t num_indexes);
+kudu_status* kudu_scanner_add_lower_bound(kudu_scanner*, const kudu_partial_row* bound);
+kudu_status* kudu_scanner_add_upper_bound(kudu_scanner*, const kudu_partial_row* bound);
+kudu_status* kudu_scanner_set_cache_blocks(kudu_scanner*, /*bool*/int32_t cache_blocks);
+kudu_status* kudu_scanner_open(kudu_scanner*);
+void kudu_scanner_close(kudu_scanner* scanner);
+/*bool*/int32_t kudu_scanner_has_more_rows(kudu_scanner* scanner);
+kudu_status* kudu_scanner_next_batch(kudu_scanner* scanner, kudu_scan_batch* batch);
+kudu_status* kudu_scanner_get_current_server(kudu_scanner* scanner, kudu_tablet_server** tserver);
+kudu_status* kudu_scanner_set_batch_size_bytes(kudu_scanner* scanner, uint32_t batch_size);
+kudu_status* kudu_scanner_set_read_mode(kudu_scanner* scanner, kudu_read_mode mode);
+kudu_status* kudu_scanner_set_order_mode(kudu_scanner* scanner, kudu_order_mode mode);
+kudu_status* kudu_scanner_set_fault_tolerant(kudu_scanner* scanner);
+kudu_status* kudu_scanner_set_snapshot_micros(kudu_scanner* scanner, uint64_t timestamp);
+kudu_status* kudu_scanner_set_snapshot_raw(kudu_scanner* scanner, uint64_t timestamp);
+kudu_status* kudu_scanner_set_timeout_millis(kudu_scanner* scanner, int32_t timeout);
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Scan Batch
+////////////////////////////////////////////////////////////////////////////////
+
+kudu_scan_batch* kudu_scan_batch_create();
+void kudu_scan_batch_destroy(kudu_scan_batch* batch);
+size_t kudu_scan_batch_num_rows(const kudu_scan_batch* batch);
+kudu_scan_batch_row_ptr kudu_scan_batch_row(const kudu_scan_batch* batch, size_t idx);
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Scan Batch Row Ptr
+////////////////////////////////////////////////////////////////////////////////
+
+kudu_status* kudu_scan_batch_row_ptr_get_bool(const kudu_scan_batch_row_ptr*,
+                                              size_t column_idx,
+                                              int32_t/*bool*/* val);
+kudu_status* kudu_scan_batch_row_ptr_get_int8(const kudu_scan_batch_row_ptr*,
+                                              size_t column_idx,
+                                              int8_t* val);
+kudu_status* kudu_scan_batch_row_ptr_get_int16(const kudu_scan_batch_row_ptr*,
+                                               size_t column_idx,
+                                               int16_t* val);
+kudu_status* kudu_scan_batch_row_ptr_get_int32(const kudu_scan_batch_row_ptr*,
+                                               size_t column_idx,
+                                               int32_t* val);
+kudu_status* kudu_scan_batch_row_ptr_get_int64(const kudu_scan_batch_row_ptr*,
+                                               size_t column_idx,
+                                               int64_t* val);
+kudu_status* kudu_scan_batch_row_ptr_get_timestamp(const kudu_scan_batch_row_ptr*,
+                                                   size_t column_idx,
+                                                   int64_t* val);
+kudu_status* kudu_scan_batch_row_ptr_get_float(const kudu_scan_batch_row_ptr*,
+                                               size_t column_idx,
+                                               float* val);
+kudu_status* kudu_scan_batch_row_ptr_get_double(const kudu_scan_batch_row_ptr*,
+                                                size_t column_idx,
+                                                double* val);
+kudu_status* kudu_scan_batch_row_ptr_get_string(const kudu_scan_batch_row_ptr*,
+                                                size_t column_idx,
+                                                kudu_slice* val);
+kudu_status* kudu_scan_batch_row_ptr_get_binary(const kudu_scan_batch_row_ptr*,
+                                                size_t column_idx,
+                                                kudu_slice* val);
+int32_t/*bool*/ kudu_scan_batch_row_ptr_is_null(const kudu_scan_batch_row_ptr*,
+                                                size_t column_idx);
+
+kudu_status* kudu_scan_batch_row_ptr_get_bool_by_name(const kudu_scan_batch_row_ptr*,
+                                                      kudu_slice column_name,
+                                                      int32_t/*bool*/* val);
+kudu_status* kudu_scan_batch_row_ptr_get_int8_by_name(const kudu_scan_batch_row_ptr*,
+                                                      kudu_slice column_name,
+                                                      int8_t* val);
+kudu_status* kudu_scan_batch_row_ptr_get_int16_by_name(const kudu_scan_batch_row_ptr*,
+                                                       kudu_slice column_name,
+                                                       int16_t* val);
+kudu_status* kudu_scan_batch_row_ptr_get_int32_by_name(const kudu_scan_batch_row_ptr*,
+                                                       kudu_slice column_name,
+                                                       int32_t* val);
+kudu_status* kudu_scan_batch_row_ptr_get_int64_by_name(const kudu_scan_batch_row_ptr*,
+                                                       kudu_slice column_name,
+                                                       int64_t* val);
+kudu_status* kudu_scan_batch_row_ptr_get_timestamp_by_name(const kudu_scan_batch_row_ptr*,
+                                                           kudu_slice column_name,
+                                                           int64_t* val);
+kudu_status* kudu_scan_batch_row_ptr_get_float_by_name(const kudu_scan_batch_row_ptr*,
+                                                       kudu_slice column_name,
+                                                       float* val);
+kudu_status* kudu_scan_batch_row_ptr_get_double_by_name(const kudu_scan_batch_row_ptr*,
+                                                        kudu_slice column_name,
+                                                        double* val);
+kudu_status* kudu_scan_batch_row_ptr_get_string_by_name(const kudu_scan_batch_row_ptr*,
+                                                        kudu_slice column_name,
+                                                        kudu_slice* val);
+kudu_status* kudu_scan_batch_row_ptr_get_binary_by_name(const kudu_scan_batch_row_ptr*,
+                                                        kudu_slice column_name,
+                                                        kudu_slice* val);
+int32_t/*bool*/ kudu_scan_batch_row_ptr_is_null_by_name(const kudu_scan_batch_row_ptr*,
+                                                        kudu_slice column_name);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Partial Row

@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "kudu/client/client.h"
+#include "kudu/client/scan_batch.h"
 #include "kudu/client/schema.h"
 #include "kudu/client/shared_ptr.h"
 #include "kudu/common/partial_row.h"
@@ -45,6 +46,8 @@ using kudu::client::KuduColumnStorageAttributes;
 using kudu::client::KuduDelete;
 using kudu::client::KuduInsert;
 using kudu::client::KuduPredicate;
+using kudu::client::KuduScanBatch;
+using kudu::client::KuduScanner;
 using kudu::client::KuduSchema;
 using kudu::client::KuduSchemaBuilder;
 using kudu::client::KuduSession;
@@ -117,6 +120,13 @@ namespace {
   KuduDelete* to_internal(kudu_delete* del) {
     return reinterpret_cast<KuduDelete*>(del);
   }
+  KuduScanner* to_internal(kudu_scanner* scanner) {
+    return reinterpret_cast<KuduScanner*>(scanner);
+  }
+  KuduScanBatch::RowPtr to_internal(const kudu_scan_batch_row_ptr* ptr) {
+    return KuduScanBatch::RowPtr(static_cast<const kudu::Schema*>(ptr->schema),
+                                 static_cast<const uint8_t*>(ptr->data));
+  }
 } // anonymous namespace
 
 extern "C" {
@@ -128,6 +138,7 @@ struct kudu_session { shared_ptr<KuduSession> session_; };
 struct kudu_table { shared_ptr<KuduTable> table_; };
 struct kudu_table_list { vector<string> list_; };
 struct kudu_tablet_server_list { vector<KuduTabletServer*> list_; };
+struct kudu_scan_batch { KuduScanBatch batch_; };
 
 struct kudu_column_schema {
   kudu_column_schema(KuduColumnSchema column) : column_(move(column)) {}
@@ -613,6 +624,254 @@ const kudu_partial_row* kudu_delete_row(const kudu_delete* del) {
 
 kudu_partial_row* kudu_delete_mutable_row(kudu_delete* del) {
   return reinterpret_cast<kudu_partial_row*>(to_internal(del)->mutable_row());
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Scanner
+////////////////////////////////////////////////////////////////////////////////
+
+kudu_scanner* kudu_scanner_create(kudu_table* table) {
+  return reinterpret_cast<kudu_scanner*>(new KuduScanner(table->table_.get()));
+}
+
+void kudu_scanner_destroy(kudu_scanner* scanner) {
+  delete to_internal(scanner);
+}
+
+kudu_status* kudu_scanner_set_projected_column_names(kudu_scanner* scanner,
+                                                     kudu_slice_list col_names) {
+  vector<string> names = slice_list_to_vector(col_names);
+  return Status::into_kudu_status(to_internal(scanner)->SetProjectedColumnNames(names));
+}
+
+kudu_status* kudu_scanner_set_projected_column_indexes(kudu_scanner* scanner,
+                                                       const size_t* indexes,
+                                                       size_t num_indexes) {
+  vector<int> is;
+  is.reserve(num_indexes);
+  for (int i = 0; i < num_indexes; i++) {
+    is.push_back(indexes[i]);
+  }
+  return Status::into_kudu_status(to_internal(scanner)->SetProjectedColumnIndexes(is));
+}
+
+kudu_status* kudu_scanner_add_lower_bound(kudu_scanner* scanner, const kudu_partial_row* bound) {
+  return Status::into_kudu_status(to_internal(scanner)->AddLowerBound(*to_internal(bound)));
+}
+
+kudu_status* kudu_scanner_add_upper_bound(kudu_scanner* scanner, const kudu_partial_row* bound) {
+  return Status::into_kudu_status(to_internal(scanner)->AddExclusiveUpperBound(*to_internal(bound)));
+}
+
+kudu_status* kudu_scanner_set_cache_blocks(kudu_scanner* scanner, /*bool*/int32_t cache_blocks) {
+  return Status::into_kudu_status(to_internal(scanner)->SetCacheBlocks(cache_blocks));
+}
+
+kudu_status* kudu_scanner_open(kudu_scanner* scanner) {
+  return Status::into_kudu_status(to_internal(scanner)->Open());
+}
+
+void kudu_scanner_close(kudu_scanner* scanner) {
+  to_internal(scanner)->Close();
+}
+
+/*bool*/int32_t kudu_scanner_has_more_rows(kudu_scanner* scanner) {
+  return to_internal(scanner)->HasMoreRows();
+}
+
+kudu_status* kudu_scanner_next_batch(kudu_scanner* scanner, kudu_scan_batch* batch) {
+  return Status::into_kudu_status(to_internal(scanner)->NextBatch(&batch->batch_));
+}
+
+kudu_status* kudu_scanner_get_current_server(kudu_scanner* scanner, kudu_tablet_server** tserver) {
+  // TODO
+  return nullptr;
+}
+
+kudu_status* kudu_scanner_set_batch_size_bytes(kudu_scanner* scanner, uint32_t batch_size) {
+  return Status::into_kudu_status(to_internal(scanner)->SetBatchSizeBytes(batch_size));
+}
+
+kudu_status* kudu_scanner_set_read_mode(kudu_scanner* scanner, kudu_read_mode mode) {
+  return Status::into_kudu_status(to_internal(scanner)->SetReadMode(static_cast<KuduScanner::ReadMode>(mode)));
+}
+
+kudu_status* kudu_scanner_set_order_mode(kudu_scanner* scanner, kudu_order_mode mode) {
+  return Status::into_kudu_status(to_internal(scanner)->SetOrderMode(static_cast<KuduScanner::OrderMode>(mode)));
+}
+
+kudu_status* kudu_scanner_set_fault_tolerant(kudu_scanner* scanner) {
+  return Status::into_kudu_status(to_internal(scanner)->SetFaultTolerant());
+}
+
+kudu_status* kudu_scanner_set_snapshot_micros(kudu_scanner* scanner, uint64_t timestamp) {
+  return Status::into_kudu_status(to_internal(scanner)->SetSnapshotMicros(timestamp));
+}
+
+kudu_status* kudu_scanner_set_snapshot_raw(kudu_scanner* scanner, uint64_t timestamp) {
+  return Status::into_kudu_status(to_internal(scanner)->SetSnapshotRaw(timestamp));
+}
+
+kudu_status* kudu_scanner_set_timeout_millis(kudu_scanner* scanner, int32_t timeout) {
+  return Status::into_kudu_status(to_internal(scanner)->SetTimeoutMillis(timeout));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Scan Batch
+////////////////////////////////////////////////////////////////////////////////
+
+kudu_scan_batch* kudu_scan_batch_create() {
+  return new kudu_scan_batch;
+}
+
+void kudu_scan_batch_destroy(kudu_scan_batch* batch) {
+  delete batch;
+}
+
+size_t kudu_scan_batch_num_rows(const kudu_scan_batch* batch) {
+  return batch->batch_.NumRows();
+}
+
+kudu_scan_batch_row_ptr kudu_scan_batch_row(const kudu_scan_batch* batch, size_t idx) {
+  KuduScanBatch::RowPtr ptr = batch->batch_.Row(idx);
+  return kudu_scan_batch_row_ptr { .schema = ptr.schema_, .data = ptr.row_data_ };
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Kudu Scan Batch Row Ptr
+////////////////////////////////////////////////////////////////////////////////
+
+kudu_status* kudu_scan_batch_row_ptr_get_bool(const kudu_scan_batch_row_ptr* row,
+                                              size_t column_idx,
+                                              int32_t/*bool*/* val) {
+  bool b;
+  RETURN_NOT_OK_C(to_internal(row).GetBool(column_idx, &b));
+  *val = b;
+  return nullptr;
+}
+kudu_status* kudu_scan_batch_row_ptr_get_int8(const kudu_scan_batch_row_ptr* row,
+                                              size_t column_idx,
+                                              int8_t* val) {
+  return Status::into_kudu_status(to_internal(row).GetInt8(column_idx, val));
+}
+kudu_status* kudu_scan_batch_row_ptr_get_int16(const kudu_scan_batch_row_ptr* row,
+                                               size_t column_idx,
+                                               int16_t* val) {
+  return Status::into_kudu_status(to_internal(row).GetInt16(column_idx, val));
+}
+kudu_status* kudu_scan_batch_row_ptr_get_int32(const kudu_scan_batch_row_ptr* row,
+                                               size_t column_idx,
+                                               int32_t* val) {
+  return Status::into_kudu_status(to_internal(row).GetInt32(column_idx, val));
+}
+kudu_status* kudu_scan_batch_row_ptr_get_int64(const kudu_scan_batch_row_ptr* row,
+                                               size_t column_idx,
+                                               int64_t* val) {
+  return Status::into_kudu_status(to_internal(row).GetInt64(column_idx, val));
+}
+kudu_status* kudu_scan_batch_row_ptr_get_timestamp(const kudu_scan_batch_row_ptr* row,
+                                                   size_t column_idx,
+                                                   int64_t* val) {
+  return Status::into_kudu_status(to_internal(row).GetTimestamp(column_idx, val));
+}
+kudu_status* kudu_scan_batch_row_ptr_get_float(const kudu_scan_batch_row_ptr* row,
+                                               size_t column_idx,
+                                               float* val) {
+  return Status::into_kudu_status(to_internal(row).GetFloat(column_idx, val));
+}
+kudu_status* kudu_scan_batch_row_ptr_get_double(const kudu_scan_batch_row_ptr* row,
+                                                size_t column_idx,
+                                                double* val) {
+  return Status::into_kudu_status(to_internal(row).GetDouble(column_idx, val));
+}
+kudu_status* kudu_scan_batch_row_ptr_get_string(const kudu_scan_batch_row_ptr* row,
+                                                size_t column_idx,
+                                                kudu_slice* val) {
+  Slice s;
+  RETURN_NOT_OK_C(to_internal(row).GetString(column_idx, &s));
+  val->data = s.data();
+  val->len = s.size();
+  return nullptr;
+}
+kudu_status* kudu_scan_batch_row_ptr_get_binary(const kudu_scan_batch_row_ptr* row,
+                                                size_t column_idx,
+                                                kudu_slice* val) {
+  Slice s;
+  RETURN_NOT_OK_C(to_internal(row).GetBinary(column_idx, &s));
+  val->data = s.data();
+  val->len = s.size();
+  return nullptr;
+}
+int32_t/*bool*/ kudu_scan_batch_row_ptr_is_null(const kudu_scan_batch_row_ptr* row,
+                                                size_t column_idx) {
+  return to_internal(row).IsNull(column_idx);
+}
+
+kudu_status* kudu_scan_batch_row_ptr_get_bool_by_name(const kudu_scan_batch_row_ptr* row,
+                                                      kudu_slice column_name,
+                                                      int32_t/*bool*/* val) {
+  bool b;
+  RETURN_NOT_OK_C(to_internal(row).GetBool(slice_to_Slice(column_name), &b));
+  *val = b;
+  return nullptr;
+}
+kudu_status* kudu_scan_batch_row_ptr_get_int8_by_name(const kudu_scan_batch_row_ptr* row,
+                                                      kudu_slice column_name,
+                                                      int8_t* val) {
+  return Status::into_kudu_status(to_internal(row).GetInt8(slice_to_Slice(column_name), val));
+}
+kudu_status* kudu_scan_batch_row_ptr_get_int16_by_name(const kudu_scan_batch_row_ptr* row,
+                                                       kudu_slice column_name,
+                                                       int16_t* val) {
+  return Status::into_kudu_status(to_internal(row).GetInt16(slice_to_Slice(column_name), val));
+}
+kudu_status* kudu_scan_batch_row_ptr_get_int32_by_name(const kudu_scan_batch_row_ptr* row,
+                                                       kudu_slice column_name,
+                                                       int32_t* val) {
+  return Status::into_kudu_status(to_internal(row).GetInt32(slice_to_Slice(column_name), val));
+}
+kudu_status* kudu_scan_batch_row_ptr_get_int64_by_name(const kudu_scan_batch_row_ptr* row,
+                                                       kudu_slice column_name,
+                                                       int64_t* val) {
+  return Status::into_kudu_status(to_internal(row).GetInt64(slice_to_Slice(column_name), val));
+}
+kudu_status* kudu_scan_batch_row_ptr_get_timestamp_by_name(const kudu_scan_batch_row_ptr* row,
+                                                           kudu_slice column_name,
+                                                           int64_t* val) {
+  return Status::into_kudu_status(to_internal(row).GetTimestamp(slice_to_Slice(column_name), val));
+}
+kudu_status* kudu_scan_batch_row_ptr_get_float_by_name(const kudu_scan_batch_row_ptr* row,
+                                                       kudu_slice column_name,
+                                                       float* val) {
+  return Status::into_kudu_status(to_internal(row).GetFloat(slice_to_Slice(column_name), val));
+}
+kudu_status* kudu_scan_batch_row_ptr_get_double_by_name(const kudu_scan_batch_row_ptr* row,
+                                                        kudu_slice column_name,
+                                                        double* val) {
+  return Status::into_kudu_status(to_internal(row).GetDouble(slice_to_Slice(column_name), val));
+}
+kudu_status* kudu_scan_batch_row_ptr_get_string_by_name(const kudu_scan_batch_row_ptr* row,
+                                                        kudu_slice column_name,
+                                                        kudu_slice* val) {
+  Slice s;
+  RETURN_NOT_OK_C(to_internal(row).GetString(slice_to_Slice(column_name), &s));
+  val->data = s.data();
+  val->len = s.size();
+  return nullptr;
+}
+kudu_status* kudu_scan_batch_row_ptr_get_binary_by_name(const kudu_scan_batch_row_ptr* row,
+                                                        kudu_slice column_name,
+                                                        kudu_slice* val) {
+  Slice s;
+  RETURN_NOT_OK_C(to_internal(row).GetBinary(slice_to_Slice(column_name), &s));
+  val->data = s.data();
+  val->len = s.size();
+  return nullptr;
+}
+int32_t/*bool*/ kudu_scan_batch_row_ptr_is_null_by_name(const kudu_scan_batch_row_ptr* row,
+                                                        kudu_slice column_name) {
+  return to_internal(row).IsNull(slice_to_Slice(column_name));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
