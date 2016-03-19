@@ -145,11 +145,6 @@ class KUDU_EXPORT KuduScanBatch::RowPtr {
 
   std::string ToString() const;
 
- private:
-  friend class KuduScanBatch;
-  template<typename KeyTypeWrapper> friend struct SliceKeysTestSetup;
-  template<typename KeyTypeWrapper> friend struct IntKeysTestSetup;
-
   // Only invoked by KuduScanner.
   RowPtr(const Schema* schema,
          const uint8_t* row_data)
@@ -157,14 +152,20 @@ class KUDU_EXPORT KuduScanBatch::RowPtr {
         row_data_(row_data) {
   }
 
+  const Schema* schema_;
+  const uint8_t* row_data_;
+
+ private:
+  friend class KuduScanBatch;
+  template<typename KeyTypeWrapper> friend struct SliceKeysTestSetup;
+  template<typename KeyTypeWrapper> friend struct IntKeysTestSetup;
+
   template<typename T>
   Status Get(const Slice& col_name, typename T::cpp_type* val) const;
 
   template<typename T>
   Status Get(int col_idx, typename T::cpp_type* val) const;
 
-  const Schema* schema_;
-  const uint8_t* row_data_;
 };
 
 // C++ forward iterator over the rows in a KuduScanBatch.
