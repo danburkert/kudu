@@ -481,6 +481,7 @@ kudu_status* kudu_scanner_set_fault_tolerant(kudu_scanner* scanner);
 kudu_status* kudu_scanner_set_snapshot_micros(kudu_scanner* scanner, uint64_t timestamp);
 kudu_status* kudu_scanner_set_snapshot_raw(kudu_scanner* scanner, uint64_t timestamp);
 kudu_status* kudu_scanner_set_timeout_millis(kudu_scanner* scanner, int32_t timeout);
+kudu_schema* kudu_scanner_get_projection_schema(const kudu_scanner* scanner);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Kudu Scan Batch

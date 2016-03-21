@@ -123,6 +123,9 @@ namespace {
   KuduScanner* to_internal(kudu_scanner* scanner) {
     return reinterpret_cast<KuduScanner*>(scanner);
   }
+  const KuduScanner* to_internal(const kudu_scanner* scanner) {
+    return reinterpret_cast<const KuduScanner*>(scanner);
+  }
   KuduScanBatch::RowPtr to_internal(const kudu_scan_batch_row_ptr* ptr) {
     return KuduScanBatch::RowPtr(static_cast<const kudu::Schema*>(ptr->schema),
                                  static_cast<const uint8_t*>(ptr->data));
@@ -714,6 +717,12 @@ kudu_status* kudu_scanner_set_snapshot_raw(kudu_scanner* scanner, uint64_t times
 
 kudu_status* kudu_scanner_set_timeout_millis(kudu_scanner* scanner, int32_t timeout) {
   return Status::into_kudu_status(to_internal(scanner)->SetTimeoutMillis(timeout));
+}
+
+kudu_schema* kudu_scanner_get_projection_schema(const kudu_scanner* scanner) {
+  kudu_schema* schema = new kudu_schema;
+  schema->schema_ = to_internal(scanner)->GetProjectionSchema();
+  return schema;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
