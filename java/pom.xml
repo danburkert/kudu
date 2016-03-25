@@ -50,7 +50,8 @@
 
         <!-- Library dependencies -->
         <async.version>1.4.1</async.version>
-        <guava.version>12.0.1</guava.version>
+        <guava.version>19.0</guava.version>
+        <findbugs.version>3.0.1</findbugs.version>
         <hadoop.version>2.6.0-cdh5.4.7</hadoop.version>
         <junit.version>4.11</junit.version>
         <log4j.version>1.2.17</log4j.version>

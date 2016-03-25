@@ -35,6 +35,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 import sun.management.VMManagement;
 
@@ -87,8 +88,8 @@ public class MiniKuduCluster implements AutoCloseable {
    */
   public boolean waitForTabletServers(int expected) throws Exception {
     int count = 0;
-    Stopwatch stopwatch = new Stopwatch().start();
-    while (count < expected && stopwatch.elapsedMillis() < defaultTimeoutMs) {
+    Stopwatch stopwatch = Stopwatch.createStarted();
+    while (count < expected && stopwatch.elapsed(TimeUnit.MILLISECONDS) < defaultTimeoutMs) {
       Thread.sleep(200);
       count = syncClient.listTabletServers().getTabletServersCount();
     }

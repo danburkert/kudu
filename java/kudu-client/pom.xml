@@ -46,6 +46,14 @@
             <version>${guava.version}</version>
         </dependency>
         <dependency>
+            <!-- Annotations are not necessary at runtime, so we put them in
+                 provided scope. -->
+            <groupId>com.google.code.findbugs</groupId>
+            <artifactId>jsr305</artifactId>
+            <version>${findbugs.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty</artifactId>
             <version>${netty.version}</version>
