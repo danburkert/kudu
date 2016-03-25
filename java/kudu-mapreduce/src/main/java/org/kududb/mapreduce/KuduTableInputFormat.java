@@ -16,9 +16,9 @@ package org.kududb.mapreduce;
 
 import com.google.common.base.Objects;
 import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedBytes;
-import org.apache.commons.net.util.Base64;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.NullWritable;
@@ -35,6 +35,7 @@ import org.kududb.annotations.InterfaceStability;
 import org.kududb.client.AsyncKuduClient;
 import org.kududb.client.Bytes;
 import org.kududb.client.KuduClient;
+import org.kududb.client.KuduPredicate;
 import org.kududb.client.KuduScanner;
 import org.kududb.client.KuduTable;
 import org.kududb.client.LocatedTablet;
@@ -92,9 +93,8 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
   /** Job parameter that specifies the address for the name server. */
   static final String NAME_SERVER_KEY = "kudu.mapreduce.name.server";
 
-  /** Job parameter that specifies the encoded column range predicates (may be empty). */
-  static final String ENCODED_COLUMN_RANGE_PREDICATES_KEY =
-      "kudu.mapreduce.encoded.column.range.predicates";
+  /** Job parameter that specifies the stringified predicates (may be empty). */
+  static final String PREDICATES_KEY = "kudu.mapreduce.predicates";
 
   /**
    * Job parameter that specifies the column projection as a comma-separated list of column names.
@@ -119,7 +119,7 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
   private String nameServer;
   private boolean cacheBlocks;
   private List<String> projectedCols;
-  private byte[] rawPredicates;
+  private List<KuduPredicate> predicates;
 
   @Override
   public List<InputSplit> getSplits(JobContext jobContext)
@@ -131,13 +131,14 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
 
       ScanToken.ScanTokenBuilder builder = client.newScanTokenBuilder(table);
       builder.setProjectedColumnNames(projectedCols);
+      for (KuduPredicate predicate : predicates) {
+        builder.addPredicate(predicate);
+      }
       List<ScanToken> tokens =
-          client.newScanTokenBuilder(table)
-                .setProjectedColumnNames(projectedCols)
-                .cacheBlocks(cacheBlocks)
-                .addColumnRangePredicatesRaw(rawPredicates)
-                .setTimeout(operationTimeoutMs)
-                .build();
+          builder.setProjectedColumnNames(projectedCols)
+                 .cacheBlocks(cacheBlocks)
+                 .setTimeout(operationTimeoutMs)
+                 .build();
 
       List<InputSplit> splits = new ArrayList<>(tokens.size());
       for (ScanToken token : tokens) {
@@ -236,8 +237,12 @@ public class KuduTableInputFormat extends InputFormat<NullWritable, RowResult>
       }
     }
 
-    String encodedPredicates = conf.get(ENCODED_COLUMN_RANGE_PREDICATES_KEY, "");
-    rawPredicates = Base64.decodeBase64(encodedPredicates);
+    String predicates = conf.get(PREDICATES_KEY);
+    if (predicates != null) {
+      this.predicates = KuduPredicate.fromString(this.table.getSchema(), predicates);
+    } else {
+      this.predicates = ImmutableList.of();
+    }
   }
 
   /**

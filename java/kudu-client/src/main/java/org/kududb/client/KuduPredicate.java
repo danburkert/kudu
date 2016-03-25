@@ -29,7 +29,10 @@ import org.kududb.Type;
 import org.kududb.annotations.InterfaceAudience;
 import org.kududb.annotations.InterfaceStability;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * A predicate which can be used to filter rows based on the value of a column.
@@ -647,6 +650,200 @@ public class KuduPredicate {
       case IS_NOT_NULL: return String.format("`%s` IS NOT NULL", column.getName());
       case NONE: return String.format("`%s` NONE", column.getName());
       default: throw new IllegalArgumentException(String.format("unknown predicate type %s", type));
+    }
+  }
+
+  /**
+   * Converts a stringified predicate into a {@code KuduPredicate}.
+   *
+   * @param schema the schema of the table which the predicate operates on
+   * @param input the stringified predicate
+   * @return a list of predicates
+   */
+  public static List<KuduPredicate> fromString(Schema schema, String input) {
+    List<KuduPredicate> predicates = new ArrayList<>();
+    String remaining = input;
+
+    while (!remaining.isEmpty()) {
+      if (!predicates.isEmpty()) {
+        if (remaining.regionMatches(true, 0, "AND ", 0, 4)) {
+          remaining = remaining.substring(4);
+        } else {
+          parseError(remaining, "expected AND separator between predicates");
+        }
+      }
+
+      ParseResult<KuduPredicate> result = parsePredicate(schema, remaining.trim());
+      predicates.add(result.value);
+      remaining = result.remaining.trim();
+    }
+    return predicates;
+  }
+
+  /**
+   * The result of a parse, including a value and the remaining unparsed input.
+   * @param <T> the parsed value.
+   */
+  private static class ParseResult<T> {
+    public T value;
+    public String remaining;
+    public static <U> ParseResult<U> create(U value, String remaining) {
+      ParseResult<U> result = new ParseResult<>();
+      result.value = value;
+      result.remaining = remaining;
+      return result;
+    }
+  }
+
+  /**
+   * Throws a parse error exception.
+   * @param remaining the unparseable input
+   * @param reason the reason for parse failure
+   */
+  private static void parseError(String remaining, String reason) {
+    throw new IllegalArgumentException(
+        String.format("unable to parse predicate from '%s': %s", remaining, reason));
+  }
+
+  /**
+   * Parses a string with the provided quote character. The string may contain
+   * escaped quote characters.
+   * @param remaining the input to parse
+   * @param quote the quote character
+   * @return the parse result
+   */
+  private static ParseResult<String> parseQuotedString(String remaining, char quote) {
+    int offset = 0;
+    StringBuilder sb = new StringBuilder();
+    if (remaining.charAt(0) != quote) parseError(remaining,String.format("expected opening quote: %s", quote));
+    // Search for the first unescaped tick.
+    while (true) {
+      int quoteOffset = remaining.indexOf(quote, offset + 1);
+      if (quoteOffset == -1) parseError(remaining, String.format("no closing quote (%s)", quote));
+      if (remaining.charAt(quoteOffset -1) == '\\') {
+        sb.append(remaining.substring(offset + 1, quoteOffset - 1));
+        sb.append(quote);
+        offset = quoteOffset;
+      } else {
+        sb.append(remaining.substring(offset + 1, quoteOffset));
+        offset = quoteOffset;
+        break;
+      }
+    }
+    return ParseResult.create(sb.toString(), remaining.substring(offset + 1));
+  }
+
+  /**
+   * Parse a binary hex literal (uppercase only).
+   * @param remaining the input to parse
+   * @return the parse result
+   */
+  private static ParseResult<byte[]> parseBinary(String remaining) {
+    if (!remaining.regionMatches(0, "0x", 0, 2)) parseError(remaining, "expected binary hex literal");
+    int offset = remaining.indexOf(' ');
+    if (offset == -1) { offset = remaining.length(); }
+    return ParseResult.create(BaseEncoding.base16().decode(remaining.substring(2, offset)),
+                              remaining.substring(offset));
+  }
+
+  /**
+   * Parses a column name from the string. The column name can be unquoted,
+   * or be quoted with backticks.
+   *
+   * @param remaining the string to parse
+   * @return the parse result
+   */
+  private static ParseResult<String> parseColumnName(String remaining) {
+    if (remaining.charAt(0) == '`') {
+      return parseQuotedString(remaining, '`');
+    } else {
+      int offset = remaining.indexOf(' ');
+      if (offset == -1) parseError(remaining, "incomplete column name");
+      return ParseResult.create(remaining.substring(0, offset), remaining.substring(offset + 1));
+    }
+  }
+
+  /**
+   * Parses a {@link ComparisonOp}.
+   * @param remaining the input to parse
+   * @return the parse result
+   */
+  private static ParseResult<ComparisonOp> parseComparisonOp(String remaining) {
+    int offset = remaining.indexOf(' ');
+    if (offset == -1) parseError(remaining, "incomplete comparison operator");
+    ComparisonOp op = ComparisonOp.EQUAL;
+    switch (remaining.substring(0, offset)) {
+      case ">=": { op = ComparisonOp.GREATER_EQUAL; break; }
+      case ">": { op = ComparisonOp.GREATER; break; }
+      case "=": { op = ComparisonOp.EQUAL; break; }
+      case "<": { op = ComparisonOp.LESS; break; }
+      case "<=": { op = ComparisonOp.LESS_EQUAL; break; }
+      default: parseError(remaining, "unknown comparison operator");
+    }
+    return ParseResult.create(op, remaining.substring(offset + 1));
+  }
+
+  /**
+   * Parses a {@code KuduPredicate}.
+   * @param schema the table schema
+   * @param remaining the input to parse
+   * @return the parse result
+   */
+  private static ParseResult<KuduPredicate> parsePredicate(Schema schema, String remaining) {
+    ParseResult<String> column = parseColumnName(remaining.trim());
+    ColumnSchema columnSchema = schema.getColumn(column.value);
+    remaining = column.remaining.trim();
+    if (remaining.regionMatches(true, 0, "NONE", 0, 4)) {
+      return ParseResult.create(none(columnSchema), remaining.substring(4));
+    }
+    ParseResult<ComparisonOp> op = parseComparisonOp(remaining);
+    remaining = op.remaining.trim();
+
+    switch (columnSchema.getType()) {
+      case BOOL: {
+        int offset = remaining.indexOf(' ');
+        if (offset == -1) { offset = remaining.length(); }
+        return ParseResult.create(new KuduPredicate(columnSchema, op.value,
+                                                    Boolean.valueOf(remaining.substring(0, offset))),
+                                  remaining.substring(offset));
+      }
+      case INT8:
+      case INT16:
+      case INT32:
+      case INT64:
+      case TIMESTAMP: {
+        int offset = remaining.indexOf(' ');
+        if (offset == -1) { offset = remaining.length(); }
+        return ParseResult.create(new KuduPredicate(columnSchema, op.value,
+                                                    Long.valueOf(remaining.substring(0, offset))),
+                                  remaining.substring(offset));
+      }
+      case FLOAT: {
+        int offset = remaining.indexOf(' ');
+        if (offset == -1) { offset = remaining.length(); }
+        return ParseResult.create(new KuduPredicate(columnSchema, op.value,
+                                                    Float.valueOf(remaining.substring(0, offset))),
+                                  remaining.substring(offset));
+      }
+      case DOUBLE: {
+        int offset = remaining.indexOf(' ');
+        if (offset == -1) { offset = remaining.length(); }
+        return ParseResult.create(new KuduPredicate(columnSchema, op.value,
+                                                    Double.valueOf(remaining.substring(0, offset))),
+                                  remaining.substring(offset));
+      }
+      case STRING: {
+        ParseResult<String> literal = parseQuotedString(remaining, '"');
+        return ParseResult.create(new KuduPredicate(columnSchema, op.value, literal.value),
+                                  literal.remaining);
+      }
+      case BINARY: {
+        ParseResult<byte[]> literal = parseBinary(remaining);
+        return ParseResult.create(new KuduPredicate(columnSchema, op.value, literal.value),
+                                  literal.remaining);
+      }
+      default: throw new IllegalArgumentException(
+          String.format("unknown column type %s", columnSchema.getType()));
     }
   }
 

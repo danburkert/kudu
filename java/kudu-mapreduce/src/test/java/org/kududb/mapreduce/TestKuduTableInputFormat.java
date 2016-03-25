@@ -16,6 +16,7 @@
 // under the License.
 package org.kududb.mapreduce;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import org.kududb.Schema;
@@ -102,12 +103,12 @@ public class TestKuduTableInputFormat extends BaseKuduTest {
     // Test using a predicate that filters the row out.
     ColumnRangePredicate pred1 = new ColumnRangePredicate(schema.getColumnByIndex(1));
     pred1.setLowerBound(3);
-    reader = createRecordReader("*", Lists.newArrayList(pred1));
+    reader = createRecordReader("*", Lists.newArrayList(pred1.toKuduPredicate()));
     assertFalse(reader.nextKeyValue());
   }
 
   private RecordReader<NullWritable, RowResult> createRecordReader(String columnProjection,
-        List<ColumnRangePredicate> predicates) throws IOException, InterruptedException {
+        List<KuduPredicate> predicates) throws IOException, InterruptedException {
     KuduTableInputFormat input = new KuduTableInputFormat();
     Configuration conf = new Configuration();
     conf.set(KuduTableInputFormat.MASTER_ADDRESSES_KEY, getMasterAddresses());
@@ -116,8 +117,7 @@ public class TestKuduTableInputFormat extends BaseKuduTest {
       conf.set(KuduTableInputFormat.COLUMN_PROJECTION_KEY, columnProjection);
     }
     if (predicates != null) {
-      String encodedPredicates = KuduTableMapReduceUtil.base64EncodePredicates(predicates);
-      conf.set(KuduTableInputFormat.ENCODED_COLUMN_RANGE_PREDICATES_KEY, encodedPredicates);
+      conf.set(KuduTableInputFormat.PREDICATES_KEY, Joiner.on(" AND ").join(predicates));
     }
     input.setConf(conf);
     List<InputSplit> splits = input.getSplits(null);

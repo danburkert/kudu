@@ -18,9 +18,11 @@
 package org.kududb.client;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import org.junit.Assert;
 import org.junit.Test;
 import org.kududb.ColumnSchema;
+import org.kududb.Schema;
 import org.kududb.Type;
 
 import static org.kududb.client.KuduPredicate.ComparisonOp.EQUAL;
@@ -624,5 +626,73 @@ public class TestKuduPredicate {
                         KuduPredicate.newComparisonPredicate(stringCol, EQUAL, "my string").toString());
     Assert.assertEquals("`binary` = 0xAB01CD", KuduPredicate.newComparisonPredicate(
         binaryCol, EQUAL, new byte[] { (byte) 0xAB, (byte) 0x01, (byte) 0xCD }).toString());
+  }
+
+  @Test
+  public void testFromString() {
+    Schema schema = new Schema(ImmutableList.of(boolCol, intCol, floatCol,
+                                                doubleCol, stringCol, binaryCol));
+
+    Assert.assertEquals(
+        ImmutableList.of(new KuduPredicate(intCol, GREATER_EQUAL, 10)),
+        KuduPredicate.fromString(schema, "int >= 10"));
+
+    Assert.assertEquals(
+        ImmutableList.of(new KuduPredicate(intCol, GREATER_EQUAL, 10)),
+        KuduPredicate.fromString(schema, "`int` >= 10"));
+
+    Assert.assertEquals(
+        ImmutableList.of(new KuduPredicate(intCol, GREATER_EQUAL, 10),
+                         new KuduPredicate(intCol, GREATER_EQUAL, 20)),
+        KuduPredicate.fromString(schema, "int >= 10 AND int >= 20"));
+
+    Assert.assertEquals(
+        ImmutableList.of(new KuduPredicate(intCol, EQUAL, 10),
+                         new KuduPredicate(intCol, LESS, 20)),
+        KuduPredicate.fromString(schema, "int = 10 and int < 20 "));
+
+    Assert.assertEquals(
+        ImmutableList.of(new KuduPredicate(intCol, GREATER, -35299),
+                         new KuduPredicate(intCol, LESS_EQUAL, 20)),
+        KuduPredicate.fromString(schema, "   int      >      -35299     AnD    `int`   <=    20"));
+
+    Assert.assertEquals(
+        ImmutableList.of(new KuduPredicate(stringCol, GREATER, "fuzz buzz")),
+        KuduPredicate.fromString(schema, "string > \"fuzz buzz\""));
+
+    Assert.assertEquals(
+        ImmutableList.of(new KuduPredicate(stringCol, GREATER, "fuzz \" buzz")),
+        KuduPredicate.fromString(schema, " string  >  \"fuzz \\\" buzz\"     "));
+
+    Assert.assertEquals(
+        ImmutableList.of(new KuduPredicate(stringCol, GREATER, "fuzz \" buzz")),
+        KuduPredicate.fromString(schema, " string  >  \"fuzz \\\" buzz\"     "));
+
+    Assert.assertEquals(
+        ImmutableList.of(new KuduPredicate(boolCol, EQUAL, true),
+                         new KuduPredicate(boolCol, EQUAL, false)),
+        KuduPredicate.fromString(schema, " bool  =  truE AND bool = FALSE"));
+
+    Assert.assertEquals(
+        ImmutableList.of(new KuduPredicate(floatCol, EQUAL, 92.124f),
+                         new KuduPredicate(doubleCol, LESS_EQUAL, -13.24)),
+        KuduPredicate.fromString(schema, " float  =  92.124 AND double <= -13.24"));
+
+    Assert.assertEquals(
+        ImmutableList.of(new KuduPredicate(binaryCol, GREATER_EQUAL,
+                                           new byte[] { (byte) 0xAA, (byte) 0xBB, (byte) 0xCC }),
+                         new KuduPredicate(binaryCol, LESS,
+                                           new byte[] { (byte) 0x12, (byte) 0x34 })),
+        KuduPredicate.fromString(schema, " binary >=  0xAABBCC AND `binary` < 0x1234"));
+
+    Assert.assertEquals(
+        ImmutableList.of(new KuduPredicate(intCol, LESS, 99),
+                         new KuduPredicate(stringCol, GREATER, "fuzz buzz"),
+                         KuduPredicate.none(floatCol),
+                         new KuduPredicate(doubleCol, EQUAL, -33.4),
+                         new KuduPredicate(binaryCol, LESS_EQUAL,
+                                           new byte[] { (byte) 0x12, (byte) 0x34, (byte) 0xAF })),
+        KuduPredicate.fromString(schema, "int < 99 AND `string` > \"fuzz buzz\" AND float NONE " +
+                                         "AND double = -33.4 AND binary <= 0x1234AF"));
   }
 }

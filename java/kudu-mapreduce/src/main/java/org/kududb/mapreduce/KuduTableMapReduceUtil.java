@@ -14,6 +14,7 @@
  */
 package org.kududb.mapreduce;
 
+import com.google.common.base.Joiner;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.commons.net.util.Base64;
@@ -29,6 +30,7 @@ import org.kududb.annotations.InterfaceAudience;
 import org.kududb.annotations.InterfaceStability;
 import org.kududb.client.AsyncKuduClient;
 import org.kududb.client.ColumnRangePredicate;
+import org.kududb.client.KuduPredicate;
 import org.kududb.client.KuduTable;
 import org.kududb.client.Operation;
 
@@ -145,7 +147,7 @@ public class KuduTableMapReduceUtil {
     protected long operationTimeoutMs = AsyncKuduClient.DEFAULT_OPERATION_TIMEOUT_MS;
     protected final String columnProjection;
     protected boolean cacheBlocks;
-    protected List<ColumnRangePredicate> columnRangePredicates = new ArrayList<>();
+    protected List<KuduPredicate> columnRangePredicates = new ArrayList<>();
 
     /**
      * Constructor for the required fields to configure.
@@ -189,8 +191,8 @@ public class KuduTableMapReduceUtil {
       }
 
       if (!columnRangePredicates.isEmpty()) {
-        conf.set(KuduTableInputFormat.ENCODED_COLUMN_RANGE_PREDICATES_KEY,
-            base64EncodePredicates(columnRangePredicates));
+        conf.set(KuduTableInputFormat.PREDICATES_KEY,
+                 Joiner.on(" AND ").join(columnRangePredicates));
       }
 
       if (addDependencies) {
@@ -198,12 +200,6 @@ public class KuduTableMapReduceUtil {
       }
     }
   }
-
-  static String base64EncodePredicates(List<ColumnRangePredicate> predicates) {
-    byte[] predicateBytes = ColumnRangePredicate.toByteArray(predicates);
-    return Base64.encodeBase64String(predicateBytes);
-  }
-
 
   /**
    * Table output format configurator to use to specify the parameters directly.
@@ -299,7 +295,7 @@ public class KuduTableMapReduceUtil {
      * @return this instance
      */
     public TableInputFormatConfigurator addColumnRangePredicate(ColumnRangePredicate predicate) {
-      this.columnRangePredicates.add(predicate);
+      this.columnRangePredicates.add(predicate.toKuduPredicate());
       return this;
     }
   }
