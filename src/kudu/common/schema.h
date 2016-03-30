@@ -231,10 +231,6 @@ class ColumnSchema {
     return attributes_;
   }
 
-  int Compare(const void *lhs, const void *rhs) const {
-    return type_info_->Compare(lhs, rhs);
-  }
-
   // Stringify the given cell. This just stringifies the cell contents,
   // and doesn't include the column name or type.
   string Stringify(const void *cell) const {
@@ -528,18 +524,14 @@ class Schema {
   };
   string DebugEncodedRowKey(Slice encoded_key, StartOrEnd start_or_end) const;
 
-  // Compare two rows of this schema.
+  // Returns true if the primary key values of the rows match.
   template<class RowTypeA, class RowTypeB>
-  int Compare(const RowTypeA& lhs, const RowTypeB& rhs) const {
+  bool Equals(const RowTypeA& lhs, const RowTypeB& rhs) const {
     DCHECK(KeyEquals(*lhs.schema()) && KeyEquals(*rhs.schema()));
-
     for (size_t col = 0; col < num_key_columns_; col++) {
-      int col_compare = column(col).Compare(lhs.cell_ptr(col), rhs.cell_ptr(col));
-      if (col_compare != 0) {
-        return col_compare;
-      }
+      if (!column(col).type_info()->Equals(lhs.cell_ptr(col), rhs.cell_ptr(col))) return false;
     }
-    return 0;
+    return true;
   }
 
   // Return the projection of this schema which contains only

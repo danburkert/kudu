@@ -94,7 +94,7 @@ void ColumnPredicate::Simplify() {
     case PredicateType::Equality: return;
     case PredicateType::Range: {
       if (lower_ != nullptr && upper_ != nullptr) {
-        if (column_.type_info()->Compare(lower_, upper_) >= 0) {
+        if (column_.type_info()->LessThanEquals(upper_, lower_)) {
           // If the range bounds are empty then no results can be returned.
           SetToNone();
         } else if (column_.type_info()->AreConsecutive(lower_, upper_)) {
@@ -137,13 +137,13 @@ void ColumnPredicate::MergeIntoRange(const ColumnPredicate& other) {
     case PredicateType::Range: {
       // Set the lower bound to the larger of the two.
       if (other.lower_ != nullptr &&
-          (lower_ == nullptr || column_.type_info()->Compare(lower_, other.lower_) < 0)) {
+          (lower_ == nullptr || column_.type_info()->LessThan(lower_, other.lower_))) {
         lower_ = other.lower_;
       }
 
       // Set the upper bound to the smaller of the two.
       if (other.upper_ != nullptr &&
-          (upper_ == nullptr || column_.type_info()->Compare(upper_, other.upper_) > 0)) {
+          (upper_ == nullptr || column_.type_info()->LessThan(other.upper_, upper_))) {
         upper_ = other.upper_;
       }
 
@@ -152,8 +152,8 @@ void ColumnPredicate::MergeIntoRange(const ColumnPredicate& other) {
     };
 
     case PredicateType::Equality: {
-      if (column_.type_info()->Compare(lower_, other.lower_) > 0 ||
-          column_.type_info()->Compare(upper_, other.lower_) <= 0) {
+      if (column_.type_info()->LessThan(other.lower_, lower_) ||
+          column_.type_info()->LessThanEquals(upper_, other.lower_)) {
         // The equality value does not fall in this range.
         SetToNone();
       } else {
@@ -176,15 +176,15 @@ void ColumnPredicate::MergeIntoEquality(const ColumnPredicate& other) {
       return;
     }
     case PredicateType::Range: {
-      if (column_.type_info()->Compare(lower_, other.lower_) < 0 ||
-          column_.type_info()->Compare(lower_, other.upper_) >= 0) {
+      if (column_.type_info()->LessThan(lower_, other.lower_)||
+          column_.type_info()->LessThanEquals(other.upper_, lower_)) {
         // This equality value does not fall in the other range.
         SetToNone();
       }
       return;
     };
     case PredicateType::Equality: {
-      if (column_.type_info()->Compare(lower_, other.lower_) != 0) {
+      if (!column_.type_info()->Equals(lower_, other.lower_)) {
         SetToNone();
       }
       return;
@@ -240,23 +240,23 @@ void ColumnPredicate::Evaluate(const ColumnBlock& block, SelectionVector *sel) c
     case PredicateType::Range: {
       if (lower_ == nullptr) {
         ApplyPredicate(block, sel, [this] (const void* cell) {
-            return column_.type_info()->Compare(cell, this->upper_) < 0;
+            return column_.type_info()->LessThan(cell, this->upper_);
         });
       } else if (upper_ == nullptr) {
         ApplyPredicate(block, sel, [this] (const void* cell) {
-            return column_.type_info()->Compare(cell, this->lower_) >= 0;
+            return column_.type_info()->LessThanEquals(this->lower_, cell);
         });
       } else {
         ApplyPredicate(block, sel, [this] (const void* cell) {
-            return column_.type_info()->Compare(cell, this->upper_) < 0 &&
-                   column_.type_info()->Compare(cell, this->lower_) >= 0;
+            return column_.type_info()->LessThan(cell, this->upper_) &&
+                   column_.type_info()->LessThanEquals(this->lower_, cell);
         });
       }
       return;
     };
     case PredicateType::Equality: {
         ApplyPredicate(block, sel, [this] (const void* cell) {
-            return column_.type_info()->Compare(cell, this->lower_) == 0;
+            return column_.type_info()->Equals(cell, this->lower_);
         });
         return;
     };
@@ -291,14 +291,14 @@ bool ColumnPredicate::operator==(const ColumnPredicate& other) const {
   if (predicate_type_ != other.predicate_type_) {
     return false;
   } else if (predicate_type_ == PredicateType::Equality) {
-    return column_.type_info()->Compare(lower_, other.lower_) == 0;
+    return column_.type_info()->Equals(lower_, other.lower_);
   } else if (predicate_type_ == PredicateType::Range) {
     return (lower_ == other.lower_ ||
             (lower_ != nullptr && other.lower_ != nullptr &&
-             column_.type_info()->Compare(lower_, other.lower_) == 0)) &&
+             column_.type_info()->Equals(lower_, other.lower_))) &&
            (upper_ == other.upper_ ||
             (upper_ != nullptr && other.upper_ != nullptr &&
-             column_.type_info()->Compare(upper_, other.upper_) == 0));
+             column_.type_info()->Equals(upper_, other.upper_)));
   } else {
     return true;
   }

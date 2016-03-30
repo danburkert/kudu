@@ -215,15 +215,12 @@ class StringPiece {
     length_ -= n;
   }
 
-  // returns {-1, 0, 1}
+  // returns a negative value if this < x, or 0 if this == x, or a positive
+  // value if this > x.
   int compare(StringPiece x) const {
     const int min_size = length_ < x.length_ ? length_ : x.length_;
     int r = memcmp(ptr_, x.ptr_, min_size);
-    if (r < 0) return -1;
-    if (r > 0) return 1;
-    if (length_ < x.length_) return -1;
-    if (length_ > x.length_) return 1;
-    return 0;
+    return r == 0 ? length_ - x.length_ : r;
   }
 
   std::string as_string() const {

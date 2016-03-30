@@ -266,9 +266,6 @@ TEST(TestSchema, TestRowOperations) {
   ContiguousRow row_b(&schema);
   ASSERT_OK(CopyRowToArena(rb.data(), schema, &arena, &row_b));
 
-  ASSERT_GT(schema.Compare(row_b, row_a), 0);
-  ASSERT_LT(schema.Compare(row_a, row_b), 0);
-
   ASSERT_EQ(string("(string col1=row_a_1, string col2=row_a_2, uint32 col3=3, int32 col4=-3)"),
             schema.DebugRow(row_a));
 }

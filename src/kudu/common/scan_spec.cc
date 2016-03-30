@@ -185,7 +185,7 @@ void ScanSpec::LiftPrimaryKeyBounds(const Schema& schema, Arena* arena) {
     const void* upper = exclusive_upper_bound_key_ == nullptr
       ? nullptr : exclusive_upper_bound_key_->raw_keys()[col_idx];
 
-    if (lower != nullptr && upper != nullptr && column.Compare(lower, upper) == 0) {
+    if (lower != nullptr && upper != nullptr && column.type_info()->Equals(lower, upper)) {
       // We are still in the equality prefix of the bounds
       AddPredicate(ColumnPredicate::Equality(column, lower));
     } else {
@@ -212,7 +212,7 @@ void ScanSpec::LiftPrimaryKeyBounds(const Schema& schema, Arena* arena) {
           const ColumnSchema& suffix_column = schema.column(suffix_idx);
           suffix_column.type_info()->CopyMinValue(min);
           const void* suffix_val = exclusive_upper_bound_key_->raw_keys()[suffix_idx];
-          is_exclusive &= suffix_column.type_info()->Compare(suffix_val, min) == 0;
+          is_exclusive &= suffix_column.type_info()->Equals(suffix_val, min);
         }
       }
 

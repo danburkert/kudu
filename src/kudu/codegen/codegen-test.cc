@@ -157,7 +157,7 @@ void CheckRowBlocksEqual(const RowBlock* rb1, const RowBlock* rb2,
   for (int i = 0; i < rb1->nrows(); ++i) {
     RowBlockRow row1 = rb1->row(i);
     RowBlockRow row2 = rb2->row(i);
-    CHECK_EQ(schema.Compare(row1, row2), 0)
+    CHECK(schema.Equals(row1, row2))
       << "Rows unequal (failed at row " << i << "):\n"
       << "\t(" << name1 << ") = " << schema.DebugRow(row1) << "\n"
       << "\t(" << name2 << ") = " << schema.DebugRow(row2);

@@ -398,6 +398,43 @@ class AllTypesItest : public KuduTest {
     return Status::OK();
   }
 
+  // Creates a table scan with the provided predicates, counts the scanned rows,
+  // and compares against the expected row count.
+  Status VerifyRowCount(int expected_row_count,
+                        const vector<KuduPredicate*> predicates) {
+    vector<string> projection;
+    SetupProjection(&projection);
+
+    KuduScanner scanner(table_.get());
+    RETURN_NOT_OK(scanner.SetProjectedColumns(projection));
+    RETURN_NOT_OK(scanner.SetBatchSizeBytes(KMaxBatchSize));
+    RETURN_NOT_OK(scanner.SetFaultTolerant());
+    RETURN_NOT_OK(scanner.SetReadMode(KuduScanner::READ_AT_SNAPSHOT));
+    RETURN_NOT_OK(scanner.SetTimeoutMillis(5000));
+    for (KuduPredicate* predicate : predicates) {
+      RETURN_NOT_OK(scanner.AddConjunctPredicate(predicate));
+    }
+    RETURN_NOT_OK(scanner.Open());
+    int row_count = 0;
+    KuduScanBatch batch;
+    while (scanner.HasMoreRows()) {
+      RETURN_NOT_OK(scanner.NextBatch(&batch));
+      row_count += batch.NumRows();
+    }
+    CHECK_EQ(expected_row_count, row_count);
+    return Status::OK();
+  }
+
+  // Check scanning with predicates over different column types.
+  Status VerifyPredicates() {
+    int total_rows = setup_.GetRowsPerTablet() * kNumTablets;
+
+
+    // Bool
+    //VerifyRowCount(
+
+  }
+
   void RunTest() {
     ASSERT_OK(CreateCluster());
     ASSERT_OK(CreateTable());
@@ -408,6 +445,7 @@ class AllTypesItest : public KuduTest {
     NO_FATALS(ClusterVerifier(cluster_.get()).CheckCluster());
     // Check that the inserted data matches what we thought we inserted.
     ASSERT_OK(VerifyRows());
+    ASSERT_OK(VerifyPredicates());
   }
 
   virtual void TearDown() OVERRIDE {

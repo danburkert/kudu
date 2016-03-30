@@ -40,6 +40,8 @@ add_dependencies(integration-tests
 
 # Tests
 set(KUDU_TEST_LINK_LIBS integration-tests ${KUDU_MIN_TEST_LIBS})
+ADD_KUDU_TEST(predicate-itest RESOURCE_LOCK "master-rpc-ports")
+ADD_KUDU_TEST(all_types-itest RESOURCE_LOCK "master-rpc-ports")
 ADD_KUDU_TEST(alter_table-test)
 ADD_KUDU_TEST(alter_table-randomized-test)
 ADD_KUDU_TEST(registration-test RESOURCE_LOCK "master-web-port")
@@ -56,7 +58,6 @@ ADD_KUDU_TEST(create-table-stress-test)
 ADD_KUDU_TEST(delete_table-test)
 ADD_KUDU_TEST(external_mini_cluster-test RESOURCE_LOCK "master-rpc-ports")
 ADD_KUDU_TEST(linked_list-test RESOURCE_LOCK "master-rpc-ports")
-ADD_KUDU_TEST(all_types-itest RESOURCE_LOCK "master-rpc-ports")
 ADD_KUDU_TEST(remote_bootstrap-itest)
 ADD_KUDU_TEST(tablet_replacement-itest)
 ADD_KUDU_TEST(create-table-itest)
@@ -65,6 +66,6 @@ ADD_KUDU_TEST(write_throttling-itest)
 
 # Some tests have additional dependencies
 set(KUDU_TEST_LINK_LIBS kudu_client kudu_tools_util ${KUDU_TEST_LINK_LIBS})
+ADD_KUDU_TEST(flex_partitioning-itest)
 ADD_KUDU_TEST(full_stack-insert-scan-test RUN_SERIAL true)
 ADD_KUDU_TEST(update_scan_delta_compact-test RUN_SERIAL true)
-ADD_KUDU_TEST(flex_partitioning-itest)

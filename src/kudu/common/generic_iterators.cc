@@ -248,8 +248,8 @@ Status MergeIterator::MaterializeBlock(RowBlock *dst) {
     for (size_t i = 0; i < iters_.size(); i++) {
       shared_ptr<MergeIterState> &state = iters_[i];
 
-      if (smallest == nullptr ||
-          schema_.Compare(state->next_row(), smallest->next_row()) < 0) {
+      if (smallest == nullptr || true) {
+          //schema_.Compare(state->next_row(), smallest->next_row()) < 0) {
         smallest = state.get();
         smallest_idx = i;
       }

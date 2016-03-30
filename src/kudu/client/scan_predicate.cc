@@ -69,6 +69,10 @@ Status ComparisonPredicateData::AddToScanSpec(ScanSpec* spec, Arena* arena) {
   RETURN_NOT_OK(val_->data_->CheckTypeAndGetPointer(col_.name(),
                                                     col_.type_info()->physical_type(),
                                                     &val_void));
+  if (col_.type_info()->physical_type() == DataType::BOOL && op_ != KuduPredicate::EQUAL) {
+    return Status::InvalidArgument("only EQUAL predicates may be applied to BOOL columns");
+  }
+
   switch (op_) {
     case KuduPredicate::LESS_EQUAL: {
       optional<ColumnPredicate> pred =

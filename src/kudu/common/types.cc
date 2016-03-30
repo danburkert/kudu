@@ -35,7 +35,9 @@ TypeInfo::TypeInfo(TypeTraitsClass t)
     size_(TypeTraitsClass::size),
     min_value_(TypeTraitsClass::min_value()),
     append_func_(TypeTraitsClass::AppendDebugStringForValue),
-    compare_func_(TypeTraitsClass::Compare),
+    less_than_func_(TypeTraitsClass::LessThan),
+    equals_func_(TypeTraitsClass::Equals),
+    less_than_equals_func_(TypeTraitsClass::LessThanEquals),
     are_consecutive_func_(TypeTraitsClass::AreConsecutive) {
 }
 
@@ -43,8 +45,16 @@ void TypeInfo::AppendDebugStringForValue(const void *ptr, string *str) const {
   append_func_(ptr, str);
 }
 
-int TypeInfo::Compare(const void *lhs, const void *rhs) const {
-  return compare_func_(lhs, rhs);
+bool TypeInfo::LessThan(const void *lhs, const void *rhs) const {
+  return less_than_func_(lhs, rhs);
+}
+
+bool TypeInfo::Equals(const void *lhs, const void *rhs) const {
+  return equals_func_(lhs, rhs);
+}
+
+bool TypeInfo::LessThanEquals(const void *lhs, const void *rhs) const {
+  return less_than_equals_func_(lhs, rhs);
 }
 
 bool TypeInfo::AreConsecutive(const void* a, const void* b) const {

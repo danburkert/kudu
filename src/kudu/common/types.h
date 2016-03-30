@@ -54,7 +54,18 @@ class TypeInfo {
   const string& name() const { return name_; }
   const size_t size() const { return size_; }
   void AppendDebugStringForValue(const void *ptr, string *str) const;
-  int Compare(const void *lhs, const void *rhs) const;
+
+  // Comparison operators. These are split into separate operators since
+  // comparisons on floating point types don't form a total order, so a single
+  // integer return is not sufficient to represent all comparison results.
+
+  // Returns true if lhs < rhs.
+  bool LessThan(const void* lhs, const void* rhs) const;
+  // Returns true if lhs == rhs.
+  bool Equals(const void* lhs, const void* rhs) const;
+  // Returns true if lhs <= rhs.
+  bool LessThanEquals(const void* lhs, const void* rhs) const;
+
   // Returns true if increment(a) is equal to b.
   bool AreConsecutive(const void* a, const void* b) const;
   void CopyMinValue(void* dst) const {
@@ -74,8 +85,14 @@ class TypeInfo {
   typedef void (*AppendDebugFunc)(const void *, string *);
   const AppendDebugFunc append_func_;
 
-  typedef int (*CompareFunc)(const void *, const void *);
-  const CompareFunc compare_func_;
+  typedef bool (*LessThanFunc)(const void *, const void *);
+  const LessThanFunc less_than_func_;
+
+  typedef bool (*EqualsFunc)(const void *, const void *);
+  const EqualsFunc equals_func_;
+
+  typedef bool (*LessThanEqualsFunc)(const void *, const void *);
+  const LessThanEqualsFunc less_than_equals_func_;
 
   typedef bool (*AreConsecutiveFunc)(const void*, const void*);
   const AreConsecutiveFunc are_consecutive_func_;
@@ -84,17 +101,24 @@ class TypeInfo {
 template<DataType Type> struct DataTypeTraits {};
 
 template<DataType Type>
-static int GenericCompare(const void *lhs, const void *rhs) {
+static bool NumericLessThan(const void *lhs, const void *rhs) {
   typedef typename DataTypeTraits<Type>::cpp_type CppType;
-  CppType lhs_int = *reinterpret_cast<const CppType *>(lhs);
-  CppType rhs_int = *reinterpret_cast<const CppType *>(rhs);
-  if (lhs_int < rhs_int) {
-    return -1;
-  } else if (lhs_int > rhs_int) {
-    return 1;
-  } else {
-    return 0;
-  }
+  return *reinterpret_cast<const CppType *>(lhs) <
+         *reinterpret_cast<const CppType *>(rhs);
+}
+
+template<DataType Type>
+static bool NumericEquals(const void *lhs, const void *rhs) {
+  typedef typename DataTypeTraits<Type>::cpp_type CppType;
+  return *reinterpret_cast<const CppType *>(lhs) ==
+         *reinterpret_cast<const CppType *>(rhs);
+}
+
+template<DataType Type>
+static bool NumericLessThanEquals(const void *lhs, const void *rhs) {
+  typedef typename DataTypeTraits<Type>::cpp_type CppType;
+  return *reinterpret_cast<const CppType *>(lhs) <=
+         *reinterpret_cast<const CppType *>(rhs);
 }
 
 template<DataType Type>
@@ -124,8 +148,14 @@ struct DataTypeTraits<UINT8> {
   static void AppendDebugStringForValue(const void *val, string *str) {
     str->append(SimpleItoa(*reinterpret_cast<const uint8_t *>(val)));
   }
-  static int Compare(const void *lhs, const void *rhs) {
-    return GenericCompare<UINT8>(lhs, rhs);
+  static bool LessThan(const void *lhs, const void *rhs) {
+    return NumericLessThan<UINT8>(lhs, rhs);
+  }
+  static bool Equals(const void *lhs, const void *rhs) {
+    return NumericEquals<UINT8>(lhs, rhs);
+  }
+  static bool LessThanEquals(const void *lhs, const void *rhs) {
+    return NumericLessThanEquals<UINT8>(lhs, rhs);
   }
   static bool AreConsecutive(const void* a, const void* b) {
     return AreIntegersConsecutive<UINT8>(a, b);
@@ -145,8 +175,14 @@ struct DataTypeTraits<INT8> {
   static void AppendDebugStringForValue(const void *val, string *str) {
     str->append(SimpleItoa(*reinterpret_cast<const int8_t *>(val)));
   }
-  static int Compare(const void *lhs, const void *rhs) {
-    return GenericCompare<INT8>(lhs, rhs);
+  static bool LessThan(const void *lhs, const void *rhs) {
+    return NumericLessThan<INT8>(lhs, rhs);
+  }
+  static bool Equals(const void *lhs, const void *rhs) {
+    return NumericEquals<INT8>(lhs, rhs);
+  }
+  static bool LessThanEquals(const void *lhs, const void *rhs) {
+    return NumericLessThanEquals<INT8>(lhs, rhs);
   }
   static bool AreConsecutive(const void* a, const void* b) {
     return AreIntegersConsecutive<INT8>(a, b);
@@ -166,8 +202,14 @@ struct DataTypeTraits<UINT16> {
   static void AppendDebugStringForValue(const void *val, string *str) {
     str->append(SimpleItoa(*reinterpret_cast<const uint16_t *>(val)));
   }
-  static int Compare(const void *lhs, const void *rhs) {
-    return GenericCompare<UINT16>(lhs, rhs);
+  static bool LessThan(const void *lhs, const void *rhs) {
+    return NumericLessThan<UINT16>(lhs, rhs);
+  }
+  static bool Equals(const void *lhs, const void *rhs) {
+    return NumericEquals<UINT16>(lhs, rhs);
+  }
+  static bool LessThanEquals(const void *lhs, const void *rhs) {
+    return NumericLessThanEquals<UINT16>(lhs, rhs);
   }
   static bool AreConsecutive(const void* a, const void* b) {
     return AreIntegersConsecutive<UINT16>(a, b);
@@ -187,8 +229,14 @@ struct DataTypeTraits<INT16> {
   static void AppendDebugStringForValue(const void *val, string *str) {
     str->append(SimpleItoa(*reinterpret_cast<const int16_t *>(val)));
   }
-  static int Compare(const void *lhs, const void *rhs) {
-    return GenericCompare<INT16>(lhs, rhs);
+  static bool LessThan(const void *lhs, const void *rhs) {
+    return NumericLessThan<INT16>(lhs, rhs);
+  }
+  static bool Equals(const void *lhs, const void *rhs) {
+    return NumericEquals<INT16>(lhs, rhs);
+  }
+  static bool LessThanEquals(const void *lhs, const void *rhs) {
+    return NumericLessThanEquals<INT16>(lhs, rhs);
   }
   static bool AreConsecutive(const void* a, const void* b) {
     return AreIntegersConsecutive<INT16>(a, b);
@@ -208,8 +256,14 @@ struct DataTypeTraits<UINT32> {
   static void AppendDebugStringForValue(const void *val, string *str) {
     str->append(SimpleItoa(*reinterpret_cast<const uint32_t *>(val)));
   }
-  static int Compare(const void *lhs, const void *rhs) {
-    return GenericCompare<UINT32>(lhs, rhs);
+  static bool LessThan(const void *lhs, const void *rhs) {
+    return NumericLessThan<UINT32>(lhs, rhs);
+  }
+  static bool Equals(const void *lhs, const void *rhs) {
+    return NumericEquals<UINT32>(lhs, rhs);
+  }
+  static bool LessThanEquals(const void *lhs, const void *rhs) {
+    return NumericLessThanEquals<UINT32>(lhs, rhs);
   }
   static bool AreConsecutive(const void* a, const void* b) {
     return AreIntegersConsecutive<UINT32>(a, b);
@@ -229,8 +283,14 @@ struct DataTypeTraits<INT32> {
   static void AppendDebugStringForValue(const void *val, string *str) {
     str->append(SimpleItoa(*reinterpret_cast<const int32_t *>(val)));
   }
-  static int Compare(const void *lhs, const void *rhs) {
-    return GenericCompare<INT32>(lhs, rhs);
+  static bool LessThan(const void *lhs, const void *rhs) {
+    return NumericLessThan<INT32>(lhs, rhs);
+  }
+  static bool Equals(const void *lhs, const void *rhs) {
+    return NumericEquals<INT32>(lhs, rhs);
+  }
+  static bool LessThanEquals(const void *lhs, const void *rhs) {
+    return NumericLessThanEquals<INT32>(lhs, rhs);
   }
   static bool AreConsecutive(const void* a, const void* b) {
     return AreIntegersConsecutive<INT32>(a, b);
@@ -250,8 +310,14 @@ struct DataTypeTraits<UINT64> {
   static void AppendDebugStringForValue(const void *val, string *str) {
     str->append(SimpleItoa(*reinterpret_cast<const uint64_t *>(val)));
   }
-  static int Compare(const void *lhs, const void *rhs) {
-    return GenericCompare<UINT64>(lhs, rhs);
+  static bool LessThan(const void *lhs, const void *rhs) {
+    return NumericLessThan<UINT64>(lhs, rhs);
+  }
+  static bool Equals(const void *lhs, const void *rhs) {
+    return NumericEquals<UINT64>(lhs, rhs);
+  }
+  static bool LessThanEquals(const void *lhs, const void *rhs) {
+    return NumericLessThanEquals<UINT64>(lhs, rhs);
   }
   static bool AreConsecutive(const void* a, const void* b) {
     return AreIntegersConsecutive<UINT64>(a, b);
@@ -271,8 +337,14 @@ struct DataTypeTraits<INT64> {
   static void AppendDebugStringForValue(const void *val, string *str) {
     str->append(SimpleItoa(*reinterpret_cast<const int64_t *>(val)));
   }
-  static int Compare(const void *lhs, const void *rhs) {
-    return GenericCompare<INT64>(lhs, rhs);
+  static bool LessThan(const void *lhs, const void *rhs) {
+    return NumericLessThan<INT64>(lhs, rhs);
+  }
+  static bool Equals(const void *lhs, const void *rhs) {
+    return NumericEquals<INT64>(lhs, rhs);
+  }
+  static bool LessThanEquals(const void *lhs, const void *rhs) {
+    return NumericLessThanEquals<INT64>(lhs, rhs);
   }
   static bool AreConsecutive(const void* a, const void* b) {
     return AreIntegersConsecutive<INT64>(a, b);
@@ -292,8 +364,14 @@ struct DataTypeTraits<FLOAT> {
   static void AppendDebugStringForValue(const void *val, string *str) {
     str->append(SimpleFtoa(*reinterpret_cast<const float *>(val)));
   }
-  static int Compare(const void *lhs, const void *rhs) {
-    return GenericCompare<FLOAT>(lhs, rhs);
+  static bool LessThan(const void *lhs, const void *rhs) {
+    return NumericLessThan<FLOAT>(lhs, rhs);
+  }
+  static bool Equals(const void *lhs, const void *rhs) {
+    return NumericEquals<FLOAT>(lhs, rhs);
+  }
+  static bool LessThanEquals(const void *lhs, const void *rhs) {
+    return NumericLessThanEquals<FLOAT>(lhs, rhs);
   }
   static bool AreConsecutive(const void* a, const void* b) {
     return AreFloatsConsecutive<FLOAT>(a, b);
@@ -313,8 +391,14 @@ struct DataTypeTraits<DOUBLE> {
   static void AppendDebugStringForValue(const void *val, string *str) {
     str->append(SimpleDtoa(*reinterpret_cast<const double *>(val)));
   }
-  static int Compare(const void *lhs, const void *rhs) {
-    return GenericCompare<DOUBLE>(lhs, rhs);
+  static bool LessThan(const void *lhs, const void *rhs) {
+    return NumericLessThan<DOUBLE>(lhs, rhs);
+  }
+  static bool Equals(const void *lhs, const void *rhs) {
+    return NumericEquals<DOUBLE>(lhs, rhs);
+  }
+  static bool LessThanEquals(const void *lhs, const void *rhs) {
+    return NumericLessThanEquals<DOUBLE>(lhs, rhs);
   }
   static bool AreConsecutive(const void* a, const void* b) {
     return AreFloatsConsecutive<DOUBLE>(a, b);
@@ -335,10 +419,20 @@ struct DataTypeTraits<BINARY> {
     const Slice *s = reinterpret_cast<const Slice *>(val);
     str->append(strings::CHexEscape(s->ToString()));
   }
-  static int Compare(const void *lhs, const void *rhs) {
+  static bool LessThan(const void *lhs, const void *rhs) {
     const Slice *lhs_slice = reinterpret_cast<const Slice *>(lhs);
     const Slice *rhs_slice = reinterpret_cast<const Slice *>(rhs);
-    return lhs_slice->compare(*rhs_slice);
+    return lhs_slice->compare(*rhs_slice) < 0;
+  }
+  static bool Equals(const void *lhs, const void *rhs) {
+    const Slice *lhs_slice = reinterpret_cast<const Slice *>(lhs);
+    const Slice *rhs_slice = reinterpret_cast<const Slice *>(rhs);
+    return lhs_slice->compare(*rhs_slice) == 0;
+  }
+  static bool LessThanEquals(const void *lhs, const void *rhs) {
+    const Slice *lhs_slice = reinterpret_cast<const Slice *>(lhs);
+    const Slice *rhs_slice = reinterpret_cast<const Slice *>(rhs);
+    return lhs_slice->compare(*rhs_slice) <= 0;
   }
   static bool AreConsecutive(const void* a, const void* b) {
     const Slice *a_slice = reinterpret_cast<const Slice *>(a);
@@ -369,8 +463,14 @@ struct DataTypeTraits<BOOL> {
   static void AppendDebugStringForValue(const void* val, string* str) {
     str->append(*reinterpret_cast<const bool *>(val) ? "true" : "false");
   }
-  static int Compare(const void *lhs, const void *rhs) {
-    return GenericCompare<BOOL>(lhs, rhs);
+  static bool LessThan(const void *lhs, const void *rhs) {
+    return NumericLessThan<BOOL>(lhs, rhs);
+  }
+  static bool Equals(const void *lhs, const void *rhs) {
+    return NumericEquals<BOOL>(lhs, rhs);
+  }
+  static bool LessThanEquals(const void *lhs, const void *rhs) {
+    return NumericLessThanEquals<BOOL>(lhs, rhs);
   }
   static bool AreConsecutive(const void* a, const void* b) {
     return AreIntegersConsecutive<BOOL>(a, b);
@@ -392,8 +492,16 @@ struct DerivedTypeTraits {
     DataTypeTraits<PhysicalType>::AppendDebugStringForValue(val, str);
   }
 
-  static int Compare(const void *lhs, const void *rhs) {
-    return DataTypeTraits<PhysicalType>::Compare(lhs, rhs);
+  static bool LessThan(const void* lhs, const void* rhs) {
+    return DataTypeTraits<PhysicalType>::LessThan(lhs, rhs);
+  }
+
+  static bool Equals(const void* lhs, const void* rhs) {
+    return DataTypeTraits<PhysicalType>::Equals(lhs, rhs);
+  }
+
+  static bool LessThanEquals(const void* lhs, const void* rhs) {
+    return DataTypeTraits<PhysicalType>::LessThanEquals(lhs, rhs);
   }
 
   static bool AreConsecutive(const void* a, const void* b) {
@@ -591,9 +699,9 @@ class Variant {
   }
 
   bool Equals(const Variant *other) const {
-    if (other == NULL || type_ != other->type_)
-      return false;
-    return GetTypeInfo(type_)->Compare(value(), other->value()) == 0;
+    return other != nullptr &&
+           type_ == other->type_ &&
+           GetTypeInfo(type_)->Equals(value(), other->value());
   }
 
  private:
