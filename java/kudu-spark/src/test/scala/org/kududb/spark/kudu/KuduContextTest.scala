@@ -14,31 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.kududb.spark
+package org.kududb.spark.kudu
 
-import org.apache.spark.sql.SQLContext
 import org.junit.runner.RunWith
 import org.scalatest.FunSuite
 import org.scalatest.junit.JUnitRunner
 
 @RunWith(classOf[JUnitRunner])
-class DefaultSourceTest extends FunSuite with TestContext {
-
-  test("Test basic SparkSQL") {
+class KuduContextTest extends FunSuite with TestContext {
+  test("Test basic kuduRDD") {
     val rowCount = 10
 
     insertRows(rowCount)
 
-    val sqlContext = new SQLContext(sc)
+    val scanRdd = kuduContext.kuduRDD(sc, "test", Seq("key"))
 
-    sqlContext.load("org.kududb.spark",
-      Map("kudu.table" -> tableName, "kudu.master" -> miniCluster.getMasterAddresses))
-      .registerTempTable(tableName)
-
-    val results = sqlContext.sql("SELECT * FROM " + tableName).collectAsList()
-    assert(results.size() == rowCount)
-
-    assert(results.get(0).isNullAt(2))
-    assert(!results.get(1).isNullAt(2))
+    val scanList = scanRdd.map(r => r.getInt(0)).collect()
+    assert(scanList.length == rowCount)
   }
 }

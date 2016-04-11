@@ -15,16 +15,14 @@
  * limitations under the License.
  */
 
-package org.kududb.spark
+package org.kududb.spark.kudu
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.io.NullWritable
 import org.apache.hadoop.util.ShutdownHookManager
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.Row
 import org.kududb.annotations.InterfaceStability
-import org.kududb.client.{AsyncKuduClient, KuduClient, RowResult}
-import org.kududb.mapreduce.KuduTableInputFormat
+import org.kududb.client.{AsyncKuduClient, KuduClient}
 
 /**
   * KuduContext is a façade for Kudu operations.
@@ -65,27 +63,14 @@ class KuduContext(kuduMaster: String) extends Serializable {
     * Create an RDD from a Kudu table.
     *
     * @param tableName          table to read from
-    * @param columnProjection   list of columns to read
-    *
-    * Not specifying this at all (i.e. setting to null) or setting to the special string
-    * '*' means to project all columns.
+    * @param columnProjection   list of columns to read. Not specifying this at all
+    *                           (i.e. setting to null) or setting to the special
+    *                           string '*' means to project all columns.
     * @return a new RDD that maps over the given table for the selected columns
     */
   def kuduRDD(sc: SparkContext,
               tableName: String,
-              columnProjection: Seq[String] = Nil): RDD[RowResult] = {
-
-    val conf = new Configuration
-    conf.set("kudu.mapreduce.master.address", kuduMaster)
-    conf.set("kudu.mapreduce.input.table", tableName)
-    if (columnProjection.nonEmpty) {
-      conf.set("kudu.mapreduce.column.projection", columnProjection.mkString(","))
-    }
-
-    val rdd = sc.newAPIHadoopRDD(conf, classOf[KuduTableInputFormat],
-                                 classOf[NullWritable], classOf[RowResult])
-
-    val columnNames = if (columnProjection.nonEmpty) columnProjection.mkString(", ") else "(*)"
-    rdd.values.setName(s"KuduRDD { table=$tableName, columnProjection=$columnNames }")
+              columnProjection: Seq[String] = Nil): RDD[Row] = {
+    new KuduRDD(sc, kuduMaster, tableName, 1024*1024*20, columnProjection.toArray, Array())
   }
 }
