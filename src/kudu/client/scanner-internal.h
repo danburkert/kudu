@@ -146,6 +146,23 @@ class KuduScanner::Data {
   // non-fatal (i.e. retriable) scan error is encountered.
   void UpdateLastError(const Status& error);
 
+  // Returns a string representation of this scan.
+  std::string ToString() const;
+
+  // Return true if there may be rows to be fetched from this scanner.
+  bool HasMoreRows() const;
+
+  // Fetches the next batch of results for this scanner.
+  Status NextBatch(KuduScanBatch* batch);
+
+  Status GetCurrentServer(KuduTabletServer** server);
+
+  // Begin scanning.
+  Status Open();
+
+  // Close the scanner.
+  void Close();
+
   const ScanConfiguration& configuration() const {
     return configuration_;
   }
