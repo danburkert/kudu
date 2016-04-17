@@ -502,7 +502,7 @@ void WriteRpc::SendRpcCb(const Status& status) {
 
 Batcher::Batcher(KuduClient* client,
                  ErrorCollector* error_collector,
-                 const sp::shared_ptr<KuduSession>& session,
+                 const shared_ptr<KuduSession::Data>& session,
                  kudu::client::KuduSession::ExternalConsistencyMode consistency_mode)
   : state_(kGatheringOps),
     client_(client),
@@ -575,7 +575,7 @@ int Batcher::CountBufferedOperations() const {
 }
 
 void Batcher::CheckForFinishedFlush() {
-  sp::shared_ptr<KuduSession> session;
+  shared_ptr<KuduSession::Data> session;
   {
     lock_guard<simple_spinlock> l(&lock_);
     if (state_ != kFlushing || !ops_.empty()) {
@@ -590,7 +590,7 @@ void Batcher::CheckForFinishedFlush() {
     // Important to do this outside of the lock so that we don't have
     // a lock inversion deadlock -- the session lock should always
     // come before the batcher lock.
-    session->data_->FlushFinished(this);
+    session->FlushFinished(this);
   }
 
   Status s;

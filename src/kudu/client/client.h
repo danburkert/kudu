@@ -827,7 +827,7 @@ class KUDU_EXPORT KuduSession : public sp::enable_shared_from_this<KuduSession> 
   explicit KuduSession(const sp::shared_ptr<KuduClient>& client);
 
   // Owned.
-  Data* data_;
+  std::shared_ptr<Data>* data_;
 
   DISALLOW_COPY_AND_ASSIGN(KuduSession);
 };

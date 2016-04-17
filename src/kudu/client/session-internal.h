@@ -17,6 +17,7 @@
 #ifndef KUDU_CLIENT_SESSION_INTERNAL_H
 #define KUDU_CLIENT_SESSION_INTERNAL_H
 
+#include <memory>
 #include <unordered_set>
 
 #include "kudu/client/client.h"
@@ -31,17 +32,30 @@ class Batcher;
 class ErrorCollector;
 } // internal
 
-class KuduSession::Data {
+class KuduSession::Data : public std::enable_shared_from_this<KuduSession::Data> {
  public:
   explicit Data(sp::shared_ptr<KuduClient> client);
   ~Data();
 
-  void Init(const sp::shared_ptr<KuduSession>& session);
+  void Init();
+
+  // Set the flush mode.
+  Status SetFlushMode(KuduSession::FlushMode m) WARN_UNUSED_RESULT;
+
+  // Set the new external consistency mode for this session.
+  Status SetExternalConsistencyMode(KuduSession::ExternalConsistencyMode m) WARN_UNUSED_RESULT;
+
+  // Set the timeout for writes made in this session.
+  void SetTimeoutMillis(int millis);
+
+  Status Apply(KuduWriteOperation* write_op) WARN_UNUSED_RESULT;
+
+  Status Flush() WARN_UNUSED_RESULT;
+  void FlushAsync(KuduStatusCallback* cb);
 
   // Swap in a new Batcher instance, returning the old one in '*old_batcher', unless it is
   // NULL.
-  void NewBatcher(const sp::shared_ptr<KuduSession>& session,
-                  scoped_refptr<internal::Batcher>* old_batcher);
+  void NewBatcher(scoped_refptr<internal::Batcher>* old_batcher);
 
   // Called by Batcher when a flush has finished.
   void FlushFinished(internal::Batcher* b);
@@ -50,6 +64,13 @@ class KuduSession::Data {
   // operations. If 'force' is true batcher_ is aborted even if there are pending
   // operations.
   Status Close(bool force);
+
+  // Return true if there are operations which have not yet been delivered to
+  // the cluster.
+  bool HasPendingOperations() const;
+
+  // Return the number of buffered operations.
+  int CountBufferedOperations() const;
 
   // The client that this session is associated with.
   const sp::shared_ptr<KuduClient> client_;
