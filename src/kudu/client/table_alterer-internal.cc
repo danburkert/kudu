@@ -19,8 +19,9 @@
 
 #include <string>
 
-#include "kudu/client/schema.h"
+#include "kudu/client/client-internal.h"
 #include "kudu/client/schema-internal.h"
+#include "kudu/client/schema.h"
 #include "kudu/common/wire_protocol.h"
 #include "kudu/master/master.pb.h"
 
@@ -108,6 +109,54 @@ Status KuduTableAlterer::Data::ToRequest(AlterTableRequestPB* req) {
   }
 
   return Status::OK();
+}
+
+void KuduTableAlterer::Data::RenameTo(const string& new_name) {
+  rename_to_ = new_name;
+}
+
+KuduColumnSpec* KuduTableAlterer::Data::AddColumn(const string& name) {
+  Data::Step s = {AlterTableRequestPB::ADD_COLUMN,
+                  new KuduColumnSpec(name)};
+  steps_.push_back(s);
+  return s.spec;
+}
+
+KuduColumnSpec* KuduTableAlterer::Data::AlterColumn(const string& name) {
+  Data::Step s = {AlterTableRequestPB::ALTER_COLUMN,
+                  new KuduColumnSpec(name)};
+  steps_.push_back(s);
+  return s.spec;
+}
+
+void KuduTableAlterer::Data::DropColumn(const string& name) {
+  Step s = {AlterTableRequestPB::DROP_COLUMN, new KuduColumnSpec(name)};
+  steps_.push_back(s);
+}
+
+Status KuduTableAlterer::Data::Alter() {
+  AlterTableRequestPB req;
+  RETURN_NOT_OK(ToRequest(&req));
+
+  MonoDelta timeout = timeout_.Initialized() ? timeout_ :
+      client_->default_admin_operation_timeout();
+  MonoTime deadline = MonoTime::Now(MonoTime::FINE);
+  deadline.AddDelta(timeout);
+  RETURN_NOT_OK(client_->data_->AlterTable(client_, req, deadline));
+  if (wait_) {
+    string alter_name = rename_to_.get_value_or(table_name_);
+    RETURN_NOT_OK(client_->data_->WaitForAlterTableToFinish(client_, alter_name, deadline));
+  }
+
+  return Status::OK();
+}
+
+void KuduTableAlterer::Data::timeout(const MonoDelta& timeout) {
+  timeout_ = timeout;
+}
+
+void KuduTableAlterer::Data::wait(bool wait) {
+  wait_ = wait;
 }
 
 } // namespace client

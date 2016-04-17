@@ -716,58 +716,35 @@ KuduTableAlterer::~KuduTableAlterer() {
 }
 
 KuduTableAlterer* KuduTableAlterer::RenameTo(const string& new_name) {
-  data_->rename_to_ = new_name;
+  data_->RenameTo(new_name);
   return this;
 }
 
 KuduColumnSpec* KuduTableAlterer::AddColumn(const string& name) {
-  Data::Step s = {AlterTableRequestPB::ADD_COLUMN,
-                  new KuduColumnSpec(name)};
-  data_->steps_.push_back(s);
-  return s.spec;
+  return data_->AddColumn(name);
 }
 
 KuduColumnSpec* KuduTableAlterer::AlterColumn(const string& name) {
-  Data::Step s = {AlterTableRequestPB::ALTER_COLUMN,
-                  new KuduColumnSpec(name)};
-  data_->steps_.push_back(s);
-  return s.spec;
+  return data_->AlterColumn(name);
 }
 
 KuduTableAlterer* KuduTableAlterer::DropColumn(const string& name) {
-  Data::Step s = {AlterTableRequestPB::DROP_COLUMN,
-                  new KuduColumnSpec(name)};
-  data_->steps_.push_back(s);
+  data_->DropColumn(name);
   return this;
 }
 
 KuduTableAlterer* KuduTableAlterer::timeout(const MonoDelta& timeout) {
-  data_->timeout_ = timeout;
+  data_->timeout(timeout);
   return this;
 }
 
 KuduTableAlterer* KuduTableAlterer::wait(bool wait) {
-  data_->wait_ = wait;
+  data_->wait(wait);
   return this;
 }
 
 Status KuduTableAlterer::Alter() {
-  AlterTableRequestPB req;
-  RETURN_NOT_OK(data_->ToRequest(&req));
-
-  MonoDelta timeout = data_->timeout_.Initialized() ?
-    data_->timeout_ :
-    data_->client_->default_admin_operation_timeout();
-  MonoTime deadline = MonoTime::Now(MonoTime::FINE);
-  deadline.AddDelta(timeout);
-  RETURN_NOT_OK(data_->client_->data_->AlterTable(data_->client_, req, deadline));
-  if (data_->wait_) {
-    string alter_name = data_->rename_to_.get_value_or(data_->table_name_);
-    RETURN_NOT_OK(data_->client_->data_->WaitForAlterTableToFinish(
-        data_->client_, alter_name, deadline));
-  }
-
-  return Status::OK();
+  return data_->Alter();
 }
 
 ////////////////////////////////////////////////////////////

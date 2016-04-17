@@ -39,6 +39,13 @@ class KuduTableAlterer::Data {
   ~Data();
   Status ToRequest(master::AlterTableRequestPB* req);
 
+  void RenameTo(const std::string& new_name);
+  KuduColumnSpec* AddColumn(const std::string& name);
+  KuduColumnSpec* AlterColumn(const std::string& name);
+  void DropColumn(const std::string& name);
+  Status Alter() WARN_UNUSED_RESULT;
+  void timeout(const MonoDelta& timeout);
+  void wait(bool wait);
 
   KuduClient* const client_;
   const std::string table_name_;
