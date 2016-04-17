@@ -502,7 +502,7 @@ TEST_F(ClientTest, TestBadTable) {
 TEST_F(ClientTest, TestMasterDown) {
   cluster_->mini_master()->Shutdown();
   shared_ptr<KuduTable> t;
-  client_->data_->default_admin_operation_timeout_ = MonoDelta::FromSeconds(1);
+  client_->data_->get()->default_admin_operation_timeout_ = MonoDelta::FromSeconds(1);
   Status s = client_->OpenTable("other-tablet", &t);
   ASSERT_TRUE(s.IsNetworkError());
 }
@@ -1041,8 +1041,8 @@ TEST_F(ClientTest, TestGetTabletServerBlacklist) {
   scoped_refptr<internal::RemoteTablet> rt;
   while (true) {
     Synchronizer sync;
-    client_->data_->meta_cache_->LookupTabletByKey(table.get(), "", MonoTime::Max(), &rt,
-                                                  sync.AsStatusCallback());
+    client_->data_->get()->meta_cache_->LookupTabletByKey(table.get(), "", MonoTime::Max(), &rt,
+                                                          sync.AsStatusCallback());
     ASSERT_OK(sync.Wait());
     ASSERT_TRUE(rt.get() != nullptr);
     vector<internal::RemoteTabletServer*> tservers;
@@ -1059,27 +1059,27 @@ TEST_F(ClientTest, TestGetTabletServerBlacklist) {
   set<string> blacklist;
   vector<internal::RemoteTabletServer*> candidates;
   vector<internal::RemoteTabletServer*> tservers;
-  ASSERT_OK(client_->data_->GetTabletServer(client_.get(), rt,
-                                            KuduClient::LEADER_ONLY,
-                                            blacklist, &candidates, &rts));
+  ASSERT_OK(client_->data_->get()->GetTabletServer(rt,
+                                                   KuduClient::LEADER_ONLY,
+                                                   blacklist, &candidates, &rts));
   tservers.push_back(rts);
   // Blacklist the leader, should not work.
   blacklist.insert(rts->permanent_uuid());
   {
-    Status s = client_->data_->GetTabletServer(client_.get(), rt,
-                                               KuduClient::LEADER_ONLY,
-                                               blacklist, &candidates, &rts);
+    Status s = client_->data_->get()->GetTabletServer(rt,
+                                                      KuduClient::LEADER_ONLY,
+                                                      blacklist, &candidates, &rts);
     ASSERT_TRUE(s.IsServiceUnavailable());
   }
   // Keep blacklisting replicas until we run out.
-  ASSERT_OK(client_->data_->GetTabletServer(client_.get(), rt,
-                                            KuduClient::CLOSEST_REPLICA,
-                                            blacklist, &candidates, &rts));
+  ASSERT_OK(client_->data_->get()->GetTabletServer(rt,
+                                                   KuduClient::CLOSEST_REPLICA,
+                                                   blacklist, &candidates, &rts));
   tservers.push_back(rts);
   blacklist.insert(rts->permanent_uuid());
-  ASSERT_OK(client_->data_->GetTabletServer(client_.get(), rt,
-                                            KuduClient::FIRST_REPLICA,
-                                            blacklist, &candidates, &rts));
+  ASSERT_OK(client_->data_->get()->GetTabletServer(rt,
+                                                   KuduClient::FIRST_REPLICA,
+                                                   blacklist, &candidates, &rts));
   tservers.push_back(rts);
   blacklist.insert(rts->permanent_uuid());
 
@@ -1089,20 +1089,20 @@ TEST_F(ClientTest, TestGetTabletServerBlacklist) {
   selections.push_back(KuduClient::CLOSEST_REPLICA);
   selections.push_back(KuduClient::FIRST_REPLICA);
   for (KuduClient::ReplicaSelection selection : selections) {
-    Status s = client_->data_->GetTabletServer(client_.get(), rt, selection,
-                                               blacklist, &candidates, &rts);
+    Status s = client_->data_->get()->GetTabletServer(rt, selection,
+                                                      blacklist, &candidates, &rts);
     ASSERT_TRUE(s.IsServiceUnavailable());
   }
 
   // Make sure none of the modes work when all nodes are dead.
   for (internal::RemoteTabletServer* rt : tservers) {
-    client_->data_->meta_cache_->MarkTSFailed(rt, Status::NetworkError("test"));
+    client_->data_->get()->meta_cache_->MarkTSFailed(rt, Status::NetworkError("test"));
   }
   blacklist.clear();
   for (KuduClient::ReplicaSelection selection : selections) {
-    Status s = client_->data_->GetTabletServer(client_.get(), rt,
-                                               selection,
-                                               blacklist, &candidates, &rts);
+    Status s = client_->data_->get()->GetTabletServer(rt,
+                                                      selection,
+                                                      blacklist, &candidates, &rts);
     ASSERT_TRUE(s.IsServiceUnavailable());
   }
 }
@@ -1342,12 +1342,12 @@ TEST_F(ClientTest, TestScanTimeout) {
   // If we set the RPC timeout to be 0, we'll time out in the GetTableLocations
   // code path and not even discover where the tablet is hosted.
   {
-    client_->data_->default_rpc_timeout_ = MonoDelta::FromSeconds(0);
+    client_->data_->get()->default_rpc_timeout_ = MonoDelta::FromSeconds(0);
     KuduScanner scanner(client_table_.get());
     Status s = scanner.Open();
     EXPECT_TRUE(s.IsTimedOut()) << s.ToString();
     EXPECT_FALSE(scanner.data_->remote_) << "should not have located any tablet";
-    client_->data_->default_rpc_timeout_ = MonoDelta::FromSeconds(5);
+    client_->data_->get()->default_rpc_timeout_ = MonoDelta::FromSeconds(5);
   }
 
   // Warm the cache so that the subsequent timeout occurs within the scan,
@@ -1365,7 +1365,7 @@ TEST_F(ClientTest, TestScanTimeout) {
 
   // Insert some more rows so that the scan takes multiple batches, instead of
   // fetching all the data on the 'Open()' call.
-  client_->data_->default_rpc_timeout_ = MonoDelta::FromSeconds(5);
+  client_->data_->get()->default_rpc_timeout_ = MonoDelta::FromSeconds(5);
   ASSERT_NO_FATAL_FAILURE(InsertTestRows(client_table_.get(), 1000, 1));
   {
     google::FlagSaver saver;
@@ -1376,7 +1376,7 @@ TEST_F(ClientTest, TestScanTimeout) {
     // table, we'll ignore this timeout for the actual scan calls, and use the
     // scanner timeout instead.
     FLAGS_scanner_inject_latency_on_each_batch_ms = 50;
-    client_->data_->default_rpc_timeout_ = MonoDelta::FromMilliseconds(1);
+    client_->data_->get()->default_rpc_timeout_ = MonoDelta::FromMilliseconds(1);
     scanner.SetTimeoutMillis(5000);
 
     // Should successfully scan.
@@ -1690,7 +1690,7 @@ void ClientTest::DoTestWriteWithDeadServer(WhichServerToKill which) {
 
 // Test error handling cases where the master is down (tablet resolution fails)
 TEST_F(ClientTest, TestWriteWithDeadMaster) {
-  client_->data_->default_admin_operation_timeout_ = MonoDelta::FromSeconds(1);
+  client_->data_->get()->default_admin_operation_timeout_ = MonoDelta::FromSeconds(1);
   DoTestWriteWithDeadServer(DEAD_MASTER);
 }
 
@@ -2134,9 +2134,9 @@ TEST_F(ClientTest, TestReplicatedMultiTabletTableFailover) {
   // Find the leader of the first tablet.
   Synchronizer sync;
   scoped_refptr<internal::RemoteTablet> rt;
-  client_->data_->meta_cache_->LookupTabletByKey(table.get(), "",
-                                                 MonoTime::Max(),
-                                                 &rt, sync.AsStatusCallback());
+  client_->data_->get()->meta_cache_->LookupTabletByKey(table.get(), "",
+                                                        MonoTime::Max(),
+                                                        &rt, sync.AsStatusCallback());
   ASSERT_OK(sync.Wait());
   internal::RemoteTabletServer *rts = rt->LeaderTServer();
 
@@ -2202,19 +2202,18 @@ TEST_F(ClientTest, TestReplicatedTabletWritesWithLeaderElection) {
   // Find the leader replica
   Synchronizer sync;
   scoped_refptr<internal::RemoteTablet> rt;
-  client_->data_->meta_cache_->LookupTabletByKey(table.get(), "",
-                                                 MonoTime::Max(),
-                                                 &rt, sync.AsStatusCallback());
+  client_->data_->get()->meta_cache_->LookupTabletByKey(table.get(), "",
+                                                        MonoTime::Max(),
+                                                        &rt, sync.AsStatusCallback());
   ASSERT_OK(sync.Wait());
   internal::RemoteTabletServer *rts;
   set<string> blacklist;
   vector<internal::RemoteTabletServer*> candidates;
-  ASSERT_OK(client_->data_->GetTabletServer(client_.get(),
-                                            rt,
-                                            KuduClient::LEADER_ONLY,
-                                            blacklist,
-                                            &candidates,
-                                            &rts));
+  ASSERT_OK(client_->data_->get()->GetTabletServer(rt,
+                                                   KuduClient::LEADER_ONLY,
+                                                   blacklist,
+                                                   &candidates,
+                                                   &rts));
 
   string killed_uuid = rts->permanent_uuid();
   // Kill the tserver that is serving the leader tablet.
@@ -2436,11 +2435,11 @@ TEST_F(ClientTest, TestSeveralRowMutatesPerBatch) {
 // Tests that master permits are properly released after a whole bunch of
 // rows are inserted.
 TEST_F(ClientTest, TestMasterLookupPermits) {
-  int initial_value = client_->data_->meta_cache_->master_lookup_sem_.GetValue();
+  int initial_value = client_->data_->get()->meta_cache_->master_lookup_sem_.GetValue();
   ASSERT_NO_FATAL_FAILURE(InsertTestRows(client_table_.get(),
                                          FLAGS_test_scan_num_rows));
   ASSERT_EQ(initial_value,
-            client_->data_->meta_cache_->master_lookup_sem_.GetValue());
+            client_->data_->get()->meta_cache_->master_lookup_sem_.GetValue());
 }
 
 // Define callback for deadlock simulation, as well as various helper methods.

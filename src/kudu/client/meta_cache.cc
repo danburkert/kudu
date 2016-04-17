@@ -67,7 +67,7 @@ RemoteTabletServer::RemoteTabletServer(const master::TSInfoPB& pb)
 
 void RemoteTabletServer::DnsResolutionFinished(const HostPort& hp,
                                                vector<Sockaddr>* addrs,
-                                               KuduClient* client,
+                                               KuduClient::Data* client,
                                                const StatusCallback& user_callback,
                                                const Status &result_status) {
   gscoped_ptr<vector<Sockaddr> > scoped_addrs(addrs);
@@ -89,12 +89,12 @@ void RemoteTabletServer::DnsResolutionFinished(const HostPort& hp,
 
   {
     lock_guard<simple_spinlock> l(&lock_);
-    proxy_.reset(new TabletServerServiceProxy(client->data_->messenger_, (*addrs)[0]));
+    proxy_.reset(new TabletServerServiceProxy(client->messenger_, (*addrs)[0]));
   }
   user_callback.Run(s);
 }
 
-void RemoteTabletServer::InitProxy(KuduClient* client, const StatusCallback& cb) {
+void RemoteTabletServer::InitProxy(KuduClient::Data* client, const StatusCallback& cb) {
   HostPort hp;
   {
     unique_lock<simple_spinlock> l(&lock_);
@@ -113,7 +113,7 @@ void RemoteTabletServer::InitProxy(KuduClient* client, const StatusCallback& cb)
   }
 
   auto addrs = new vector<Sockaddr>();
-  client->data_->dns_resolver_->ResolveAddresses(
+  client->dns_resolver_->ResolveAddresses(
     hp, addrs, Bind(&RemoteTabletServer::DnsResolutionFinished,
                     Unretained(this), hp, addrs, client, cb));
 }
@@ -284,7 +284,7 @@ std::string RemoteTablet::ReplicasAsStringUnlocked() const {
 
 ////////////////////////////////////////////////////////////
 
-MetaCache::MetaCache(KuduClient* client)
+MetaCache::MetaCache(KuduClient::Data* client)
   : client_(client),
     master_lookup_sem_(50) {
 }
@@ -330,7 +330,7 @@ class LookupRpc : public Rpc {
   virtual void SendRpcCb(const Status& status) OVERRIDE;
 
   std::shared_ptr<MasterServiceProxy> master_proxy() const {
-    return table_->client()->data_->master_proxy();
+    return table_->client()->data_->get()->master_proxy();
   }
 
   void ResetMasterLeaderAndRetry();
@@ -457,8 +457,7 @@ string LookupRpc::ToString() const {
 }
 
 void LookupRpc::ResetMasterLeaderAndRetry() {
-  table_->client()->data_->SetMasterServerProxyAsync(
-      table_->client(),
+  table_->client()->data_->get()->SetMasterServerProxyAsync(
       retrier().deadline(),
       Bind(&LookupRpc::NewLeaderMasterDeterminedCb,
            Unretained(this)));
@@ -633,7 +632,7 @@ void MetaCache::LookupTabletByKey(const KuduTable* table,
                                  partition_key,
                                  remote_tablet,
                                  deadline,
-                                 client_->data_->messenger_);
+                                 client_->messenger_);
   rpc->SendRpc();
 }
 

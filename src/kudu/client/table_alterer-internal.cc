@@ -142,10 +142,10 @@ Status KuduTableAlterer::Data::Alter() {
       client_->default_admin_operation_timeout();
   MonoTime deadline = MonoTime::Now(MonoTime::FINE);
   deadline.AddDelta(timeout);
-  RETURN_NOT_OK(client_->data_->AlterTable(client_, req, deadline));
+  RETURN_NOT_OK(client_->data_->get()->AlterTable(req, deadline));
   if (wait_) {
     string alter_name = rename_to_.get_value_or(table_name_);
-    RETURN_NOT_OK(client_->data_->WaitForAlterTableToFinish(client_, alter_name, deadline));
+    RETURN_NOT_OK(client_->data_->get()->WaitForAlterTableToFinish(alter_name, deadline));
   }
 
   return Status::OK();

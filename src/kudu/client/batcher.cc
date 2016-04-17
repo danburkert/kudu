@@ -374,13 +374,13 @@ void WriteRpc::SendRpc() {
   // TODO: When we support tablet splits, we should let the lookup shift
   // the write to another tablet (i.e. if it's since been split).
   if (!current_ts_) {
-    batcher_->client_->data_->meta_cache_->LookupTabletByKey(table(),
-                                                             tablet_->partition()
-                                                                     .partition_key_start(),
-                                                             retrier().deadline(),
-                                                             NULL,
-                                                             Bind(&WriteRpc::LookupTabletCb,
-                                                                  Unretained(this)));
+    batcher_->client_->meta_cache_->LookupTabletByKey(table(),
+                                                      tablet_->partition()
+                                                              .partition_key_start(),
+                                                      retrier().deadline(),
+                                                      NULL,
+                                                      Bind(&WriteRpc::LookupTabletCb,
+                                                          Unretained(this)));
     return;
   }
 
@@ -500,7 +500,7 @@ void WriteRpc::SendRpcCb(const Status& status) {
   delete this;
 }
 
-Batcher::Batcher(KuduClient* client,
+Batcher::Batcher(KuduClient::Data* client,
                  ErrorCollector* error_collector,
                  const shared_ptr<KuduSession::Data>& session,
                  kudu::client::KuduSession::ExternalConsistencyMode consistency_mode)
@@ -668,7 +668,7 @@ Status Batcher::Add(KuduWriteOperation* write_op) {
   // here we're forced to create a new deadline.
   MonoTime deadline = ComputeDeadlineUnlocked();
   base::RefCountInc(&outstanding_lookups_);
-  client_->data_->meta_cache_->LookupTabletByKey(
+  client_->meta_cache_->LookupTabletByKey(
       op->write_op->table(),
       op->partition_key,
       deadline,
@@ -824,7 +824,7 @@ void Batcher::FlushBuffer(RemoteTablet* tablet, const vector<InFlightOp*>& ops) 
                                tablet,
                                ops,
                                deadline_,
-                               client_->data_->messenger_);
+                               client_->messenger_);
   rpc->SendRpc();
 }
 
@@ -838,7 +838,7 @@ void Batcher::ProcessWriteResponse(const WriteRpc& rpc,
 
   if (s.ok()) {
     if (rpc.resp().has_timestamp()) {
-      client_->data_->UpdateLatestObservedTimestamp(rpc.resp().timestamp());
+      client_->UpdateLatestObservedTimestamp(rpc.resp().timestamp());
     }
   } else {
     // Mark each of the rows in the write op as failed, since the whole RPC failed.

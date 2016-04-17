@@ -131,7 +131,7 @@ void KuduSession::Data::NewBatcher(scoped_refptr<Batcher>* old_batcher) {
   shared_ptr<KuduSession::Data> shared = shared_from_this();
 
   scoped_refptr<Batcher> batcher(
-    new Batcher(client_.get(), error_collector_.get(), shared_from_this(),
+    new Batcher(client_->data_->get(), error_collector_.get(), shared_from_this(),
                 external_consistency_mode_));
   if (timeout_ms_ != -1) {
     batcher->SetTimeoutMillis(timeout_ms_);

@@ -37,7 +37,7 @@ using master::CreateTableResponsePB;
 
 namespace client {
 
-KuduTableCreator::Data::Data(KuduClient* client)
+KuduTableCreator::Data::Data(KuduClient::Data* client)
   : client_(client),
     schema_(nullptr),
     num_replicas_(0),
@@ -98,12 +98,12 @@ Status KuduTableCreator::Data::Create() {
     deadline.AddDelta(client_->default_admin_operation_timeout());
   }
 
-  RETURN_NOT_OK_PREPEND(client_->data_->CreateTable(client_, req, *schema_, deadline),
+  RETURN_NOT_OK_PREPEND(client_->CreateTable(req, *schema_, deadline),
                         strings::Substitute("Error creating table $0 on the master", table_name_));
 
   // Spin until the table is fully created, if requested.
   if (wait_) {
-    RETURN_NOT_OK(client_->data_->WaitForCreateTableToFinish(client_, table_name_, deadline));
+    RETURN_NOT_OK(client_->WaitForCreateTableToFinish(table_name_, deadline));
   }
 
   return Status::OK();

@@ -63,7 +63,7 @@ class Batcher : public RefCountedThreadSafe<Batcher> {
   // the provided ErrorCollector.
   //
   // Takes a reference on error_collector. Creates a weak_ptr to 'session'.
-  Batcher(KuduClient* client,
+  Batcher(KuduClient::Data* client,
           ErrorCollector* error_collector,
           const std::shared_ptr<KuduSession::Data>& session,
           kudu::client::KuduSession::ExternalConsistencyMode consistency_mode);
@@ -160,7 +160,7 @@ class Batcher : public RefCountedThreadSafe<Batcher> {
   };
   State state_;
 
-  KuduClient* const client_;
+  KuduClient::Data* const client_;
   std::weak_ptr<KuduSession::Data> weak_session_;
 
   // The consistency mode set in the session.

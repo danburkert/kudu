@@ -26,17 +26,18 @@
 #include <unordered_map>
 #include <vector>
 
+#include "kudu/client/client-internal.h"
 #include "kudu/common/partition.h"
 #include "kudu/consensus/metadata.pb.h"
 #include "kudu/gutil/macros.h"
 #include "kudu/gutil/ref_counted.h"
 #include "kudu/util/async_util.h"
 #include "kudu/util/locks.h"
+#include "kudu/util/memory/arena.h"
 #include "kudu/util/monotime.h"
+#include "kudu/util/net/net_util.h"
 #include "kudu/util/semaphore.h"
 #include "kudu/util/status.h"
-#include "kudu/util/memory/arena.h"
-#include "kudu/util/net/net_util.h"
 
 namespace kudu {
 
@@ -72,7 +73,7 @@ class RemoteTabletServer {
   // Initialize the RPC proxy to this tablet server, if it is not already set up.
   // This will involve a DNS lookup if there is not already an active proxy.
   // If there is an active proxy, does nothing.
-  void InitProxy(KuduClient* client, const StatusCallback& cb);
+  void InitProxy(KuduClient::Data* client, const StatusCallback& cb);
 
   // Update information from the given pb.
   // Requires that 'pb''s UUID matches this server.
@@ -93,7 +94,7 @@ class RemoteTabletServer {
   // Internal callback for DNS resolution.
   void DnsResolutionFinished(const HostPort& hp,
                              std::vector<Sockaddr>* addrs,
-                             KuduClient* client,
+                             KuduClient::Data* client,
                              const StatusCallback& user_callback,
                              const Status &result_status);
 
@@ -205,7 +206,7 @@ class RemoteTablet : public RefCountedThreadSafe<RemoteTablet> {
 class MetaCache : public RefCountedThreadSafe<MetaCache> {
  public:
   // The passed 'client' object must remain valid as long as MetaCache is alive.
-  explicit MetaCache(KuduClient* client);
+  explicit MetaCache(KuduClient::Data* client);
   ~MetaCache();
 
   // Look up which tablet hosts the given partition key for a table. When it is
@@ -257,7 +258,7 @@ class MetaCache : public RefCountedThreadSafe<MetaCache> {
   // NOTE: Must be called with lock_ held.
   void UpdateTabletServer(const master::TSInfoPB& pb);
 
-  KuduClient* client_;
+  KuduClient::Data* client_;
 
   rw_spinlock lock_;
 

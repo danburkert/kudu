@@ -282,6 +282,7 @@ class KUDU_EXPORT KuduClient : public sp::enable_shared_from_this<KuduClient> {
   friend class KuduClientBuilder;
   friend class KuduScanner;
   friend class KuduScanTokenBuilder;
+  friend class KuduSession;
   friend class KuduTable;
   friend class KuduTableAlterer;
   friend class KuduTableCreator;
@@ -299,7 +300,7 @@ class KUDU_EXPORT KuduClient : public sp::enable_shared_from_this<KuduClient> {
   KuduClient();
 
   // Owned.
-  Data* data_;
+  std::shared_ptr<Data>* data_;
 
   DISALLOW_COPY_AND_ASSIGN(KuduClient);
 };
@@ -391,7 +392,7 @@ class KUDU_EXPORT KuduTableCreator {
 
   friend class KuduClient;
 
-  explicit KuduTableCreator(KuduClient* client);
+  explicit KuduTableCreator(KuduClient::Data* client);
 
   // Owned.
   Data* data_;

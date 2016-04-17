@@ -52,7 +52,6 @@
 #include "kudu/master/master.pb.h"
 #include "kudu/master/master.proxy.h"
 #include "kudu/rpc/messenger.h"
-#include "kudu/util/init.h"
 #include "kudu/util/logging.h"
 #include "kudu/util/net/dns_resolver.h"
 #include "kudu/util/version_info.h"
@@ -173,6 +172,10 @@ std::string GetAllVersionInfo() {
   return VersionInfo::GetAllVersionInfo();
 }
 
+////////////////////////////////////////////////////////////
+// KuduClientBuilder
+////////////////////////////////////////////////////////////
+
 KuduClientBuilder::KuduClientBuilder()
   : data_(new KuduClientBuilder::Data()) {
 }
@@ -182,65 +185,42 @@ KuduClientBuilder::~KuduClientBuilder() {
 }
 
 KuduClientBuilder& KuduClientBuilder::clear_master_server_addrs() {
-  data_->master_server_addrs_.clear();
+  data_->clear_master_server_addrs();
   return *this;
 }
 
 KuduClientBuilder& KuduClientBuilder::master_server_addrs(const vector<string>& addrs) {
   for (const string& addr : addrs) {
-    data_->master_server_addrs_.push_back(addr);
+    data_->add_master_server_addr(addr);
   }
   return *this;
 }
 
 KuduClientBuilder& KuduClientBuilder::add_master_server_addr(const string& addr) {
-  data_->master_server_addrs_.push_back(addr);
+  data_->add_master_server_addr(addr);
   return *this;
 }
 
 KuduClientBuilder& KuduClientBuilder::default_admin_operation_timeout(const MonoDelta& timeout) {
-  data_->default_admin_operation_timeout_ = timeout;
+  data_->default_admin_operation_timeout(timeout);
   return *this;
 }
 
 KuduClientBuilder& KuduClientBuilder::default_rpc_timeout(const MonoDelta& timeout) {
-  data_->default_rpc_timeout_ = timeout;
+  data_->default_rpc_timeout(timeout);
   return *this;
 }
 
 Status KuduClientBuilder::Build(shared_ptr<KuduClient>* client) {
-  RETURN_NOT_OK(CheckCPUFlags());
-
-  shared_ptr<KuduClient> c(new KuduClient());
-
-  // Init messenger.
-  MessengerBuilder builder("client");
-  RETURN_NOT_OK(builder.Build(&c->data_->messenger_));
-
-  c->data_->master_server_addrs_ = data_->master_server_addrs_;
-  c->data_->default_admin_operation_timeout_ = data_->default_admin_operation_timeout_;
-  c->data_->default_rpc_timeout_ = data_->default_rpc_timeout_;
-
-  // Let's allow for plenty of time for discovering the master the first
-  // time around.
-  MonoTime deadline = MonoTime::Now(MonoTime::FINE);
-  deadline.AddDelta(c->default_admin_operation_timeout());
-  RETURN_NOT_OK_PREPEND(c->data_->SetMasterServerProxy(c.get(), deadline),
-                        "Could not locate the leader master");
-
-  c->data_->meta_cache_.reset(new MetaCache(c.get()));
-  c->data_->dns_resolver_.reset(new DnsResolver());
-
-  // Init local host names used for locality decisions.
-  RETURN_NOT_OK_PREPEND(c->data_->InitLocalHostNames(),
-                        "Could not determine local host names");
-
-  client->swap(c);
-  return Status::OK();
+  return data_->Build(client);
 }
 
+////////////////////////////////////////////////////////////
+// KuduClient
+////////////////////////////////////////////////////////////
+
 KuduClient::KuduClient()
-  : data_(new KuduClient::Data()) {
+  : data_(new shared_ptr<KuduClient::Data>(new KuduClient::Data())) {
 }
 
 KuduClient::~KuduClient() {
@@ -248,20 +228,20 @@ KuduClient::~KuduClient() {
 }
 
 KuduTableCreator* KuduClient::NewTableCreator() {
-  return new KuduTableCreator(this);
+  return new KuduTableCreator(data_->get());
 }
 
 Status KuduClient::IsCreateTableInProgress(const string& table_name,
                                            bool *create_in_progress) {
   MonoTime deadline = MonoTime::Now(MonoTime::FINE);
   deadline.AddDelta(default_admin_operation_timeout());
-  return data_->IsCreateTableInProgress(this, table_name, deadline, create_in_progress);
+  return data_->get()->IsCreateTableInProgress(table_name, deadline, create_in_progress);
 }
 
 Status KuduClient::DeleteTable(const string& table_name) {
   MonoTime deadline = MonoTime::Now(MonoTime::FINE);
   deadline.AddDelta(default_admin_operation_timeout());
-  return data_->DeleteTable(this, table_name, deadline);
+  return data_->get()->DeleteTable(table_name, deadline);
 }
 
 KuduTableAlterer* KuduClient::NewTableAlterer(const string& name) {
@@ -272,7 +252,7 @@ Status KuduClient::IsAlterTableInProgress(const string& table_name,
                                           bool *alter_in_progress) {
   MonoTime deadline = MonoTime::Now(MonoTime::FINE);
   deadline.AddDelta(default_admin_operation_timeout());
-  return data_->IsAlterTableInProgress(this, table_name, deadline, alter_in_progress);
+  return data_->get()->IsAlterTableInProgress(table_name, deadline, alter_in_progress);
 }
 
 Status KuduClient::GetTableSchema(const string& table_name,
@@ -281,70 +261,24 @@ Status KuduClient::GetTableSchema(const string& table_name,
   deadline.AddDelta(default_admin_operation_timeout());
   string table_id_ignored;
   PartitionSchema partition_schema;
-  return data_->GetTableSchema(this,
-                               table_name,
-                               deadline,
-                               schema,
-                               &partition_schema,
-                               &table_id_ignored);
+  return data_->get()->GetTableSchema(table_name,
+                                      deadline,
+                                      schema,
+                                      &partition_schema,
+                                      &table_id_ignored);
 }
 
 Status KuduClient::ListTabletServers(vector<KuduTabletServer*>* tablet_servers) {
-  ListTabletServersRequestPB req;
-  ListTabletServersResponsePB resp;
-
   MonoTime deadline = MonoTime::Now(MonoTime::FINE);
   deadline.AddDelta(default_admin_operation_timeout());
-  Status s =
-      data_->SyncLeaderMasterRpc<ListTabletServersRequestPB, ListTabletServersResponsePB>(
-          deadline,
-          this,
-          req,
-          &resp,
-          nullptr,
-          "ListTabletServers",
-          &MasterServiceProxy::ListTabletServers);
-  RETURN_NOT_OK(s);
-  if (resp.has_error()) {
-    return StatusFromPB(resp.error().status());
-  }
-  for (int i = 0; i < resp.servers_size(); i++) {
-    const ListTabletServersResponsePB_Entry& e = resp.servers(i);
-    auto ts = new KuduTabletServer();
-    ts->data_ = new KuduTabletServer::Data(e.instance_id().permanent_uuid(),
-                                           e.registration().rpc_addresses(0).host());
-    tablet_servers->push_back(ts);
-  }
-  return Status::OK();
+  return data_->get()->ListTabletServers(tablet_servers, deadline);
 }
 
 Status KuduClient::ListTables(vector<string>* tables,
                               const string& filter) {
-  ListTablesRequestPB req;
-  ListTablesResponsePB resp;
-
-  if (!filter.empty()) {
-    req.set_name_filter(filter);
-  }
   MonoTime deadline = MonoTime::Now(MonoTime::FINE);
   deadline.AddDelta(default_admin_operation_timeout());
-  Status s =
-      data_->SyncLeaderMasterRpc<ListTablesRequestPB, ListTablesResponsePB>(
-          deadline,
-          this,
-          req,
-          &resp,
-          nullptr,
-          "ListTables",
-          &MasterServiceProxy::ListTables);
-  RETURN_NOT_OK(s);
-  if (resp.has_error()) {
-    return StatusFromPB(resp.error().status());
-  }
-  for (int i = 0; i < resp.tables_size(); i++) {
-    tables->push_back(resp.tables(i).name());
-  }
-  return Status::OK();
+  return data_->get()->ListTables(tables, filter, deadline);
 }
 
 Status KuduClient::TableExists(const string& table_name, bool* exists) {
@@ -367,12 +301,11 @@ Status KuduClient::OpenTable(const string& table_name,
   PartitionSchema partition_schema;
   MonoTime deadline = MonoTime::Now(MonoTime::FINE);
   deadline.AddDelta(default_admin_operation_timeout());
-  RETURN_NOT_OK(data_->GetTableSchema(this,
-                                      table_name,
-                                      deadline,
-                                      &schema,
-                                      &partition_schema,
-                                      &table_id));
+  RETURN_NOT_OK(data_->get()->GetTableSchema(table_name,
+                                             deadline,
+                                             &schema,
+                                             &partition_schema,
+                                             &table_id));
 
   // In the future, probably will look up the table in some map to reuse KuduTable
   // instances.
@@ -391,32 +324,32 @@ shared_ptr<KuduSession> KuduClient::NewSession() {
 }
 
 bool KuduClient::IsMultiMaster() const {
-  return data_->master_server_addrs_.size() > 1;
+  return data_->get()->IsMultiMaster();
 }
 
 const MonoDelta& KuduClient::default_admin_operation_timeout() const {
-  return data_->default_admin_operation_timeout_;
+  return data_->get()->default_admin_operation_timeout();
 }
 
 const MonoDelta& KuduClient::default_rpc_timeout() const {
-  return data_->default_rpc_timeout_;
+  return data_->get()->default_rpc_timeout();
 }
 
 const uint64_t KuduClient::kNoTimestamp = 0;
 
 uint64_t KuduClient::GetLatestObservedTimestamp() const {
-  return data_->GetLatestObservedTimestamp();
+  return data_->get()->GetLatestObservedTimestamp();
 }
 
 void KuduClient::SetLatestObservedTimestamp(uint64_t ht_timestamp) {
-  data_->UpdateLatestObservedTimestamp(ht_timestamp);
+  return data_->get()->UpdateLatestObservedTimestamp(ht_timestamp);
 }
 
 ////////////////////////////////////////////////////////////
 // KuduTableCreator
 ////////////////////////////////////////////////////////////
 
-KuduTableCreator::KuduTableCreator(KuduClient* client)
+KuduTableCreator::KuduTableCreator(KuduClient::Data* client)
   : data_(new KuduTableCreator::Data(client)) {
 }
 
@@ -588,12 +521,12 @@ KuduSession::KuduSession(const shared_ptr<KuduClient>& client)
 }
 
 KuduSession::~KuduSession() {
-  WARN_NOT_OK((*data_)->Close(true), "Closed Session with pending operations.");
+  WARN_NOT_OK(data_->get()->Close(true), "Closed Session with pending operations.");
   delete data_;
 }
 
 Status KuduSession::Close() {
-  return (*data_)->Close(false);
+  return data_->get()->Close(false);
 }
 
 Status KuduSession::SetFlushMode(FlushMode m) {
@@ -601,7 +534,7 @@ Status KuduSession::SetFlushMode(FlushMode m) {
     // Be paranoid in client code.
     return Status::InvalidArgument("Bad flush mode");
   }
-  return (*data_)->SetFlushMode(m);
+  return data_->get()->SetFlushMode(m);
 }
 
 Status KuduSession::SetExternalConsistencyMode(ExternalConsistencyMode m) {
@@ -609,43 +542,43 @@ Status KuduSession::SetExternalConsistencyMode(ExternalConsistencyMode m) {
     // Be paranoid in client code.
     return Status::InvalidArgument("Bad external consistency mode");
   }
-  return (*data_)->SetExternalConsistencyMode(m);
+  return data_->get()->SetExternalConsistencyMode(m);
 }
 
 void KuduSession::SetTimeoutMillis(int millis) {
-  return (*data_)->SetTimeoutMillis(millis);
+  return data_->get()->SetTimeoutMillis(millis);
 }
 
 Status KuduSession::Flush() {
-  return (*data_)->Flush();
+  return data_->get()->Flush();
 }
 
 void KuduSession::FlushAsync(KuduStatusCallback* user_callback) {
-  return (*data_)->FlushAsync(user_callback);
+  return data_->get()->FlushAsync(user_callback);
 }
 
 bool KuduSession::HasPendingOperations() const {
-  return (*data_)->HasPendingOperations();
+  return data_->get()->HasPendingOperations();
 }
 
 Status KuduSession::Apply(KuduWriteOperation* write_op) {
-  return (*data_)->Apply(write_op);
+  return data_->get()->Apply(write_op);
 }
 
 int KuduSession::CountBufferedOperations() const {
-  return (*data_)->CountBufferedOperations();
+  return data_->get()->CountBufferedOperations();
 }
 
 int KuduSession::CountPendingErrors() const {
-  return (*data_)->error_collector_->CountErrors();
+  return data_->get()->error_collector_->CountErrors();
 }
 
 void KuduSession::GetPendingErrors(vector<KuduError*>* errors, bool* overflowed) {
-  (*data_)->error_collector_->GetErrors(errors, overflowed);
+  data_->get()->error_collector_->GetErrors(errors, overflowed);
 }
 
 KuduClient* KuduSession::client() const {
-  return (*data_)->client_.get();
+  return data_->get()->client_.get();
 }
 
 ////////////////////////////////////////////////////////////

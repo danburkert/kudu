@@ -108,7 +108,7 @@ Status KuduScanner::Data::HandleError(const ScanRpcStatus& err,
   }
 
   if (mark_ts_failed) {
-    table_->client()->data_->meta_cache_->MarkTSFailed(ts_, err.status);
+    table_->client()->data_->get()->meta_cache_->MarkTSFailed(ts_, err.status);
     DCHECK(blacklist_location);
   }
 
@@ -297,19 +297,18 @@ Status KuduScanner::Data::OpenTablet(const string& partition_key,
 
   for (int attempt = 1;; attempt++) {
     Synchronizer sync;
-    table_->client()->data_->meta_cache_->LookupTabletByKey(table_.get(),
-                                                            partition_key,
-                                                            deadline,
-                                                            &remote_,
-                                                            sync.AsStatusCallback());
+    table_->client()->data_->get()->meta_cache_->LookupTabletByKey(table_.get(),
+                                                                   partition_key,
+                                                                   deadline,
+                                                                   &remote_,
+                                                                   sync.AsStatusCallback());
     RETURN_NOT_OK(sync.Wait());
 
     scan->set_tablet_id(remote_->tablet_id());
 
     RemoteTabletServer *ts;
     vector<RemoteTabletServer*> candidates;
-    Status lookup_status = table_->client()->data_->GetTabletServer(
-        table_->client(),
+    Status lookup_status = table_->client()->data_->get()->GetTabletServer(
         remote_,
         configuration_.selection(),
         *blacklist,
@@ -376,7 +375,7 @@ Status KuduScanner::Data::OpenTablet(const string& partition_key,
   }
 
   if (last_response_.has_snap_timestamp()) {
-    table_->client()->data_->UpdateLatestObservedTimestamp(last_response_.snap_timestamp());
+    table_->client()->data_->get()->UpdateLatestObservedTimestamp(last_response_.snap_timestamp());
   }
 
   return Status::OK();

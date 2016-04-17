@@ -195,8 +195,7 @@ TEST_F(MasterFailoverTest, TestPauseAfterCreateTableIssued) {
 
   MonoTime deadline = MonoTime::Now(MonoTime::FINE);
   deadline.AddDelta(MonoDelta::FromSeconds(90));
-  ASSERT_OK(client_->data_->WaitForCreateTableToFinish(client_.get(),
-                                                       table_id, deadline));
+  ASSERT_OK(client_->data_->get()->WaitForCreateTableToFinish(table_id, deadline));
 
   ASSERT_OK(OpenTableAndScanner(table_id));
 }

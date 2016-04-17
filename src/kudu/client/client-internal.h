@@ -48,7 +48,7 @@ class RpcController;
 
 namespace client {
 
-class KuduClient::Data {
+class KuduClient::Data : public std::enable_shared_from_this<KuduClient::Data> {
  public:
   Data();
   ~Data();
@@ -61,50 +61,48 @@ class KuduClient::Data {
   // The 'candidates' return parameter indicates tservers that are live and meet the selection
   // criteria, but are possibly filtered by the blacklist. This is useful for implementing
   // retry logic.
-  Status GetTabletServer(KuduClient* client,
-                         const scoped_refptr<internal::RemoteTablet>& rt,
+  Status GetTabletServer(const scoped_refptr<internal::RemoteTablet>& rt,
                          ReplicaSelection selection,
                          const std::set<std::string>& blacklist,
                          std::vector<internal::RemoteTabletServer*>* candidates,
                          internal::RemoteTabletServer** ts);
 
-  Status CreateTable(KuduClient* client,
-                     const master::CreateTableRequestPB& req,
+  Status CreateTable(const master::CreateTableRequestPB& req,
                      const KuduSchema& schema,
                      const MonoTime& deadline);
 
-  Status IsCreateTableInProgress(KuduClient* client,
-                                 const std::string& table_name,
+  Status IsCreateTableInProgress(const std::string& table_name,
                                  const MonoTime& deadline,
                                  bool *create_in_progress);
 
-  Status WaitForCreateTableToFinish(KuduClient* client,
-                                    const std::string& table_name,
+  Status WaitForCreateTableToFinish(const std::string& table_name,
                                     const MonoTime& deadline);
 
-  Status DeleteTable(KuduClient* client,
-                     const std::string& table_name,
+  Status DeleteTable(const std::string& table_name,
                      const MonoTime& deadline);
 
-  Status AlterTable(KuduClient* client,
-                    const master::AlterTableRequestPB& req,
+  Status AlterTable(const master::AlterTableRequestPB& req,
                     const MonoTime& deadline);
 
-  Status IsAlterTableInProgress(KuduClient* client,
-                                const std::string& table_name,
+  Status IsAlterTableInProgress(const std::string& table_name,
                                 const MonoTime& deadline,
                                 bool *alter_in_progress);
 
-  Status WaitForAlterTableToFinish(KuduClient* client,
-                                   const std::string& alter_name,
+  Status WaitForAlterTableToFinish(const std::string& alter_name,
                                    const MonoTime& deadline);
 
-  Status GetTableSchema(KuduClient* client,
-                        const std::string& table_name,
+  Status GetTableSchema(const std::string& table_name,
                         const MonoTime& deadline,
                         KuduSchema* schema,
                         PartitionSchema* partition_schema,
                         std::string* table_id);
+
+  Status ListTabletServers(std::vector<KuduTabletServer*>* tablet_servers,
+                           const MonoTime& deadline);
+
+  Status ListTables(std::vector<std::string>* tables,
+                    const std::string& filter,
+                    const MonoTime& deadline);
 
   Status InitLocalHostNames();
 
@@ -138,8 +136,7 @@ class KuduClient::Data {
   // Invokes 'cb' with the appropriate status when finished.
   //
   // Works with both a distributed and non-distributed configuration.
-  void SetMasterServerProxyAsync(KuduClient* client,
-                                 const MonoTime& deadline,
+  void SetMasterServerProxyAsync(const MonoTime& deadline,
                                  const StatusCallback& cb);
 
   // Synchronous version of SetMasterServerProxyAsync method above.
@@ -149,8 +146,7 @@ class KuduClient::Data {
   //
   // TODO (KUDU-492): Get rid of this method and re-factor the client
   // to lazily initialize 'master_proxy_'.
-  Status SetMasterServerProxy(KuduClient* client,
-                              const MonoTime& deadline);
+  Status SetMasterServerProxy(const MonoTime& deadline);
 
   std::shared_ptr<master::MasterServiceProxy> master_proxy() const;
 
@@ -177,7 +173,7 @@ class KuduClient::Data {
   template<class ReqClass, class RespClass>
   Status SyncLeaderMasterRpc(
       const MonoTime& deadline,
-      KuduClient* client,
+      KuduClient::Data* client,
       const ReqClass& req,
       RespClass* resp,
       int* num_attempts,
@@ -185,6 +181,18 @@ class KuduClient::Data {
       const boost::function<Status(master::MasterServiceProxy*,
                                    const ReqClass&, RespClass*,
                                    rpc::RpcController*)>& func);
+
+  bool IsMultiMaster() const {
+    return master_server_addrs_.size() > 1;
+  }
+
+  const MonoDelta& default_admin_operation_timeout() const {
+    return default_admin_operation_timeout_;
+  }
+
+  const MonoDelta& default_rpc_timeout() const {
+    return default_rpc_timeout_;
+  }
 
   std::shared_ptr<rpc::Messenger> messenger_;
   gscoped_ptr<DnsResolver> dns_resolver_;

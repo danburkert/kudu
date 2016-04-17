@@ -29,7 +29,17 @@ namespace client {
 class KuduClientBuilder::Data {
  public:
   Data();
-  ~Data();
+  ~Data() = default;
+
+  void clear_master_server_addrs();
+
+  void add_master_server_addr(const std::string& addr);
+
+  void default_admin_operation_timeout(const MonoDelta& timeout);
+
+  void default_rpc_timeout(const MonoDelta& timeout);
+
+  Status Build(sp::shared_ptr<KuduClient>* client);
 
   std::vector<std::string> master_server_addrs_;
   MonoDelta default_admin_operation_timeout_;

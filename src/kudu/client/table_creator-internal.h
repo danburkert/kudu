@@ -29,7 +29,7 @@ namespace client {
 
 class KuduTableCreator::Data {
  public:
-  explicit Data(KuduClient* client);
+  explicit Data(KuduClient::Data* client);
   ~Data();
 
   void add_hash_partitions(const std::vector<std::string>& columns,
@@ -40,7 +40,7 @@ class KuduTableCreator::Data {
   // Creates the table.
   Status Create();
 
-  KuduClient* client_;
+  KuduClient::Data* client_;
 
   std::string table_name_;
 
