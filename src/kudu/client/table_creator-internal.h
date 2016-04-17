@@ -32,6 +32,14 @@ class KuduTableCreator::Data {
   explicit Data(KuduClient* client);
   ~Data();
 
+  void add_hash_partitions(const std::vector<std::string>& columns,
+                           int32_t num_buckets, int32_t seed);
+
+  void set_range_partition_columns(const std::vector<std::string>& columns);
+
+  // Creates the table.
+  Status Create();
+
   KuduClient* client_;
 
   std::string table_name_;

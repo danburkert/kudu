@@ -441,25 +441,13 @@ KuduTableCreator& KuduTableCreator::add_hash_partitions(const std::vector<std::s
 
 KuduTableCreator& KuduTableCreator::add_hash_partitions(const std::vector<std::string>& columns,
                                                         int32_t num_buckets, int32_t seed) {
-  PartitionSchemaPB::HashBucketSchemaPB* bucket_schema =
-    data_->partition_schema_.add_hash_bucket_schemas();
-  for (const string& col_name : columns) {
-    bucket_schema->add_columns()->set_name(col_name);
-  }
-  bucket_schema->set_num_buckets(num_buckets);
-  bucket_schema->set_seed(seed);
+  data_->add_hash_partitions(columns, num_buckets, seed);
   return *this;
 }
 
 KuduTableCreator& KuduTableCreator::set_range_partition_columns(
     const std::vector<std::string>& columns) {
-  PartitionSchemaPB::RangeSchemaPB* range_schema =
-    data_->partition_schema_.mutable_range_schema();
-  range_schema->Clear();
-  for (const string& col_name : columns) {
-    range_schema->add_columns()->set_name(col_name);
-  }
-
+  data_->set_range_partition_columns(columns);
   return *this;
 }
 
@@ -489,51 +477,7 @@ KuduTableCreator& KuduTableCreator::wait(bool wait) {
 }
 
 Status KuduTableCreator::Create() {
-  if (!data_->table_name_.length()) {
-    return Status::InvalidArgument("Missing table name");
-  }
-  if (!data_->schema_) {
-    return Status::InvalidArgument("Missing schema");
-  }
-
-  // Build request.
-  CreateTableRequestPB req;
-  req.set_name(data_->table_name_);
-  if (data_->num_replicas_ >= 1) {
-    req.set_num_replicas(data_->num_replicas_);
-  }
-  RETURN_NOT_OK_PREPEND(SchemaToPB(*data_->schema_->schema_, req.mutable_schema()),
-                        "Invalid schema");
-
-  RowOperationsPBEncoder encoder(req.mutable_split_rows());
-
-  for (const KuduPartialRow* row : data_->split_rows_) {
-    encoder.Add(RowOperationsPB::SPLIT_ROW, *row);
-  }
-  req.mutable_partition_schema()->CopyFrom(data_->partition_schema_);
-
-  MonoTime deadline = MonoTime::Now(MonoTime::FINE);
-  if (data_->timeout_.Initialized()) {
-    deadline.AddDelta(data_->timeout_);
-  } else {
-    deadline.AddDelta(data_->client_->default_admin_operation_timeout());
-  }
-
-  RETURN_NOT_OK_PREPEND(data_->client_->data_->CreateTable(data_->client_,
-                                                           req,
-                                                           *data_->schema_,
-                                                           deadline),
-                        strings::Substitute("Error creating table $0 on the master",
-                                            data_->table_name_));
-
-  // Spin until the table is fully created, if requested.
-  if (data_->wait_) {
-    RETURN_NOT_OK(data_->client_->data_->WaitForCreateTableToFinish(data_->client_,
-                                                                    data_->table_name_,
-                                                                    deadline));
-  }
-
-  return Status::OK();
+  return data_->Create();
 }
 
 ////////////////////////////////////////////////////////////
