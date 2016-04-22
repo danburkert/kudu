@@ -357,6 +357,22 @@ class KUDU_EXPORT KuduTableCreator {
   // Optional.
   KuduTableCreator& split_rows(const std::vector<const KuduPartialRow*>& split_rows);
 
+  // Add a partition range bound to the table with an inclusive lower bound and
+  // exclusive upper bound.
+  //
+  // The table creator takes ownership of the rows. If either row is empty, then
+  // that end of the range will be unbounded. If a range column is missing a
+  // value, the logical minimum value for that column type will be used as the
+  // default.
+  //
+  // Multiple range bounds may be added, but they must not overlap. All split
+  // rows must fall in one of the range bounds. The lower bound must be less
+  // than the upper bound.
+  //
+  // If not provided, the table's range will be unbounded.
+  KuduTableCreator& add_range_bound(KuduPartialRow* lower_bound,
+                                    KuduPartialRow* upper_bound);
+
   // Sets the number of replicas for each tablet in the table.
   // This should be an odd number. Optional.
   //

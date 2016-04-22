@@ -20,8 +20,9 @@
 #include <boost/bind.hpp>
 #include <glog/logging.h>
 
-#include "kudu/client/client.h"
+#include "kudu/client/callbacks.h"
 #include "kudu/client/client-internal.h"
+#include "kudu/client/client.h"
 #include "kudu/common/schema.h"
 #include "kudu/common/wire_protocol.h"
 #include "kudu/gutil/map-util.h"
@@ -317,7 +318,8 @@ class LookupRpc : public Rpc {
             string partition_key,
             scoped_refptr<RemoteTablet>* remote_tablet,
             const MonoTime& deadline,
-            const shared_ptr<Messenger>& messenger);
+            const shared_ptr<Messenger>& messenger,
+            bool is_exact_lookup);
   virtual ~LookupRpc();
   virtual void SendRpc() OVERRIDE;
   virtual string ToString() const OVERRIDE;
@@ -325,6 +327,8 @@ class LookupRpc : public Rpc {
   const GetTableLocationsResponsePB& resp() const { return resp_; }
   const string& table_name() const { return table_->name(); }
   const string& table_id() const { return table_->id(); }
+  const string& partition_key() const { return partition_key_; }
+  bool is_exact_lookup() const { return is_exact_lookup_; }
 
  private:
   virtual void SendRpcCb(const Status& status) OVERRIDE;
@@ -367,6 +371,11 @@ class LookupRpc : public Rpc {
 
   // Whether this lookup has acquired a master lookup permit.
   bool has_permit_;
+
+  // If true, this lookup is for an exact tablet match with the requested
+  // partition key. If false, the next tablet after the partition key should be
+  // returned if the partition key falls in a non-covered partition range.
+  bool is_exact_lookup_;
 };
 
 LookupRpc::LookupRpc(const scoped_refptr<MetaCache>& meta_cache,
@@ -374,14 +383,16 @@ LookupRpc::LookupRpc(const scoped_refptr<MetaCache>& meta_cache,
                      string partition_key,
                      scoped_refptr<RemoteTablet>* remote_tablet,
                      const MonoTime& deadline,
-                     const shared_ptr<Messenger>& messenger)
+                     const shared_ptr<Messenger>& messenger,
+                     bool is_exact_lookup)
     : Rpc(deadline, messenger),
       meta_cache_(meta_cache),
       user_cb_(std::move(user_cb)),
       table_(table),
       partition_key_(std::move(partition_key)),
       remote_tablet_(remote_tablet),
-      has_permit_(false) {
+      has_permit_(false),
+      is_exact_lookup_(is_exact_lookup) {
   DCHECK(deadline.Initialized());
 }
 
@@ -529,17 +540,11 @@ void LookupRpc::SendRpcCb(const Status& status) {
     }
   }
 
-  // Finally, ensure that there were tablet replicas found. If not, consider
-  // that an error.
-  if (new_status.ok() && resp_.tablet_locations_size() == 0) {
-    new_status = Status::NotFound("No such tablet found");
-  }
-
   if (new_status.ok()) {
-    const scoped_refptr<RemoteTablet>& result =
-        meta_cache_->ProcessLookupResponse(*this);
+    scoped_refptr<RemoteTablet> result;
+    new_status = meta_cache_->ProcessLookupResponse(*this, &result);
     if (remote_tablet_) {
-      *remote_tablet_ = result;
+      remote_tablet_->swap(result);
     }
   } else {
     new_status = new_status.CloneAndPrepend(Substitute("$0 failed", ToString()));
@@ -548,7 +553,8 @@ void LookupRpc::SendRpcCb(const Status& status) {
   user_cb_.Run(new_status);
 }
 
-const scoped_refptr<RemoteTablet>& MetaCache::ProcessLookupResponse(const LookupRpc& rpc) {
+Status MetaCache::ProcessLookupResponse(const LookupRpc& rpc,
+                                        scoped_refptr<RemoteTablet>* remote_tablet) {
   VLOG(2) << "Processing master response for " << rpc.ToString()
           << ". Response: " << rpc.resp().ShortDebugString();
 
@@ -569,14 +575,13 @@ const scoped_refptr<RemoteTablet>& MetaCache::ProcessLookupResponse(const Lookup
       DCHECK_EQ(loc.partition().partition_key_start(), remote->partition().partition_key_start());
       DCHECK_EQ(loc.partition().partition_key_end(), remote->partition().partition_key_end());
 
-      VLOG(3) << "Refreshing tablet " << tablet_id << ": "
-              << loc.ShortDebugString();
+      VLOG(3) << "Refreshing tablet " << tablet_id << ": " << loc.ShortDebugString();
       remote->Refresh(ts_cache_, loc.replicas());
       continue;
     }
 
-    VLOG(3) << "Caching tablet " << tablet_id << " for (" << rpc.table_name()
-            << "): " << loc.ShortDebugString();
+    VLOG(3) << "Caching tablet " << tablet_id << " for (" << rpc.table_name() << "): "
+            << loc.ShortDebugString();
 
     Partition partition;
     Partition::FromPB(loc.partition(), &partition);
@@ -585,10 +590,47 @@ const scoped_refptr<RemoteTablet>& MetaCache::ProcessLookupResponse(const Lookup
 
     InsertOrDie(&tablets_by_id_, tablet_id, remote);
     InsertOrDie(&tablets_by_key, partition.partition_key_start(), remote);
+
+    // TODO(KUDU-1421): Once removing partition ranges is supported, we should
+    // inspect the tablet locations for any non-covered ranges. Cached tablets
+    // falling in non-covered ranges should be removed.
   }
 
-  // Always return the first tablet.
-  return FindOrDie(tablets_by_id_, rpc.resp().tablet_locations(0).tablet_id());
+  // Find the requested tablet in the returned tablet locations. In a typical
+  // lookup, the first tablet location contains the requested tablet. If the
+  // partition key falls in a non-covered partition key range, however, the
+  // response may be empty, may contain a tablet which covers a range before the
+  // requested partition key, or may start with a tablet which comes after the
+  // requested partition key.
+
+  if (rpc.resp().tablet_locations().empty()) {
+    // The table has no tablets. This could also indicate that the partition
+    // key range in the GetTableLocationsRequestPB falls before all tablets, but
+    // since we don't currently ever set an upper bound that is impossible.
+    return Status::NotFound("No tablet covering the requested range partition");
+  }
+
+  const TabletLocationsPB& tablet0 = rpc.resp().tablet_locations(0);
+  if (!tablet0.partition().partition_key_end().empty() &&
+      tablet0.partition().partition_key_end() <= rpc.partition_key()) {
+    // The partition key falls in a non-covered range, and the previous tablet
+    // is the first returned location.
+
+    if (rpc.is_exact_lookup() || rpc.resp().tablet_locations().size() <= 1) {
+      return Status::NotFound("No tablet covering the requested range partition");
+    }
+    *remote_tablet = FindOrDie(tablets_by_id_, rpc.resp().tablet_locations(1).tablet_id());
+  } else if (tablet0.partition().partition_key_start() > rpc.partition_key()) {
+    // The partition key falls in a non-covered range, and there is no
+    // previous tablet.
+    if (rpc.is_exact_lookup()) {
+      return Status::NotFound("No tablet covering the requested range partition");
+    }
+    *remote_tablet = FindOrDie(tablets_by_id_, tablet0.tablet_id());
+  } else {
+    *remote_tablet = FindOrDie(tablets_by_id_, tablet0.tablet_id());
+  }
+  return Status::OK();
 }
 
 bool MetaCache::LookupTabletByKeyFastPath(const KuduTable* table,
@@ -633,7 +675,24 @@ void MetaCache::LookupTabletByKey(const KuduTable* table,
                                  partition_key,
                                  remote_tablet,
                                  deadline,
-                                 client_->data_->messenger_);
+                                 client_->data_->messenger_,
+                                 true);
+  rpc->SendRpc();
+}
+
+void MetaCache::LookupTabletByKeyOrNext(const KuduTable* table,
+                                        const string& partition_key,
+                                        const MonoTime& deadline,
+                                        scoped_refptr<RemoteTablet>* remote_tablet,
+                                        const StatusCallback& callback) {
+  LookupRpc* rpc = new LookupRpc(this,
+                                 callback,
+                                 table,
+                                 partition_key,
+                                 remote_tablet,
+                                 deadline,
+                                 client_->data_->messenger_,
+                                 false);
   rpc->SendRpc();
 }
 
