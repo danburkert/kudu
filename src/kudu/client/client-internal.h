@@ -48,10 +48,12 @@ class RpcController;
 
 namespace client {
 
-class KuduClient::Data : public std::enable_shared_from_this<KuduClient::Data> {
+namespace internal {
+
+class Client : public std::enable_shared_from_this<Client> {
  public:
-  Data();
-  ~Data();
+  Client();
+  ~Client();
 
   // Selects a TS replica from the given RemoteTablet subject
   // to liveness and the provided selection criteria and blacklist.
@@ -62,7 +64,7 @@ class KuduClient::Data : public std::enable_shared_from_this<KuduClient::Data> {
   // criteria, but are possibly filtered by the blacklist. This is useful for implementing
   // retry logic.
   Status GetTabletServer(const scoped_refptr<internal::RemoteTablet>& rt,
-                         ReplicaSelection selection,
+                         KuduClient::ReplicaSelection selection,
                          const std::set<std::string>& blacklist,
                          std::vector<internal::RemoteTabletServer*>* candidates,
                          internal::RemoteTabletServer** ts);
@@ -116,7 +118,7 @@ class KuduClient::Data : public std::enable_shared_from_this<KuduClient::Data> {
   // Returns NULL if there are no valid tablet servers.
   internal::RemoteTabletServer* SelectTServer(
       const scoped_refptr<internal::RemoteTablet>& rt,
-      const ReplicaSelection selection,
+      const KuduClient::ReplicaSelection selection,
       const std::set<std::string>& blacklist,
       std::vector<internal::RemoteTabletServer*>* candidates) const;
 
@@ -173,7 +175,7 @@ class KuduClient::Data : public std::enable_shared_from_this<KuduClient::Data> {
   template<class ReqClass, class RespClass>
   Status SyncLeaderMasterRpc(
       const MonoTime& deadline,
-      KuduClient::Data* client,
+      Client* client,
       const ReqClass& req,
       RespClass* resp,
       int* num_attempts,
@@ -224,13 +226,13 @@ class KuduClient::Data : public std::enable_shared_from_this<KuduClient::Data> {
   // Protects 'leader_master_rpc_', 'leader_master_hostport_',
   // and master_proxy_
   //
-  // See: KuduClient::Data::SetMasterServerProxyAsync for a more
+  // See: Client::SetMasterServerProxyAsync for a more
   // in-depth explanation of why this is needed and how it works.
   mutable simple_spinlock leader_master_lock_;
 
   AtomicInt<uint64_t> latest_observed_timestamp_;
 
-  DISALLOW_COPY_AND_ASSIGN(Data);
+  DISALLOW_COPY_AND_ASSIGN(Client);
 };
 
 // Retry helper, takes a function like: Status funcName(const MonoTime& deadline, bool *retry, ...)
@@ -243,6 +245,7 @@ Status RetryFunc(const MonoTime& deadline,
                  const std::string& timeout_msg,
                  const boost::function<Status(const MonoTime&, bool*)>& func);
 
+} // namespace internal
 } // namespace client
 } // namespace kudu
 

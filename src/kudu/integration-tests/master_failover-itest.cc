@@ -33,7 +33,7 @@
 namespace kudu {
 
 // Note: this test needs to be in the client namespace in order for
-// KuduClient::Data class methods to be visible via FRIEND_TEST macro.
+// internal::Client class methods to be visible via FRIEND_TEST macro.
 namespace client {
 
 const int kNumTabletServerReplicas = 3;

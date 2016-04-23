@@ -56,7 +56,6 @@ class TSInfoPB;
 namespace client {
 
 class ClientTest_TestMasterLookupPermits_Test;
-class KuduClient;
 class KuduTable;
 
 namespace internal {
@@ -73,7 +72,7 @@ class RemoteTabletServer {
   // Initialize the RPC proxy to this tablet server, if it is not already set up.
   // This will involve a DNS lookup if there is not already an active proxy.
   // If there is an active proxy, does nothing.
-  void InitProxy(KuduClient::Data* client, const StatusCallback& cb);
+  void InitProxy(Client* client, const StatusCallback& cb);
 
   // Update information from the given pb.
   // Requires that 'pb''s UUID matches this server.
@@ -94,7 +93,7 @@ class RemoteTabletServer {
   // Internal callback for DNS resolution.
   void DnsResolutionFinished(const HostPort& hp,
                              std::vector<Sockaddr>* addrs,
-                             KuduClient::Data* client,
+                             Client* client,
                              const StatusCallback& user_callback,
                              const Status &result_status);
 
@@ -206,7 +205,7 @@ class RemoteTablet : public RefCountedThreadSafe<RemoteTablet> {
 class MetaCache : public RefCountedThreadSafe<MetaCache> {
  public:
   // The passed 'client' object must remain valid as long as MetaCache is alive.
-  explicit MetaCache(KuduClient::Data* client);
+  explicit MetaCache(Client* client);
   ~MetaCache();
 
   // Look up which tablet hosts the given partition key for a table. When it is
@@ -258,7 +257,7 @@ class MetaCache : public RefCountedThreadSafe<MetaCache> {
   // NOTE: Must be called with lock_ held.
   void UpdateTabletServer(const master::TSInfoPB& pb);
 
-  KuduClient::Data* client_;
+  Client* client_;
 
   rw_spinlock lock_;
 

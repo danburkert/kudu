@@ -39,6 +39,7 @@ class TsAdminClient;
 namespace client {
 
 namespace internal {
+class Client;
 class GetTableSchemaRpc;
 class LookupRpc;
 class WriteRpc;
@@ -327,7 +328,11 @@ class KUDU_EXPORT KuduSchema {
   Status FindColumn(const Slice column_name, size_t* idx) const;
 
  private:
-  friend class KuduClient;
+  friend class internal::Client;
+  friend class internal::GetTableSchemaRpc;
+  friend class internal::LookupRpc;
+  friend class internal::WriteRpc;
+  friend class kudu::tools::TsAdminClient;
   friend class KuduScanner;
   friend class KuduScanToken;
   friend class KuduScanTokenBuilder;
@@ -336,10 +341,6 @@ class KUDU_EXPORT KuduSchema {
   friend class KuduTableCreator;
   friend class KuduWriteOperation;
   friend class ScanConfiguration;
-  friend class internal::GetTableSchemaRpc;
-  friend class internal::LookupRpc;
-  friend class internal::WriteRpc;
-  friend class kudu::tools::TsAdminClient;
 
   friend KuduSchema KuduSchemaFromSchema(const Schema& schema);
 

@@ -67,7 +67,7 @@ RemoteTabletServer::RemoteTabletServer(const master::TSInfoPB& pb)
 
 void RemoteTabletServer::DnsResolutionFinished(const HostPort& hp,
                                                vector<Sockaddr>* addrs,
-                                               KuduClient::Data* client,
+                                               Client* client,
                                                const StatusCallback& user_callback,
                                                const Status &result_status) {
   gscoped_ptr<vector<Sockaddr> > scoped_addrs(addrs);
@@ -94,7 +94,7 @@ void RemoteTabletServer::DnsResolutionFinished(const HostPort& hp,
   user_callback.Run(s);
 }
 
-void RemoteTabletServer::InitProxy(KuduClient::Data* client, const StatusCallback& cb) {
+void RemoteTabletServer::InitProxy(Client* client, const StatusCallback& cb) {
   HostPort hp;
   {
     unique_lock<simple_spinlock> l(&lock_);
@@ -284,7 +284,7 @@ std::string RemoteTablet::ReplicasAsStringUnlocked() const {
 
 ////////////////////////////////////////////////////////////
 
-MetaCache::MetaCache(KuduClient::Data* client)
+MetaCache::MetaCache(Client* client)
   : client_(client),
     master_lookup_sem_(50) {
 }
@@ -432,7 +432,7 @@ void LookupRpc::SendRpc() {
   // The end partition key is left unset intentionally so that we'll prefetch
   // some additional tablets.
 
-  // See KuduClient::Data::SyncLeaderMasterRpc().
+  // See Client::SyncLeaderMasterRpc().
   MonoTime now = MonoTime::Now(MonoTime::FINE);
   if (retrier().deadline().ComesBefore(now)) {
     SendRpcCb(Status::TimedOut("timed out after deadline expired"));

@@ -18,26 +18,27 @@
 #define KUDU_CLIENT_TABLE_INTERNAL_H
 
 #include <string>
+#include <memory>
 
+#include "kudu/client/schema.h"
 #include "kudu/common/partition.h"
-#include "kudu/client/client.h"
 
 namespace kudu {
-
 namespace client {
+namespace internal {
 
-class KuduTable::Data {
+class Table {
  public:
-  Data(sp::shared_ptr<KuduClient> client,
-       std::string name,
-       std::string table_id,
-       const KuduSchema& schema,
-       PartitionSchema partition_schema);
-  ~Data();
+  Table(std::shared_ptr<Client> client,
+        std::string name,
+        std::string table_id,
+        const KuduSchema& schema,
+        PartitionSchema partition_schema);
+  ~Table();
 
   Status Open();
 
-  sp::shared_ptr<KuduClient> client_;
+  std::shared_ptr<Client> client_;
 
   std::string name_;
   const std::string id_;
@@ -48,9 +49,10 @@ class KuduTable::Data {
   const KuduSchema schema_;
   const PartitionSchema partition_schema_;
 
-  DISALLOW_COPY_AND_ASSIGN(Data);
+  DISALLOW_COPY_AND_ASSIGN(Table);
 };
 
+} // namespace internal
 } // namespace client
 } // namespace kudu
 

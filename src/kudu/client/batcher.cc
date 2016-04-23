@@ -500,7 +500,7 @@ void WriteRpc::SendRpcCb(const Status& status) {
   delete this;
 }
 
-Batcher::Batcher(KuduClient::Data* client,
+Batcher::Batcher(Client* client,
                  ErrorCollector* error_collector,
                  const shared_ptr<KuduSession::Data>& session,
                  kudu::client::KuduSession::ExternalConsistencyMode consistency_mode)

@@ -220,7 +220,7 @@ Status KuduClientBuilder::Build(shared_ptr<KuduClient>* client) {
 ////////////////////////////////////////////////////////////
 
 KuduClient::KuduClient()
-  : data_(new shared_ptr<KuduClient::Data>(new KuduClient::Data())) {
+  : data_(new shared_ptr<internal::Client>(new internal::Client())) {
 }
 
 KuduClient::~KuduClient() {
@@ -311,7 +311,7 @@ Status KuduClient::OpenTable(const string& table_name,
   // instances.
   shared_ptr<KuduTable> ret(new KuduTable(shared_from_this(), table_name, table_id,
                                           schema, partition_schema));
-  RETURN_NOT_OK(ret->data_->Open());
+  RETURN_NOT_OK(ret->data_->get()->Open());
   table->swap(ret);
 
   return Status::OK();
@@ -349,7 +349,7 @@ void KuduClient::SetLatestObservedTimestamp(uint64_t ht_timestamp) {
 // KuduTableCreator
 ////////////////////////////////////////////////////////////
 
-KuduTableCreator::KuduTableCreator(KuduClient::Data* client)
+KuduTableCreator::KuduTableCreator(internal::Client* client)
   : data_(new KuduTableCreator::Data(client)) {
 }
 
@@ -422,7 +422,7 @@ KuduTable::KuduTable(const shared_ptr<KuduClient>& client,
                      const string& table_id,
                      const KuduSchema& schema,
                      const PartitionSchema& partition_schema)
-  : data_(new KuduTable::Data(client, name, table_id, schema, partition_schema)) {
+  : data_(new shared_ptr<internal::Table>(new internal::Table(*client->data_, name, table_id, schema, partition_schema))) {
 }
 
 KuduTable::~KuduTable() {
@@ -430,15 +430,15 @@ KuduTable::~KuduTable() {
 }
 
 const string& KuduTable::name() const {
-  return data_->name_;
+  return data_->get()->name_;
 }
 
 const string& KuduTable::id() const {
-  return data_->id_;
+  return data_->get()->id_;
 }
 
 const KuduSchema& KuduTable::schema() const {
-  return data_->schema_;
+  return data_->get()->schema_;
 }
 
 KuduInsert* KuduTable::NewInsert() {
@@ -454,18 +454,19 @@ KuduDelete* KuduTable::NewDelete() {
 }
 
 KuduClient* KuduTable::client() const {
-  return data_->client_.get();
+  // TODO: add back KuduClient::Data with an internal KuduClient
+  return nullptr;
 }
 
 const PartitionSchema& KuduTable::partition_schema() const {
-  return data_->partition_schema_;
+  return data_->get()->partition_schema_;
 }
 
 KuduPredicate* KuduTable::NewComparisonPredicate(const Slice& col_name,
                                                  KuduPredicate::ComparisonOp op,
                                                  KuduValue* value) {
   StringPiece name_sp(reinterpret_cast<const char*>(col_name.data()), col_name.size());
-  const Schema* s = data_->schema_.schema_;
+  const Schema* s = data_->get()->schema_.schema_;
   int col_idx = s->find_column(name_sp);
   if (col_idx == Schema::kColumnNotFound) {
     // Since this function doesn't return an error, instead we create a special

@@ -163,8 +163,8 @@ TEST(ClientUnitTest, TestRetryFunc) {
   MonoTime deadline = MonoTime::Now(MonoTime::FINE);
   deadline.AddDelta(MonoDelta::FromMilliseconds(100));
   int counter = 0;
-  Status s = RetryFunc(deadline, "retrying test func", "timed out",
-                       boost::bind(TestFunc, _1, _2, &counter));
+  Status s = internal::RetryFunc(deadline, "retrying test func", "timed out",
+                                 boost::bind(TestFunc, _1, _2, &counter));
   ASSERT_TRUE(s.IsTimedOut());
   ASSERT_GT(counter, 5);
   ASSERT_LT(counter, 20);

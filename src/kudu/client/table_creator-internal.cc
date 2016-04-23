@@ -37,7 +37,7 @@ using master::CreateTableResponsePB;
 
 namespace client {
 
-KuduTableCreator::Data::Data(KuduClient::Data* client)
+KuduTableCreator::Data::Data(internal::Client* client)
   : client_(client),
     schema_(nullptr),
     num_replicas_(0),

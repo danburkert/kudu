@@ -66,11 +66,13 @@ class KuduWriteOperation;
 
 namespace internal {
 class Batcher;
+class Client;
 class GetTableSchemaRpc;
 class LookupRpc;
 class MetaCache;
 class RemoteTablet;
 class RemoteTabletServer;
+class Table;
 class WriteRpc;
 } // namespace internal
 
@@ -270,8 +272,6 @@ class KUDU_EXPORT KuduClient : public sp::enable_shared_from_this<KuduClient> {
   void SetLatestObservedTimestamp(uint64_t ht_timestamp);
 
  private:
-  class KUDU_NO_EXPORT Data;
-
   friend class internal::Batcher;
   friend class internal::GetTableSchemaRpc;
   friend class internal::LookupRpc;
@@ -300,7 +300,7 @@ class KUDU_EXPORT KuduClient : public sp::enable_shared_from_this<KuduClient> {
   KuduClient();
 
   // Owned.
-  std::shared_ptr<Data>* data_;
+  std::shared_ptr<internal::Client>* data_;
 
   DISALLOW_COPY_AND_ASSIGN(KuduClient);
 };
@@ -391,8 +391,9 @@ class KUDU_EXPORT KuduTableCreator {
   class KUDU_NO_EXPORT Data;
 
   friend class KuduClient;
+  friend class internal::Client;
 
-  explicit KuduTableCreator(KuduClient::Data* client);
+  explicit KuduTableCreator(internal::Client* client);
 
   // Owned.
   Data* data_;
@@ -451,8 +452,6 @@ class KUDU_EXPORT KuduTable : public sp::enable_shared_from_this<KuduTable> {
   const PartitionSchema& partition_schema() const;
 
  private:
-  class KUDU_NO_EXPORT Data;
-
   friend class KuduClient;
 
   KuduTable(const sp::shared_ptr<KuduClient>& client,
@@ -462,7 +461,7 @@ class KUDU_EXPORT KuduTable : public sp::enable_shared_from_this<KuduTable> {
             const PartitionSchema& partition_schema);
 
   // Owned.
-  Data* data_;
+  std::shared_ptr<internal::Table>* data_;
 
   DISALLOW_COPY_AND_ASSIGN(KuduTable);
 };
@@ -823,8 +822,8 @@ class KUDU_EXPORT KuduSession : public sp::enable_shared_from_this<KuduSession> 
  private:
   class KUDU_NO_EXPORT Data;
 
-  friend class KuduClient;
   friend class internal::Batcher;
+  friend class KuduClient;
   explicit KuduSession(const sp::shared_ptr<KuduClient>& client);
 
   // Owned.
@@ -1245,7 +1244,7 @@ class KUDU_EXPORT KuduTabletServer {
  private:
   class KUDU_NO_EXPORT Data;
 
-  friend class KuduClient;
+  friend class internal::Client;
   friend class KuduScanner;
   friend class KuduScanTokenBuilder;
 
