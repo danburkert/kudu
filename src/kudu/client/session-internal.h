@@ -24,18 +24,15 @@
 #include "kudu/util/locks.h"
 
 namespace kudu {
-
 namespace client {
-
 namespace internal {
-class Batcher;
-class ErrorCollector;
-} // internal
 
-class KuduSession::Data : public std::enable_shared_from_this<KuduSession::Data> {
+class ErrorCollector;
+
+class Session : public std::enable_shared_from_this<Session> {
  public:
-  explicit Data(sp::shared_ptr<KuduClient> client);
-  ~Data();
+  explicit Session(std::shared_ptr<Client> client);
+  ~Session();
 
   void Init();
 
@@ -63,7 +60,7 @@ class KuduSession::Data : public std::enable_shared_from_this<KuduSession::Data>
   // Returns Status::IllegalState() if 'force' is false and there are still pending
   // operations. If 'force' is true batcher_ is aborted even if there are pending
   // operations.
-  Status Close(bool force);
+  Status Close(bool force) WARN_UNUSED_RESULT;
 
   // Return true if there are operations which have not yet been delivered to
   // the cluster.
@@ -73,7 +70,7 @@ class KuduSession::Data : public std::enable_shared_from_this<KuduSession::Data>
   int CountBufferedOperations() const;
 
   // The client that this session is associated with.
-  const sp::shared_ptr<KuduClient> client_;
+  const std::shared_ptr<Client> client_;
 
   // Lock protecting internal state.
   // Note that this lock should not be taken if the thread is already holding
@@ -81,10 +78,10 @@ class KuduSession::Data : public std::enable_shared_from_this<KuduSession::Data>
   mutable simple_spinlock lock_;
 
   // Buffer for errors.
-  scoped_refptr<internal::ErrorCollector> error_collector_;
+  scoped_refptr<ErrorCollector> error_collector_;
 
   // The current batcher being prepared.
-  scoped_refptr<internal::Batcher> batcher_;
+  scoped_refptr<Batcher> batcher_;
 
   // Any batchers which have been flushed but not yet finished.
   //
@@ -95,15 +92,16 @@ class KuduSession::Data : public std::enable_shared_from_this<KuduSession::Data>
   // pointers stay valid.
   std::unordered_set<internal::Batcher*> flushed_batchers_;
 
-  FlushMode flush_mode_;
+  KuduSession::FlushMode flush_mode_;
   kudu::client::KuduSession::ExternalConsistencyMode external_consistency_mode_;
 
   // Timeout for the next batch.
   int timeout_ms_;
 
-  DISALLOW_COPY_AND_ASSIGN(Data);
+  DISALLOW_COPY_AND_ASSIGN(Session);
 };
 
+} // internal
 } // namespace client
 } // namespace kudu
 

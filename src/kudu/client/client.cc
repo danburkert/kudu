@@ -102,6 +102,7 @@ namespace client {
 using internal::Batcher;
 using internal::ErrorCollector;
 using internal::MetaCache;
+using internal::Session;
 using sp::shared_ptr;
 
 static const char* kProgName = "kudu_client";
@@ -518,7 +519,7 @@ KuduError::~KuduError() {
 ////////////////////////////////////////////////////////////
 
 KuduSession::KuduSession(const shared_ptr<KuduClient>& client)
-  : data_(new std::shared_ptr<KuduSession::Data>(new KuduSession::Data(client))) {
+  : data_(new std::shared_ptr<internal::Session>(new internal::Session(*client->data_))) {
 }
 
 KuduSession::~KuduSession() {
@@ -579,7 +580,8 @@ void KuduSession::GetPendingErrors(vector<KuduError*>* errors, bool* overflowed)
 }
 
 KuduClient* KuduSession::client() const {
-  return data_->get()->client_.get();
+  // TODO: add back KuduSession::Data with an internal KuduClient
+  return nullptr;
 }
 
 ////////////////////////////////////////////////////////////

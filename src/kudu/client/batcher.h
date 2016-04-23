@@ -35,7 +35,6 @@
 namespace kudu {
 namespace client {
 
-class KuduClient;
 class KuduSession;
 class KuduStatusCallback;
 class KuduWriteOperation;
@@ -46,6 +45,7 @@ struct InFlightOp;
 
 class ErrorCollector;
 class RemoteTablet;
+class Session;
 class WriteRpc;
 
 // A Batcher is the class responsible for collecting row operations, routing them to the
@@ -65,8 +65,8 @@ class Batcher : public RefCountedThreadSafe<Batcher> {
   // Takes a reference on error_collector. Creates a weak_ptr to 'session'.
   Batcher(Client* client,
           ErrorCollector* error_collector,
-          const std::shared_ptr<KuduSession::Data>& session,
-          kudu::client::KuduSession::ExternalConsistencyMode consistency_mode);
+          const std::shared_ptr<Session>& session,
+          KuduSession::ExternalConsistencyMode consistency_mode);
 
   // Abort the current batch. Any writes that were buffered and not yet sent are
   // discarded. Those that were sent may still be delivered.  If there is a pending Flush
@@ -105,7 +105,7 @@ class Batcher : public RefCountedThreadSafe<Batcher> {
 
   // Returns the consistency mode set on the batcher by the session when it was initially
   // created.
-  kudu::client::KuduSession::ExternalConsistencyMode external_consistency_mode() const {
+  KuduSession::ExternalConsistencyMode external_consistency_mode() const {
     return consistency_mode_;
   }
 
@@ -160,11 +160,11 @@ class Batcher : public RefCountedThreadSafe<Batcher> {
   };
   State state_;
 
-  Client* const client_;
-  std::weak_ptr<KuduSession::Data> weak_session_;
+  Client* client_;
+  std::weak_ptr<Session> weak_session_;
 
   // The consistency mode set in the session.
-  kudu::client::KuduSession::ExternalConsistencyMode consistency_mode_;
+  KuduSession::ExternalConsistencyMode consistency_mode_;
 
   // Errors are reported into this error collector.
   scoped_refptr<ErrorCollector> const error_collector_;

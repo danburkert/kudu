@@ -27,31 +27,28 @@
 using std::shared_ptr;
 
 namespace kudu {
-
 namespace client {
+namespace internal {
 
-using internal::Batcher;
-using internal::ErrorCollector;
-
-KuduSession::Data::Data(sp::shared_ptr<KuduClient> client)
+Session::Session(std::shared_ptr<Client> client)
     : client_(std::move(client)),
       error_collector_(new ErrorCollector()),
-      flush_mode_(AUTO_FLUSH_SYNC),
-      external_consistency_mode_(CLIENT_PROPAGATED),
+      flush_mode_(KuduSession::AUTO_FLUSH_SYNC),
+      external_consistency_mode_(KuduSession::CLIENT_PROPAGATED),
       timeout_ms_(-1) {
 }
 
-void KuduSession::Data::Init() {
+void Session::Init() {
   lock_guard<simple_spinlock> l(&lock_);
   CHECK(!batcher_);
   NewBatcher(nullptr);
 }
 
-KuduSession::Data::~Data() {
+Session::~Session() {
 }
 
-Status KuduSession::Data::SetFlushMode(KuduSession::FlushMode m) {
-  if (m == AUTO_FLUSH_BACKGROUND) {
+Status Session::SetFlushMode(KuduSession::FlushMode m) {
+  if (m == KuduSession::AUTO_FLUSH_BACKGROUND) {
     return Status::NotSupported("AUTO_FLUSH_BACKGROUND has not been implemented in the"
         " c++ client (see KUDU-456).");
   }
@@ -64,7 +61,7 @@ Status KuduSession::Data::SetFlushMode(KuduSession::FlushMode m) {
   return Status::OK();
 }
 
-Status KuduSession::Data::SetExternalConsistencyMode(ExternalConsistencyMode m) {
+Status Session::SetExternalConsistencyMode(KuduSession::ExternalConsistencyMode m) {
   if (batcher_->HasPendingOperations()) {
     // TODO: there may be a more reasonable behavior here.
     return Status::IllegalState("Cannot change external consistency mode when writes are buffered");
@@ -74,13 +71,13 @@ Status KuduSession::Data::SetExternalConsistencyMode(ExternalConsistencyMode m) 
   return Status::OK();
 }
 
-void KuduSession::Data::SetTimeoutMillis(int millis) {
+void Session::SetTimeoutMillis(int millis) {
   CHECK_GE(millis, 0);
   timeout_ms_ = millis;
   batcher_->SetTimeoutMillis(millis);
 }
 
-Status KuduSession::Data::Apply(KuduWriteOperation* write_op) {
+Status Session::Apply(KuduWriteOperation* write_op) {
   if (!write_op->row().IsKeySet()) {
     Status status = Status::IllegalState("Key not specified", write_op->ToString());
     error_collector_->AddError(gscoped_ptr<KuduError>(new KuduError(write_op, status)));
@@ -93,22 +90,23 @@ Status KuduSession::Data::Apply(KuduWriteOperation* write_op) {
     return s;
   }
 
-  if (flush_mode_ == AUTO_FLUSH_SYNC) {
+  if (flush_mode_ == KuduSession::AUTO_FLUSH_SYNC) {
     return Flush();
   }
 
   return Status::OK();
 }
 
-Status KuduSession::Data::Flush() {
+Status Session::Flush() {
   Synchronizer s;
   KuduStatusMemberCallback<Synchronizer> ksmcb(&s, &Synchronizer::StatusCB);
   FlushAsync(&ksmcb);
   return s.Wait();
 }
 
-void KuduSession::Data::FlushAsync(KuduStatusCallback* user_callback) {
-  CHECK_NE(flush_mode_, AUTO_FLUSH_BACKGROUND) << "AUTO_FLUSH_BACKGROUND has not been implemented";
+void Session::FlushAsync(KuduStatusCallback* user_callback) {
+  CHECK_NE(flush_mode_, KuduSession::AUTO_FLUSH_BACKGROUND)
+      << "AUTO_FLUSH_BACKGROUND has not been implemented";
 
   // Swap in a new batcher to start building the next batch.
   // Save off the old batcher.
@@ -125,13 +123,13 @@ void KuduSession::Data::FlushAsync(KuduStatusCallback* user_callback) {
   old_batcher->FlushAsync(user_callback);
 }
 
-void KuduSession::Data::NewBatcher(scoped_refptr<Batcher>* old_batcher) {
+void Session::NewBatcher(scoped_refptr<Batcher>* old_batcher) {
   DCHECK(lock_.is_locked());
 
-  shared_ptr<KuduSession::Data> shared = shared_from_this();
+  shared_ptr<Session> shared = shared_from_this();
 
   scoped_refptr<Batcher> batcher(
-    new Batcher(client_->data_->get(), error_collector_.get(), shared_from_this(),
+    new Batcher(client_.get(), error_collector_.get(), shared_from_this(),
                 external_consistency_mode_));
   if (timeout_ms_ != -1) {
     batcher->SetTimeoutMillis(timeout_ms_);
@@ -143,12 +141,12 @@ void KuduSession::Data::NewBatcher(scoped_refptr<Batcher>* old_batcher) {
   }
 }
 
-void KuduSession::Data::FlushFinished(Batcher* batcher) {
+void Session::FlushFinished(Batcher* batcher) {
   lock_guard<simple_spinlock> l(&lock_);
   CHECK_EQ(flushed_batchers_.erase(batcher), 1);
 }
 
-Status KuduSession::Data::Close(bool force) {
+Status Session::Close(bool force) {
   if (batcher_->HasPendingOperations() && !force) {
     return Status::IllegalState("Could not close. There are pending operations.");
   }
@@ -156,7 +154,7 @@ Status KuduSession::Data::Close(bool force) {
   return Status::OK();
 }
 
-bool KuduSession::Data::HasPendingOperations() const {
+bool Session::HasPendingOperations() const {
   lock_guard<simple_spinlock> l(&lock_);
   if (batcher_->HasPendingOperations()) {
     return true;
@@ -169,12 +167,13 @@ bool KuduSession::Data::HasPendingOperations() const {
   return false;
 }
 
-int KuduSession::Data::CountBufferedOperations() const {
+int Session::CountBufferedOperations() const {
   lock_guard<simple_spinlock> l(&lock_);
-  CHECK_EQ(flush_mode_, MANUAL_FLUSH);
+  CHECK_EQ(flush_mode_, KuduSession::MANUAL_FLUSH);
 
   return batcher_->CountBufferedOperations();
 }
 
+} // namespace internal
 } // namespace client
 } // namespace kudu

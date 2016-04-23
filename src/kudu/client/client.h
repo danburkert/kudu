@@ -72,6 +72,7 @@ class LookupRpc;
 class MetaCache;
 class RemoteTablet;
 class RemoteTabletServer;
+class Session;
 class Table;
 class WriteRpc;
 } // namespace internal
@@ -554,7 +555,7 @@ class KUDU_EXPORT KuduError {
   class KUDU_NO_EXPORT Data;
 
   friend class internal::Batcher;
-  friend class KuduSession;
+  friend class internal::Session;
 
   KuduError(KuduWriteOperation* failed_op, const Status& error);
 
@@ -820,14 +821,12 @@ class KUDU_EXPORT KuduSession : public sp::enable_shared_from_this<KuduSession> 
   KuduClient* client() const;
 
  private:
-  class KUDU_NO_EXPORT Data;
-
   friend class internal::Batcher;
   friend class KuduClient;
   explicit KuduSession(const sp::shared_ptr<KuduClient>& client);
 
   // Owned.
-  std::shared_ptr<Data>* data_;
+  std::shared_ptr<internal::Session>* data_;
 
   DISALLOW_COPY_AND_ASSIGN(KuduSession);
 };
