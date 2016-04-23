@@ -24,13 +24,13 @@
 #include "kudu/common/common.pb.h"
 
 namespace kudu {
-
 namespace client {
+namespace internal {
 
-class KuduTableCreator::Data {
+class TableCreator {
  public:
-  explicit Data(internal::Client* client);
-  ~Data();
+  explicit TableCreator(internal::Client* client);
+  ~TableCreator();
 
   void add_hash_partitions(const std::vector<std::string>& columns,
                            int32_t num_buckets, int32_t seed);
@@ -56,9 +56,10 @@ class KuduTableCreator::Data {
 
   bool wait_;
 
-  DISALLOW_COPY_AND_ASSIGN(Data);
+  DISALLOW_COPY_AND_ASSIGN(TableCreator);
 };
 
+} // namespace internal
 } // namespace client
 } // namespace kudu
 

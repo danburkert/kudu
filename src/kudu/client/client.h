@@ -74,6 +74,7 @@ class RemoteTablet;
 class RemoteTabletServer;
 class Session;
 class Table;
+class TableCreator;
 class WriteRpc;
 } // namespace internal
 
@@ -389,15 +390,13 @@ class KUDU_EXPORT KuduTableCreator {
   // returned.
   Status Create();
  private:
-  class KUDU_NO_EXPORT Data;
-
   friend class KuduClient;
   friend class internal::Client;
 
-  explicit KuduTableCreator(internal::Client* client);
+  explicit KuduTableCreator(KuduClient* client);
 
   // Owned.
-  Data* data_;
+  internal::TableCreator* data_;
 
   DISALLOW_COPY_AND_ASSIGN(KuduTableCreator);
 };

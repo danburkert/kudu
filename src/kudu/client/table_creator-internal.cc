@@ -36,19 +36,20 @@ using master::CreateTableRequestPB;
 using master::CreateTableResponsePB;
 
 namespace client {
+namespace internal {
 
-KuduTableCreator::Data::Data(internal::Client* client)
+TableCreator::TableCreator(internal::Client* client)
   : client_(client),
     schema_(nullptr),
     num_replicas_(0),
     wait_(true) {
 }
 
-KuduTableCreator::Data::~Data() {
+TableCreator::~TableCreator() {
   STLDeleteElements(&split_rows_);
 }
 
-void KuduTableCreator::Data::add_hash_partitions(const vector<string>& columns,
+void TableCreator::add_hash_partitions(const vector<string>& columns,
                                                  int32_t num_buckets, int32_t seed) {
   PartitionSchemaPB::HashBucketSchemaPB* bucket_schema =
       partition_schema_.add_hash_bucket_schemas();
@@ -59,7 +60,7 @@ void KuduTableCreator::Data::add_hash_partitions(const vector<string>& columns,
   bucket_schema->set_seed(seed);
 }
 
-void KuduTableCreator::Data::set_range_partition_columns(const vector<string>& columns) {
+void TableCreator::set_range_partition_columns(const vector<string>& columns) {
   PartitionSchemaPB::RangeSchemaPB* range_schema = partition_schema_.mutable_range_schema();
   range_schema->Clear();
   for (const string& col_name : columns) {
@@ -67,7 +68,7 @@ void KuduTableCreator::Data::set_range_partition_columns(const vector<string>& c
   }
 }
 
-Status KuduTableCreator::Data::Create() {
+Status TableCreator::Create() {
   if (!table_name_.length()) {
     return Status::InvalidArgument("Missing table name");
   }
@@ -109,5 +110,6 @@ Status KuduTableCreator::Data::Create() {
   return Status::OK();
 }
 
+} // namespace internal
 } // namespace client
 } // namespace kudu

@@ -229,7 +229,7 @@ KuduClient::~KuduClient() {
 }
 
 KuduTableCreator* KuduClient::NewTableCreator() {
-  return new KuduTableCreator(data_->get());
+  return new KuduTableCreator(this);
 }
 
 Status KuduClient::IsCreateTableInProgress(const string& table_name,
@@ -350,8 +350,8 @@ void KuduClient::SetLatestObservedTimestamp(uint64_t ht_timestamp) {
 // KuduTableCreator
 ////////////////////////////////////////////////////////////
 
-KuduTableCreator::KuduTableCreator(internal::Client* client)
-  : data_(new KuduTableCreator::Data(client)) {
+KuduTableCreator::KuduTableCreator(KuduClient* client)
+  : data_(new internal::TableCreator(client->data_->get())) {
 }
 
 KuduTableCreator::~KuduTableCreator() {
