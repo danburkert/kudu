@@ -42,6 +42,7 @@ namespace internal {
 class Client;
 class GetTableSchemaRpc;
 class LookupRpc;
+class TableAlterer;
 class TableCreator;
 class WriteRpc;
 } // namespace internal
@@ -144,12 +145,10 @@ class KUDU_EXPORT KuduColumnSchema {
   // TODO: Expose default column value and attributes?
 
  private:
+  friend class internal::TableAlterer;
   friend class KuduColumnSpec;
   friend class KuduSchema;
   friend class KuduSchemaBuilder;
-  // KuduTableAlterer::Data needs to be a friend. Friending the parent class
-  // is transitive to nested classes. See http://tiny.cloudera.com/jwtui
-  friend class KuduTableAlterer;
 
   KuduColumnSchema();
 
@@ -236,8 +235,8 @@ class KUDU_EXPORT KuduColumnSpec {
 
  private:
   class KUDU_NO_EXPORT Data;
+  friend class internal::TableAlterer;
   friend class KuduSchemaBuilder;
-  friend class KuduTableAlterer;
 
   // This class should always be owned and deleted by one of its friends,
   // not the user.

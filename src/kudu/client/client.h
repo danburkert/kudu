@@ -74,6 +74,7 @@ class RemoteTablet;
 class RemoteTabletServer;
 class Session;
 class Table;
+class TableAlterer;
 class TableCreator;
 class WriteRpc;
 } // namespace internal
@@ -512,14 +513,13 @@ class KUDU_EXPORT KuduTableAlterer {
   Status Alter();
 
  private:
-  class KUDU_NO_EXPORT Data;
   friend class KuduClient;
 
   KuduTableAlterer(KuduClient* client,
                    const std::string& name);
 
   // Owned.
-  Data* data_;
+  internal::TableAlterer* data_;
 
   DISALLOW_COPY_AND_ASSIGN(KuduTableAlterer);
 };

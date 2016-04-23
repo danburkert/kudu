@@ -588,7 +588,7 @@ KuduClient* KuduSession::client() const {
 // KuduTableAlterer
 ////////////////////////////////////////////////////////////
 KuduTableAlterer::KuduTableAlterer(KuduClient* client, const string& name)
-  : data_(new Data(client, name)) {
+  : data_(new internal::TableAlterer(client->data_->get(), name)) {
 }
 
 KuduTableAlterer::~KuduTableAlterer() {

@@ -21,8 +21,9 @@
 #include <string>
 #include <vector>
 
-#include "kudu/client/client.h"
+#include "kudu/client/client-internal.h"
 #include "kudu/master/master.pb.h"
+#include "kudu/util/monotime.h"
 #include "kudu/util/status.h"
 
 namespace kudu {
@@ -30,13 +31,13 @@ namespace master {
 class AlterTableRequestPB_AlterColumn;
 } // namespace master
 namespace client {
-
 class KuduColumnSpec;
+namespace internal {
 
-class KuduTableAlterer::Data {
+class TableAlterer {
  public:
-  Data(KuduClient* client, std::string name);
-  ~Data();
+  TableAlterer(Client* client, std::string name);
+  ~TableAlterer();
   Status ToRequest(master::AlterTableRequestPB* req);
 
   void RenameTo(const std::string& new_name);
@@ -47,7 +48,7 @@ class KuduTableAlterer::Data {
   void timeout(const MonoDelta& timeout);
   void wait(bool wait);
 
-  KuduClient* const client_;
+  Client* const client_;
   const std::string table_name_;
 
   Status status_;
@@ -55,7 +56,7 @@ class KuduTableAlterer::Data {
   struct Step {
     master::AlterTableRequestPB::StepType step_type;
 
-    // Owned by KuduTableAlterer::Data.
+    // Owned by TableAlterer.
     KuduColumnSpec *spec;
   };
   std::vector<Step> steps_;
@@ -67,9 +68,10 @@ class KuduTableAlterer::Data {
   boost::optional<std::string> rename_to_;
 
  private:
-  DISALLOW_COPY_AND_ASSIGN(Data);
+  DISALLOW_COPY_AND_ASSIGN(TableAlterer);
 };
 
+} // namespace internal
 } // namespace client
 } // namespace kudu
 

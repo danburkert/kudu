@@ -29,23 +29,23 @@ using std::string;
 
 namespace kudu {
 namespace client {
-
 using master::AlterTableRequestPB;
 using master::AlterTableRequestPB_AlterColumn;
+namespace internal {
 
-KuduTableAlterer::Data::Data(KuduClient* client, string name)
+TableAlterer::TableAlterer(Client* client, string name)
     : client_(client),
       table_name_(std::move(name)),
       wait_(true) {
 }
 
-KuduTableAlterer::Data::~Data() {
+TableAlterer::~TableAlterer() {
   for (Step& s : steps_) {
     delete s.spec;
   }
 }
 
-Status KuduTableAlterer::Data::ToRequest(AlterTableRequestPB* req) {
+Status TableAlterer::ToRequest(AlterTableRequestPB* req) {
   if (!status_.ok()) {
     return status_;
   }
@@ -111,30 +111,28 @@ Status KuduTableAlterer::Data::ToRequest(AlterTableRequestPB* req) {
   return Status::OK();
 }
 
-void KuduTableAlterer::Data::RenameTo(const string& new_name) {
+void TableAlterer::RenameTo(const string& new_name) {
   rename_to_ = new_name;
 }
 
-KuduColumnSpec* KuduTableAlterer::Data::AddColumn(const string& name) {
-  Data::Step s = {AlterTableRequestPB::ADD_COLUMN,
-                  new KuduColumnSpec(name)};
+KuduColumnSpec* TableAlterer::AddColumn(const string& name) {
+  TableAlterer::Step s = {AlterTableRequestPB::ADD_COLUMN, new KuduColumnSpec(name)};
   steps_.push_back(s);
   return s.spec;
 }
 
-KuduColumnSpec* KuduTableAlterer::Data::AlterColumn(const string& name) {
-  Data::Step s = {AlterTableRequestPB::ALTER_COLUMN,
-                  new KuduColumnSpec(name)};
+KuduColumnSpec* TableAlterer::AlterColumn(const string& name) {
+  TableAlterer::Step s = {AlterTableRequestPB::ALTER_COLUMN, new KuduColumnSpec(name)};
   steps_.push_back(s);
   return s.spec;
 }
 
-void KuduTableAlterer::Data::DropColumn(const string& name) {
+void TableAlterer::DropColumn(const string& name) {
   Step s = {AlterTableRequestPB::DROP_COLUMN, new KuduColumnSpec(name)};
   steps_.push_back(s);
 }
 
-Status KuduTableAlterer::Data::Alter() {
+Status TableAlterer::Alter() {
   AlterTableRequestPB req;
   RETURN_NOT_OK(ToRequest(&req));
 
@@ -142,22 +140,23 @@ Status KuduTableAlterer::Data::Alter() {
       client_->default_admin_operation_timeout();
   MonoTime deadline = MonoTime::Now(MonoTime::FINE);
   deadline.AddDelta(timeout);
-  RETURN_NOT_OK(client_->data_->get()->AlterTable(req, deadline));
+  RETURN_NOT_OK(client_->AlterTable(req, deadline));
   if (wait_) {
     string alter_name = rename_to_.get_value_or(table_name_);
-    RETURN_NOT_OK(client_->data_->get()->WaitForAlterTableToFinish(alter_name, deadline));
+    RETURN_NOT_OK(client_->WaitForAlterTableToFinish(alter_name, deadline));
   }
 
   return Status::OK();
 }
 
-void KuduTableAlterer::Data::timeout(const MonoDelta& timeout) {
+void TableAlterer::timeout(const MonoDelta& timeout) {
   timeout_ = timeout;
 }
 
-void KuduTableAlterer::Data::wait(bool wait) {
+void TableAlterer::wait(bool wait) {
   wait_ = wait;
 }
 
+} // namespace internal
 } // namespace client
 } // namespace kudu
