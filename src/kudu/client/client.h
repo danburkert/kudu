@@ -72,10 +72,14 @@ class LookupRpc;
 class MetaCache;
 class RemoteTablet;
 class RemoteTabletServer;
+class Scanner;
+class ScanToken;
+class ScanTokenBuilder;
 class Session;
 class Table;
 class TableAlterer;
 class TableCreator;
+class TabletServer;
 class WriteRpc;
 } // namespace internal
 
@@ -281,9 +285,11 @@ class KUDU_EXPORT KuduClient : public sp::enable_shared_from_this<KuduClient> {
   friend class internal::MetaCache;
   friend class internal::RemoteTablet;
   friend class internal::RemoteTabletServer;
+  friend class internal::ScanToken;
   friend class internal::WriteRpc;
   friend class KuduClientBuilder;
   friend class KuduScanner;
+  friend class KuduScanToken;
   friend class KuduScanTokenBuilder;
   friend class KuduSession;
   friend class KuduTable;
@@ -453,7 +459,16 @@ class KUDU_EXPORT KuduTable : public sp::enable_shared_from_this<KuduTable> {
   const PartitionSchema& partition_schema() const;
 
  private:
+  friend class internal::Batcher;
+  friend class internal::WriteRpc;
   friend class KuduClient;
+  friend class KuduScanner;
+  friend class KuduScanTokenBuilder;
+
+  FRIEND_TEST(ClientTest, TestGetTabletServerBlacklist);
+  FRIEND_TEST(ClientTest, TestListTables);
+  FRIEND_TEST(ClientTest, TestReplicatedTabletWritesWithLeaderElection);
+  FRIEND_TEST(ClientTest, TestReplicatedMultiTabletTableFailover);
 
   KuduTable(const sp::shared_ptr<KuduClient>& client,
             const std::string& name,
@@ -893,15 +908,13 @@ class KUDU_EXPORT KuduScanner {
   //
   // This overrides any previous call to SetProjectedColumnNames or
   // SetProjectedColumnIndexes.
-  Status SetProjectedColumnNames(const std::vector<std::string>& col_names)
-    WARN_UNUSED_RESULT;
+  Status SetProjectedColumnNames(const std::vector<std::string>& col_names) WARN_UNUSED_RESULT;
 
   // Set the projection used for this scanner by passing the column indexes to read.
   //
   // This overrides any previous call to SetProjectedColumnNames or
   // SetProjectedColumnIndexes.
-  Status SetProjectedColumnIndexes(const std::vector<int>& col_indexes)
-    WARN_UNUSED_RESULT;
+  Status SetProjectedColumnIndexes(const std::vector<int>& col_indexes) WARN_UNUSED_RESULT;
 
   // DEPRECATED: See SetProjectedColumnNames
   Status SetProjectedColumns(const std::vector<std::string>& col_names) WARN_UNUSED_RESULT;
@@ -1055,16 +1068,17 @@ class KUDU_EXPORT KuduScanner {
   // Returns a string representation of this scan.
   std::string ToString() const;
  private:
-  class KUDU_NO_EXPORT Data;
-
+  friend class internal::ScanToken;
   friend class KuduScanToken;
   FRIEND_TEST(ClientTest, TestScanCloseProxy);
   FRIEND_TEST(ClientTest, TestScanFaultTolerance);
   FRIEND_TEST(ClientTest, TestScanNoBlockCaching);
   FRIEND_TEST(ClientTest, TestScanTimeout);
 
+  explicit KuduScanner(internal::Scanner* data);
+
   // Owned.
-  Data* data_;
+  internal::Scanner* data_;
 
   DISALLOW_COPY_AND_ASSIGN(KuduScanner);
 };
@@ -1116,14 +1130,13 @@ class KUDU_EXPORT KuduScanToken {
                                        KuduScanner** scanner) WARN_UNUSED_RESULT;
 
  private:
-  class KUDU_NO_EXPORT Data;
-
+  friend class internal::ScanTokenBuilder;
   friend class KuduScanTokenBuilder;
 
-  explicit KuduScanToken(Data* data);
+  explicit KuduScanToken(internal::ScanToken* data);
 
   // Owned.
-  Data* data_;
+  internal::ScanToken* data_;
 
   DISALLOW_COPY_AND_ASSIGN(KuduScanToken);
 };
@@ -1218,10 +1231,8 @@ class KUDU_EXPORT KuduScanTokenBuilder {
   // Returns a string representation of this scan.
   std::string ToString() const;
  private:
-  class KUDU_NO_EXPORT Data;
-
   // Owned.
-  Data* data_;
+  internal::ScanTokenBuilder* data_;
 
   DISALLOW_COPY_AND_ASSIGN(KuduScanTokenBuilder);
 };
@@ -1240,16 +1251,14 @@ class KUDU_EXPORT KuduTabletServer {
   const std::string& hostname() const;
 
  private:
-  class KUDU_NO_EXPORT Data;
-
   friend class internal::Client;
-  friend class KuduScanner;
+  friend class internal::Scanner;
   friend class KuduScanTokenBuilder;
 
   KuduTabletServer();
 
   // Owned.
-  Data* data_;
+  internal::TabletServer* data_;
 
   DISALLOW_COPY_AND_ASSIGN(KuduTabletServer);
 };

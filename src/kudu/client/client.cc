@@ -262,11 +262,14 @@ Status KuduClient::GetTableSchema(const string& table_name,
   deadline.AddDelta(default_admin_operation_timeout());
   string table_id_ignored;
   PartitionSchema partition_schema;
-  return data_->get()->GetTableSchema(table_name,
-                                      deadline,
-                                      schema,
-                                      &partition_schema,
-                                      &table_id_ignored);
+  Schema table_schema;
+  RETURN_NOT_OK(data_->get()->GetTableSchema(table_name,
+                                             deadline,
+                                             &table_schema,
+                                             &partition_schema,
+                                             &table_id_ignored));
+  *schema = KuduSchema(table_schema);
+  return Status::OK();
 }
 
 Status KuduClient::ListTabletServers(vector<KuduTabletServer*>* tablet_servers) {
@@ -297,21 +300,24 @@ Status KuduClient::TableExists(const string& table_name, bool* exists) {
 
 Status KuduClient::OpenTable(const string& table_name,
                              shared_ptr<KuduTable>* table) {
-  KuduSchema schema;
+  unique_ptr<Schema> schema(new Schema);
   string table_id;
   PartitionSchema partition_schema;
   MonoTime deadline = MonoTime::Now(MonoTime::FINE);
   deadline.AddDelta(default_admin_operation_timeout());
   RETURN_NOT_OK(data_->get()->GetTableSchema(table_name,
                                              deadline,
-                                             &schema,
+                                             schema.get(),
                                              &partition_schema,
                                              &table_id));
+
+  KuduSchema kudu_schema;
+  kudu_schema.schema_ = schema.release();
 
   // In the future, probably will look up the table in some map to reuse KuduTable
   // instances.
   shared_ptr<KuduTable> ret(new KuduTable(shared_from_this(), table_name, table_id,
-                                          schema, partition_schema));
+                                          kudu_schema, partition_schema));
   RETURN_NOT_OK(ret->data_->get()->Open());
   table->swap(ret);
 
@@ -359,12 +365,12 @@ KuduTableCreator::~KuduTableCreator() {
 }
 
 KuduTableCreator& KuduTableCreator::table_name(const string& name) {
-  data_->table_name_ = name;
+  data_->set_table_name(name);
   return *this;
 }
 
 KuduTableCreator& KuduTableCreator::schema(const KuduSchema* schema) {
-  data_->schema_ = schema;
+  data_->set_schema(schema->schema_);
   return *this;
 }
 
@@ -375,38 +381,49 @@ KuduTableCreator& KuduTableCreator::add_hash_partitions(const std::vector<std::s
 
 KuduTableCreator& KuduTableCreator::add_hash_partitions(const std::vector<std::string>& columns,
                                                         int32_t num_buckets, int32_t seed) {
-  data_->add_hash_partitions(columns, num_buckets, seed);
+  internal::HashPartitionCreator creator = data_->add_hash_partition();
+  for (const std::string& column : columns) {
+    creator.add_column(column);
+  }
+  creator.set_num_hash_buckets(num_buckets);
+  creator.set_seed(seed);
   return *this;
 }
 
 KuduTableCreator& KuduTableCreator::set_range_partition_columns(
     const std::vector<std::string>& columns) {
-  data_->set_range_partition_columns(columns);
+  data_->clear_range_partition_columns();
+  for (const string& column : columns) {
+    data_->add_range_partition_column(column);
+  }
   return *this;
 }
 
 KuduTableCreator& KuduTableCreator::split_rows(const vector<const KuduPartialRow*>& rows) {
-  data_->split_rows_ = rows;
+  data_->clear_range_partition_splits();
+  for (const KuduPartialRow* row : rows) {
+    data_->add_range_partition_split(row);
+  }
   return *this;
 }
 
 KuduTableCreator& KuduTableCreator::add_split_row(const KuduPartialRow* split_row) {
-  data_->split_rows_.push_back(split_row);
+  data_->add_range_partition_split(split_row);
   return *this;
 }
 
 KuduTableCreator& KuduTableCreator::num_replicas(int num_replicas) {
-  data_->num_replicas_ = num_replicas;
+  data_->set_num_replicas(num_replicas);
   return *this;
 }
 
 KuduTableCreator& KuduTableCreator::timeout(const MonoDelta& timeout) {
-  data_->timeout_ = timeout;
+  data_->set_timeout(timeout);
   return *this;
 }
 
 KuduTableCreator& KuduTableCreator::wait(bool wait) {
-  data_->wait_ = wait;
+  data_->set_wait(wait);
   return *this;
 }
 
@@ -423,7 +440,11 @@ KuduTable::KuduTable(const shared_ptr<KuduClient>& client,
                      const string& table_id,
                      const KuduSchema& schema,
                      const PartitionSchema& partition_schema)
-  : data_(new shared_ptr<internal::Table>(new internal::Table(*client->data_, name, table_id, schema, partition_schema))) {
+  : data_(new shared_ptr<internal::Table>(new internal::Table(*client->data_,
+                                                              name,
+                                                              table_id,
+                                                              *schema.schema_,
+                                                              partition_schema))) {
 }
 
 KuduTable::~KuduTable() {
@@ -431,15 +452,16 @@ KuduTable::~KuduTable() {
 }
 
 const string& KuduTable::name() const {
-  return data_->get()->name_;
+  return data_->get()->name();
 }
 
 const string& KuduTable::id() const {
-  return data_->get()->id_;
+  return data_->get()->id();
 }
 
 const KuduSchema& KuduTable::schema() const {
-  return data_->get()->schema_;
+  // TODO: add back KuduTable::Data
+  //return data_->get()->schema();
 }
 
 KuduInsert* KuduTable::NewInsert() {
@@ -460,15 +482,15 @@ KuduClient* KuduTable::client() const {
 }
 
 const PartitionSchema& KuduTable::partition_schema() const {
-  return data_->get()->partition_schema_;
+  return data_->get()->partition_schema();
 }
 
 KuduPredicate* KuduTable::NewComparisonPredicate(const Slice& col_name,
                                                  KuduPredicate::ComparisonOp op,
                                                  KuduValue* value) {
   StringPiece name_sp(reinterpret_cast<const char*>(col_name.data()), col_name.size());
-  const Schema* s = data_->get()->schema_.schema_;
-  int col_idx = s->find_column(name_sp);
+  const Schema& s = data_->get()->schema();
+  int col_idx = s.find_column(name_sp);
   if (col_idx == Schema::kColumnNotFound) {
     // Since this function doesn't return an error, instead we create a special
     // predicate that just returns the errors when we add it to the scanner.
@@ -479,7 +501,7 @@ KuduPredicate* KuduTable::NewComparisonPredicate(const Slice& col_name,
                                  Status::NotFound("column not found", col_name)));
   }
 
-  return new KuduPredicate(new ComparisonPredicateData(s->column(col_idx), op, value));
+  return new KuduPredicate(new ComparisonPredicateData(s.column(col_idx), op, value));
 }
 
 ////////////////////////////////////////////////////////////
@@ -632,7 +654,11 @@ Status KuduTableAlterer::Alter() {
 ////////////////////////////////////////////////////////////
 
 KuduScanner::KuduScanner(KuduTable* table)
-  : data_(new KuduScanner::Data(table)) {
+  : data_(new internal::Scanner(*table->data_)) {
+}
+
+KuduScanner::KuduScanner(internal::Scanner* data)
+  : data_(data) {
 }
 
 KuduScanner::~KuduScanner() {
@@ -648,18 +674,18 @@ Status KuduScanner::SetProjectedColumnNames(const vector<string>& col_names) {
   if (data_->open_) {
     return Status::IllegalState("Projection must be set before Open()");
   }
-  return data_->mutable_configuration()->SetProjectedColumnNames(col_names);
+  return data_->configuration().SetProjectedColumnNames(col_names);
 }
 
 Status KuduScanner::SetProjectedColumnIndexes(const vector<int>& col_indexes) {
   if (data_->open_) {
     return Status::IllegalState("Projection must be set before Open()");
   }
-  return data_->mutable_configuration()->SetProjectedColumnIndexes(col_indexes);
+  return data_->configuration().SetProjectedColumnIndexes(col_indexes);
 }
 
 Status KuduScanner::SetBatchSizeBytes(uint32_t batch_size) {
-  return data_->mutable_configuration()->SetBatchSizeBytes(batch_size);
+  return data_->configuration().SetBatchSizeBytes(batch_size);
 }
 
 Status KuduScanner::SetReadMode(ReadMode read_mode) {
@@ -669,7 +695,7 @@ Status KuduScanner::SetReadMode(ReadMode read_mode) {
   if (!tight_enum_test<ReadMode>(read_mode)) {
     return Status::InvalidArgument("Bad read mode");
   }
-  return data_->mutable_configuration()->SetReadMode(read_mode);
+  return data_->configuration().SetReadMode(read_mode);
 }
 
 Status KuduScanner::SetOrderMode(OrderMode order_mode) {
@@ -679,21 +705,21 @@ Status KuduScanner::SetOrderMode(OrderMode order_mode) {
   if (!tight_enum_test<OrderMode>(order_mode)) {
     return Status::InvalidArgument("Bad order mode");
   }
-  return data_->mutable_configuration()->SetFaultTolerant(order_mode == ORDERED);
+  return data_->configuration().SetFaultTolerant(order_mode == ORDERED);
 }
 
 Status KuduScanner::SetFaultTolerant() {
   if (data_->open_) {
     return Status::IllegalState("Fault-tolerance must be set before Open()");
   }
-  return data_->mutable_configuration()->SetFaultTolerant(true);
+  return data_->configuration().SetFaultTolerant(true);
 }
 
 Status KuduScanner::SetSnapshotMicros(uint64_t snapshot_timestamp_micros) {
   if (data_->open_) {
     return Status::IllegalState("Snapshot timestamp must be set before Open()");
   }
-  data_->mutable_configuration()->SetSnapshotMicros(snapshot_timestamp_micros);
+  data_->configuration().SetSnapshotMicros(snapshot_timestamp_micros);
   return Status::OK();
 }
 
@@ -701,7 +727,7 @@ Status KuduScanner::SetSnapshotRaw(uint64_t snapshot_timestamp) {
   if (data_->open_) {
     return Status::IllegalState("Snapshot timestamp must be set before Open()");
   }
-  data_->mutable_configuration()->SetSnapshotRaw(snapshot_timestamp);
+  data_->configuration().SetSnapshotRaw(snapshot_timestamp);
   return Status::OK();
 }
 
@@ -709,14 +735,14 @@ Status KuduScanner::SetSelection(KuduClient::ReplicaSelection selection) {
   if (data_->open_) {
     return Status::IllegalState("Replica selection must be set before Open()");
   }
-  return data_->mutable_configuration()->SetSelection(selection);
+  return data_->configuration().SetSelection(selection);
 }
 
 Status KuduScanner::SetTimeoutMillis(int millis) {
   if (data_->open_) {
     return Status::IllegalState("Timeout must be set before Open()");
   }
-  data_->mutable_configuration()->SetTimeoutMillis(millis);
+  data_->configuration().SetTimeoutMillis(millis);
   return Status::OK();
 }
 
@@ -726,38 +752,38 @@ Status KuduScanner::AddConjunctPredicate(KuduPredicate* pred) {
     delete pred;
     return Status::IllegalState("Predicate must be set before Open()");
   }
-  return data_->mutable_configuration()->AddConjunctPredicate(pred);
+  return data_->configuration().AddConjunctPredicate(pred);
 }
 
 Status KuduScanner::AddLowerBound(const KuduPartialRow& key) {
-  return data_->mutable_configuration()->AddLowerBound(key);
+  return data_->configuration().AddLowerBound(key);
 }
 
 Status KuduScanner::AddLowerBoundRaw(const Slice& key) {
-  return data_->mutable_configuration()->AddLowerBoundRaw(key);
+  return data_->configuration().AddLowerBoundRaw(key);
 }
 
 Status KuduScanner::AddExclusiveUpperBound(const KuduPartialRow& key) {
-  return data_->mutable_configuration()->AddUpperBound(key);
+  return data_->configuration().AddUpperBound(key);
 }
 
 Status KuduScanner::AddExclusiveUpperBoundRaw(const Slice& key) {
-  return data_->mutable_configuration()->AddUpperBoundRaw(key);
+  return data_->configuration().AddUpperBoundRaw(key);
 }
 
 Status KuduScanner::AddLowerBoundPartitionKeyRaw(const Slice& partition_key) {
-  return data_->mutable_configuration()->AddLowerBoundPartitionKeyRaw(partition_key);
+  return data_->configuration().AddLowerBoundPartitionKeyRaw(partition_key);
 }
 
 Status KuduScanner::AddExclusiveUpperBoundPartitionKeyRaw(const Slice& partition_key) {
-  return data_->mutable_configuration()->AddUpperBoundPartitionKeyRaw(partition_key);
+  return data_->configuration().AddUpperBoundPartitionKeyRaw(partition_key);
 }
 
 Status KuduScanner::SetCacheBlocks(bool cache_blocks) {
   if (data_->open_) {
     return Status::IllegalState("Block caching must be set before Open()");
   }
-  return data_->mutable_configuration()->SetCacheBlocks(cache_blocks);
+  return data_->configuration().SetCacheBlocks(cache_blocks);
 }
 
 KuduSchema KuduScanner::GetProjectionSchema() const {
@@ -802,7 +828,7 @@ Status KuduScanner::GetCurrentServer(KuduTabletServer** server) {
 // KuduScanToken
 ////////////////////////////////////////////////////////////
 
-KuduScanToken::KuduScanToken(KuduScanToken::Data* data)
+KuduScanToken::KuduScanToken(internal::ScanToken* data)
     : data_(data) {
 }
 
@@ -815,7 +841,8 @@ Status KuduScanToken::IntoKuduScanner(KuduScanner** scanner) const {
 }
 
 const vector<KuduTabletServer*>& KuduScanToken::TabletServers() const {
-  return data_->TabletServers();
+  // TODO: add back KuduScanToken::Data with internal vector
+  // return data_->TabletServers();
 }
 
 Status KuduScanToken::Serialize(string* buf) const {
@@ -825,7 +852,7 @@ Status KuduScanToken::Serialize(string* buf) const {
 Status KuduScanToken::DeserializeIntoScanner(KuduClient* client,
                                          const string& serialized_token,
                                          KuduScanner** scanner) {
-  return KuduScanToken::Data::DeserializeIntoScanner(client, serialized_token, scanner);
+  return internal::ScanToken::DeserializeIntoScanner(client->data_->get(), serialized_token, scanner);
 }
 
 ////////////////////////////////////////////////////////////
@@ -833,7 +860,7 @@ Status KuduScanToken::DeserializeIntoScanner(KuduClient* client,
 ////////////////////////////////////////////////////////////
 
 KuduScanTokenBuilder::KuduScanTokenBuilder(KuduTable* table)
-    : data_(new KuduScanTokenBuilder::Data(table)) {
+    : data_(new internal::ScanTokenBuilder(table->data_->get())) {
 }
 
 KuduScanTokenBuilder::~KuduScanTokenBuilder() {
@@ -841,61 +868,61 @@ KuduScanTokenBuilder::~KuduScanTokenBuilder() {
 }
 
 Status KuduScanTokenBuilder::SetProjectedColumnNames(const vector<string>& col_names) {
-  return data_->mutable_configuration()->SetProjectedColumnNames(col_names);
+  return data_->configuration().SetProjectedColumnNames(col_names);
 }
 
 Status KuduScanTokenBuilder::SetProjectedColumnIndexes(const vector<int>& col_indexes) {
-  return data_->mutable_configuration()->SetProjectedColumnIndexes(col_indexes);
+  return data_->configuration().SetProjectedColumnIndexes(col_indexes);
 }
 
 Status KuduScanTokenBuilder::SetBatchSizeBytes(uint32_t batch_size) {
-  return data_->mutable_configuration()->SetBatchSizeBytes(batch_size);
+  return data_->configuration().SetBatchSizeBytes(batch_size);
 }
 
 Status KuduScanTokenBuilder::SetReadMode(KuduScanner::ReadMode read_mode) {
   if (!tight_enum_test<KuduScanner::ReadMode>(read_mode)) {
     return Status::InvalidArgument("Bad read mode");
   }
-  return data_->mutable_configuration()->SetReadMode(read_mode);
+  return data_->configuration().SetReadMode(read_mode);
 }
 
 Status KuduScanTokenBuilder::SetFaultTolerant() {
-  return data_->mutable_configuration()->SetFaultTolerant(true);
+  return data_->configuration().SetFaultTolerant(true);
 }
 
 Status KuduScanTokenBuilder::SetSnapshotMicros(uint64_t snapshot_timestamp_micros) {
-  data_->mutable_configuration()->SetSnapshotMicros(snapshot_timestamp_micros);
+  data_->configuration().SetSnapshotMicros(snapshot_timestamp_micros);
   return Status::OK();
 }
 
 Status KuduScanTokenBuilder::SetSnapshotRaw(uint64_t snapshot_timestamp) {
-  data_->mutable_configuration()->SetSnapshotRaw(snapshot_timestamp);
+  data_->configuration().SetSnapshotRaw(snapshot_timestamp);
   return Status::OK();
 }
 
 Status KuduScanTokenBuilder::SetSelection(KuduClient::ReplicaSelection selection) {
-  return data_->mutable_configuration()->SetSelection(selection);
+  return data_->configuration().SetSelection(selection);
 }
 
 Status KuduScanTokenBuilder::SetTimeoutMillis(int millis) {
-  data_->mutable_configuration()->SetTimeoutMillis(millis);
+  data_->configuration().SetTimeoutMillis(millis);
   return Status::OK();
 }
 
 Status KuduScanTokenBuilder::AddConjunctPredicate(KuduPredicate* pred) {
-  return data_->mutable_configuration()->AddConjunctPredicate(pred);
+  return data_->configuration().AddConjunctPredicate(pred);
 }
 
 Status KuduScanTokenBuilder::AddLowerBound(const KuduPartialRow& key) {
-  return data_->mutable_configuration()->AddLowerBound(key);
+  return data_->configuration().AddLowerBound(key);
 }
 
 Status KuduScanTokenBuilder::AddUpperBound(const KuduPartialRow& key) {
-  return data_->mutable_configuration()->AddUpperBound(key);
+  return data_->configuration().AddUpperBound(key);
 }
 
 Status KuduScanTokenBuilder::SetCacheBlocks(bool cache_blocks) {
-  return data_->mutable_configuration()->SetCacheBlocks(cache_blocks);
+  return data_->configuration().SetCacheBlocks(cache_blocks);
 }
 
 Status KuduScanTokenBuilder::Build(vector<KuduScanToken*>* tokens) {
@@ -915,11 +942,11 @@ KuduTabletServer::~KuduTabletServer() {
 }
 
 const string& KuduTabletServer::uuid() const {
-  return data_->uuid_;
+  return data_->uuid();
 }
 
 const string& KuduTabletServer::hostname() const {
-  return data_->hostname_;
+  return data_->hostname();
 }
 
 } // namespace client

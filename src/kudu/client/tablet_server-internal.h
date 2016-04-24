@@ -24,18 +24,27 @@
 
 namespace kudu {
 namespace client {
+namespace internal {
 
-class KuduTabletServer::Data {
+class TabletServer {
  public:
-  Data(std::string uuid, std::string hostname);
-  ~Data();
+  TabletServer(std::string uuid, std::string hostname);
+  ~TabletServer() = default;
 
+  const std::string& uuid() const {
+    return uuid_;
+  }
+
+  const std::string& hostname() const {
+    return hostname_;
+  }
+
+ private:
   const std::string uuid_;
   const std::string hostname_;
-
-  DISALLOW_COPY_AND_ASSIGN(Data);
 };
 
+} // namespace internal
 } // namespace client
 } // namespace kudu
 

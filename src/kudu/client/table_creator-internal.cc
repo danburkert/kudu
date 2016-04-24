@@ -46,26 +46,25 @@ TableCreator::TableCreator(internal::Client* client)
 }
 
 TableCreator::~TableCreator() {
-  STLDeleteElements(&split_rows_);
+  STLDeleteElements(&range_partition_splits_);
 }
 
-void TableCreator::add_hash_partitions(const vector<string>& columns,
-                                                 int32_t num_buckets, int32_t seed) {
-  PartitionSchemaPB::HashBucketSchemaPB* bucket_schema =
-      partition_schema_.add_hash_bucket_schemas();
-  for (const string& col_name : columns) {
-    bucket_schema->add_columns()->set_name(col_name);
-  }
-  bucket_schema->set_num_buckets(num_buckets);
-  bucket_schema->set_seed(seed);
+HashPartitionCreator TableCreator::add_hash_partition() {
+  return HashPartitionCreator(partition_schema_.add_hash_bucket_schemas());
 }
 
-void TableCreator::set_range_partition_columns(const vector<string>& columns) {
-  PartitionSchemaPB::RangeSchemaPB* range_schema = partition_schema_.mutable_range_schema();
-  range_schema->Clear();
-  for (const string& col_name : columns) {
-    range_schema->add_columns()->set_name(col_name);
-  }
+void TableCreator::add_range_partition_column(string column) {
+  partition_schema_.mutable_range_schema()->add_columns()->set_name(std::move(column));
+}
+
+void TableCreator::clear_range_partition_columns() {
+  partition_schema_.mutable_range_schema()->clear_columns();
+}
+
+void TableCreator::clear_range_partition_splits() {
+  std::vector<const KuduPartialRow*> splits;
+  STLDeleteElements(&splits);
+  splits.swap(range_partition_splits_);
 }
 
 Status TableCreator::Create() {
@@ -82,12 +81,11 @@ Status TableCreator::Create() {
   if (num_replicas_ >= 1) {
     req.set_num_replicas(num_replicas_);
   }
-  RETURN_NOT_OK_PREPEND(SchemaToPB(*schema_->schema_, req.mutable_schema()),
-                        "Invalid schema");
+  RETURN_NOT_OK_PREPEND(SchemaToPB(*schema_, req.mutable_schema()), "Invalid schema");
 
   RowOperationsPBEncoder encoder(req.mutable_split_rows());
 
-  for (const KuduPartialRow* row : split_rows_) {
+  for (const KuduPartialRow* row : range_partition_splits_) {
     encoder.Add(RowOperationsPB::SPLIT_ROW, *row);
   }
   req.mutable_partition_schema()->CopyFrom(partition_schema_);

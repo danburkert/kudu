@@ -19,10 +19,12 @@
 
 #include <algorithm>
 #include <limits>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "kudu/client/meta_cache.h"
+#include "kudu/client/table-internal.h"
 #include "kudu/client/tablet_server-internal.h"
 #include "kudu/common/schema.h"
 #include "kudu/common/wire_protocol.h"
@@ -320,8 +322,8 @@ Status Client::GetTabletServer(const scoped_refptr<RemoteTablet>& rt,
 }
 
 Status Client::CreateTable(const CreateTableRequestPB& req,
-                                     const KuduSchema& schema,
-                                     const MonoTime& deadline) {
+                           const Schema& schema,
+                           const MonoTime& deadline) {
   CreateTableResponsePB resp;
 
   int attempts = 0;
@@ -336,7 +338,7 @@ Status Client::CreateTable(const CreateTableRequestPB& req,
       // response (e.g., due to failure before the successful
       // response could be sent back, or due to a I/O pause or a
       // network blip leading to a timeout, etc...)
-      KuduSchema actual_schema;
+      Schema actual_schema;
       string table_id;
       PartitionSchema actual_partition_schema;
       RETURN_NOT_OK_PREPEND(
@@ -346,18 +348,18 @@ Status Client::CreateTable(const CreateTableRequestPB& req,
       if (!schema.Equals(actual_schema)) {
         string msg = Substitute("Table $0 already exists with a different "
             "schema. Requested schema was: $1, actual schema is: $2",
-            req.name(), schema.schema_->ToString(), actual_schema.schema_->ToString());
+            req.name(), schema.ToString(), actual_schema.ToString());
         LOG(ERROR) << msg;
         return Status::AlreadyPresent(msg);
       } else {
         PartitionSchema partition_schema;
         RETURN_NOT_OK(PartitionSchema::FromPB(req.partition_schema(),
-                                              *schema.schema_, &partition_schema));
+                                              schema, &partition_schema));
         if (!partition_schema.Equals(actual_partition_schema)) {
           string msg = Substitute("Table $0 already exists with a different partition schema. "
               "Requested partition schema was: $1, actual partition schema is: $2",
-              req.name(), partition_schema.DebugString(*schema.schema_),
-              actual_partition_schema.DebugString(*actual_schema.schema_));
+              req.name(), partition_schema.DebugString(schema),
+              actual_partition_schema.DebugString(actual_schema));
           LOG(ERROR) << msg;
           return Status::AlreadyPresent(msg);
         } else {
@@ -370,9 +372,33 @@ Status Client::CreateTable(const CreateTableRequestPB& req,
   return Status::OK();
 }
 
+
+Status Client::OpenTable(string table_name,
+                         const MonoTime& deadline,
+                         std::shared_ptr<Table>* table) {
+  // In the future, probably will look up the table in some map to reuse KuduTable
+  // instances.
+
+  Schema schema;
+  PartitionSchema partition_schema;
+  string table_id;
+  RETURN_NOT_OK(GetTableSchema(table_name,
+                               deadline,
+                               &schema,
+                               &partition_schema,
+                               &table_id));
+
+  *table = std::make_shared<Table>(shared_from_this(),
+                                   std::move(table_name),
+                                   std::move(table_id),
+                                   std::move(schema),
+                                   std::move(partition_schema));
+  return Status::OK();
+}
+
 Status Client::IsCreateTableInProgress(const string& table_name,
-                                                 const MonoTime& deadline,
-                                                 bool *create_in_progress) {
+                                       const MonoTime& deadline,
+                                       bool *create_in_progress) {
   IsCreateTableDoneRequestPB req;
   IsCreateTableDoneResponsePB resp;
   req.mutable_table()->set_table_name(table_name);
@@ -401,7 +427,7 @@ Status Client::IsCreateTableInProgress(const string& table_name,
 }
 
 Status Client::WaitForCreateTableToFinish(const string& table_name,
-                                                    const MonoTime& deadline) {
+                                          const MonoTime& deadline) {
   return RetryFunc(deadline,
                    "Waiting on Create Table to be completed",
                    "Timed out waiting for Table Creation",
@@ -457,8 +483,8 @@ Status Client::AlterTable(const AlterTableRequestPB& req,
 }
 
 Status Client::IsAlterTableInProgress(const string& table_name,
-                                                const MonoTime& deadline,
-                                                bool *alter_in_progress) {
+                                      const MonoTime& deadline,
+                                      bool *alter_in_progress) {
   IsAlterTableDoneRequestPB req;
   IsAlterTableDoneResponsePB resp;
 
@@ -482,7 +508,7 @@ Status Client::IsAlterTableInProgress(const string& table_name,
 }
 
 Status Client::WaitForAlterTableToFinish(const string& alter_name,
-                                                   const MonoTime& deadline) {
+                                         const MonoTime& deadline) {
   return RetryFunc(deadline,
                    "Waiting on Alter Table to be completed",
                    "Timed out waiting for AlterTable",
@@ -491,7 +517,7 @@ Status Client::WaitForAlterTableToFinish(const string& alter_name,
 }
 
 Status Client::ListTabletServers(vector<KuduTabletServer*>* tablet_servers,
-                                           const MonoTime& deadline) {
+                                 const MonoTime& deadline) {
   ListTabletServersRequestPB req;
   ListTabletServersResponsePB resp;
 
@@ -510,16 +536,16 @@ Status Client::ListTabletServers(vector<KuduTabletServer*>* tablet_servers,
   for (int i = 0; i < resp.servers_size(); i++) {
     const ListTabletServersResponsePB_Entry& e = resp.servers(i);
     auto ts = new KuduTabletServer();
-    ts->data_ = new KuduTabletServer::Data(e.instance_id().permanent_uuid(),
-                                           e.registration().rpc_addresses(0).host());
+    ts->data_ = new TabletServer(e.instance_id().permanent_uuid(),
+                                 e.registration().rpc_addresses(0).host());
     tablet_servers->push_back(ts);
   }
   return Status::OK();
 }
 
 Status Client::ListTables(vector<string>* tables,
-                              const string& filter,
-                              const MonoTime& deadline) {
+                          const string& filter,
+                          const MonoTime& deadline) {
   ListTablesRequestPB req;
   ListTablesResponsePB resp;
 
@@ -600,7 +626,7 @@ class GetTableSchemaRpc : public Rpc {
   GetTableSchemaRpc(Client* client,
                     StatusCallback user_cb,
                     string table_name,
-                    KuduSchema* out_schema,
+                    Schema* out_schema,
                     PartitionSchema* out_partition_schema,
                     string* out_id,
                     const MonoTime& deadline,
@@ -622,7 +648,7 @@ class GetTableSchemaRpc : public Rpc {
   Client* client_;
   StatusCallback user_cb_;
   const string table_name_;
-  KuduSchema* out_schema_;
+  Schema* out_schema_;
   PartitionSchema* out_partition_schema_;
   string* out_id_;
   GetTableSchemaResponsePB resp_;
@@ -631,7 +657,7 @@ class GetTableSchemaRpc : public Rpc {
 GetTableSchemaRpc::GetTableSchemaRpc(Client* client,
                                      StatusCallback user_cb,
                                      string table_name,
-                                     KuduSchema* out_schema,
+                                     Schema* out_schema,
                                      PartitionSchema* out_partition_schema,
                                      string* out_id,
                                      const MonoTime& deadline,
@@ -738,13 +764,10 @@ void GetTableSchemaRpc::SendRpcCb(const Status& status) {
   }
 
   if (new_status.ok()) {
-    gscoped_ptr<Schema> schema(new Schema());
-    new_status = SchemaFromPB(resp_.schema(), schema.get());
+    new_status = SchemaFromPB(resp_.schema(), out_schema_);
     if (new_status.ok()) {
-      delete out_schema_->schema_;
-      out_schema_->schema_ = schema.release();
       new_status = PartitionSchema::FromPB(resp_.partition_schema(),
-                                           *out_schema_->schema_,
+                                           *out_schema_,
                                            out_partition_schema_);
 
       *out_id_ = resp_.table_id();
@@ -758,10 +781,10 @@ void GetTableSchemaRpc::SendRpcCb(const Status& status) {
 }
 
 Status Client::GetTableSchema(const string& table_name,
-                                        const MonoTime& deadline,
-                                        KuduSchema* schema,
-                                        PartitionSchema* partition_schema,
-                                        string* table_id) {
+                              const MonoTime& deadline,
+                              Schema* schema,
+                              PartitionSchema* partition_schema,
+                              string* table_id) {
   Synchronizer sync;
   GetTableSchemaRpc rpc(this,
                         sync.AsStatusCallback(),
@@ -776,7 +799,7 @@ Status Client::GetTableSchema(const string& table_name,
 }
 
 void Client::LeaderMasterDetermined(const Status& status,
-                                              const HostPort& host_port) {
+                                    const HostPort& host_port) {
   Sockaddr leader_sock_addr;
   Status new_status = status;
   if (new_status.ok()) {
@@ -807,7 +830,7 @@ Status Client::SetMasterServerProxy(const MonoTime& deadline) {
 }
 
 void Client::SetMasterServerProxyAsync(const MonoTime& deadline,
-                                                 const StatusCallback& cb) {
+                                       const StatusCallback& cb) {
   DCHECK(deadline.Initialized());
 
   vector<Sockaddr> master_sockaddrs;

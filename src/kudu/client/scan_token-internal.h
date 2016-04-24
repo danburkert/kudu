@@ -26,41 +26,42 @@
 
 namespace kudu {
 namespace client {
+namespace internal {
 
-class KuduScanToken::Data {
+class ScanToken {
  public:
-  explicit Data(KuduTable* table,
-                ScanTokenPB message,
-                std::vector<KuduTabletServer*> tablet_servers);
-  ~Data();
+  explicit ScanToken(Table* table,
+                     ScanTokenPB message,
+                     std::vector<TabletServer> tablet_servers);
+  ~ScanToken() = default;
 
   Status IntoKuduScanner(KuduScanner** scanner) const;
 
-  const std::vector<KuduTabletServer*>& TabletServers() const {
+  const std::vector<TabletServer>& TabletServers() const {
     return tablet_servers_;
   }
 
   Status Serialize(std::string* buf) const;
 
-  static Status DeserializeIntoScanner(KuduClient* client,
+  static Status DeserializeIntoScanner(Client* client,
                                        const std::string& serialized_token,
                                        KuduScanner** scanner);
 
  private:
 
-  static Status PBIntoScanner(KuduClient* client,
+  static Status PBIntoScanner(Client* client,
                               const ScanTokenPB& message,
                               KuduScanner** scanner);
 
-  KuduTable* table_;
+  Table* table_;
   ScanTokenPB message_;
-  std::vector<KuduTabletServer*> tablet_servers_;
+  std::vector<TabletServer> tablet_servers_;
 };
 
-class KuduScanTokenBuilder::Data {
+class ScanTokenBuilder {
  public:
-  explicit Data(KuduTable* table);
-  ~Data() = default;
+  explicit ScanTokenBuilder(Table* table);
+  ~ScanTokenBuilder() = default;
 
   Status Build(std::vector<KuduScanToken*>* tokens);
 
@@ -68,13 +69,14 @@ class KuduScanTokenBuilder::Data {
     return configuration_;
   }
 
-  ScanConfiguration* mutable_configuration() {
-    return &configuration_;
+  ScanConfiguration& configuration() {
+    return configuration_;
   }
 
  private:
   ScanConfiguration configuration_;
 };
 
+} // namespace internal
 } // namespace client
 } // namespace kudu

@@ -17,13 +17,14 @@
 #ifndef KUDU_CLIENT_SCANNER_INTERNAL_H
 #define KUDU_CLIENT_SCANNER_INTERNAL_H
 
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
 
-#include "kudu/client/client.h"
 #include "kudu/client/row_result.h"
 #include "kudu/client/scan_configuration.h"
+#include "kudu/client/table-internal.h"
 #include "kudu/common/partition_pruner.h"
 #include "kudu/common/scan_spec.h"
 #include "kudu/gutil/macros.h"
@@ -31,10 +32,10 @@
 #include "kudu/util/auto_release_pool.h"
 
 namespace kudu {
-
 namespace client {
+namespace internal {
 
-// The result of KuduScanner::Data::AnalyzeResponse.
+// The result of Scanner::AnalyzeResponse.
 //
 // This provides a more specific enum for handling the possible error conditions in a Scan
 // RPC.
@@ -76,11 +77,11 @@ struct ScanRpcStatus {
   Status status;
 };
 
-class KuduScanner::Data {
+class Scanner {
  public:
 
-  explicit Data(KuduTable* table);
-  ~Data();
+  explicit Scanner(std::shared_ptr<Table> table);
+  ~Scanner();
 
   // Calculates a deadline and sends the next RPC for this scanner. The deadline for the
   // RPC is calculated based on whether 'allow_time_for_failover' is true. If true,
@@ -91,7 +92,7 @@ class KuduScanner::Data {
   // The RPC and TS proxy should already have been prepared in next_req_, proxy_, etc.
   ScanRpcStatus SendScanRpc(const MonoTime& overall_deadline, bool allow_time_for_failover);
 
-  // Called when KuduScanner::NextBatch or KuduScanner::Data::OpenTablet result in an RPC or
+  // Called when KuduScanner::NextBatch or Scanner::OpenTablet result in an RPC or
   // server error.
   //
   // If the provided 'status' indicates the error was retryable, then returns Status::OK()
@@ -163,12 +164,12 @@ class KuduScanner::Data {
   // Close the scanner.
   void Close();
 
-  const ScanConfiguration& configuration() const {
+  ScanConfiguration& configuration() {
     return configuration_;
   }
 
-  ScanConfiguration* mutable_configuration() {
-    return &configuration_;
+  const ScanConfiguration& configuration() const {
+    return configuration_;
   }
 
   ScanConfiguration configuration_;
@@ -183,7 +184,7 @@ class KuduScanner::Data {
   // The encoded last primary key from the most recent tablet scan response.
   std::string last_primary_key_;
 
-  internal::RemoteTabletServer* ts_;
+  RemoteTabletServer* ts_;
 
   // The proxy can be derived from the RemoteTabletServer, but this involves retaking the
   // meta cache lock. Keeping our own shared_ptr avoids this overhead.
@@ -201,12 +202,12 @@ class KuduScanner::Data {
   rpc::RpcController controller_;
 
   // The table we're scanning.
-  sp::shared_ptr<KuduTable> table_;
+  std::shared_ptr<Table> table_;
 
   PartitionPruner partition_pruner_;
 
   // The tablet we're scanning.
-  scoped_refptr<internal::RemoteTablet> remote_;
+  scoped_refptr<RemoteTablet> remote_;
 
   // Number of attempts since the last successful scan.
   int scan_attempts_;
@@ -240,17 +241,16 @@ class KuduScanner::Data {
                                 const MonoTime& overall_deadline,
                                 const MonoTime& rpc_deadline);
 
-  DISALLOW_COPY_AND_ASSIGN(Data);
+  DISALLOW_COPY_AND_ASSIGN(Scanner);
 };
 
-class KuduScanBatch::Data {
+class ScanBatch {
  public:
-  Data();
-  ~Data();
+  ScanBatch();
+  ~ScanBatch();
 
   Status Reset(rpc::RpcController* controller,
                const Schema* projection,
-               const KuduSchema* client_projection,
                gscoped_ptr<RowwiseRowBlockPB> resp_data);
 
   int num_rows() const {
@@ -285,13 +285,12 @@ class KuduScanBatch::Data {
 
   // The projection being scanned.
   const Schema* projection_;
-  // The KuduSchema version of 'projection_'
-  const KuduSchema* client_projection_;
 
   // The number of bytes of direct data for each row.
   size_t projected_row_size_;
 };
 
+} // namespace internal
 } // namespace client
 } // namespace kudu
 

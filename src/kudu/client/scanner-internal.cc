@@ -47,24 +47,23 @@ using tserver::NewScanRequestPB;
 using tserver::TabletServerFeatures;
 
 namespace client {
+namespace internal {
 
-using internal::RemoteTabletServer;
-
-KuduScanner::Data::Data(KuduTable* table)
-  : configuration_(table),
+Scanner::Scanner(shared_ptr<Table> table)
+  : configuration_(table.get()),
     open_(false),
     data_in_open_(false),
     short_circuit_(false),
-    table_(DCHECK_NOTNULL(table)->shared_from_this()),
+    table_(std::move(table)),
     scan_attempts_(0) {
 }
 
-KuduScanner::Data::~Data() {
+Scanner::~Scanner() {
 }
 
-Status KuduScanner::Data::HandleError(const ScanRpcStatus& err,
-                                      const MonoTime& deadline,
-                                      set<string>* blacklist) {
+Status Scanner::HandleError(const ScanRpcStatus& err,
+                            const MonoTime& deadline,
+                            set<string>* blacklist) {
   // If we timed out because of the overall deadline, we're done.
   // We didn't wait a full RPC timeout, though, so don't mark the tserver as failed.
   if (err.result == ScanRpcStatus::OVERALL_DEADLINE_EXCEEDED) {
@@ -108,7 +107,7 @@ Status KuduScanner::Data::HandleError(const ScanRpcStatus& err,
   }
 
   if (mark_ts_failed) {
-    table_->client()->data_->get()->meta_cache_->MarkTSFailed(ts_, err.status);
+    table_->client().meta_cache_->MarkTSFailed(ts_, err.status);
     DCHECK(blacklist_location);
   }
 
@@ -144,9 +143,9 @@ Status KuduScanner::Data::HandleError(const ScanRpcStatus& err,
   return err.status;
 }
 
-ScanRpcStatus KuduScanner::Data::AnalyzeResponse(const Status& rpc_status,
-                                                 const MonoTime& overall_deadline,
-                                                 const MonoTime& deadline) {
+ScanRpcStatus Scanner::AnalyzeResponse(const Status& rpc_status,
+                                       const MonoTime& overall_deadline,
+                                       const MonoTime& deadline) {
   if (rpc_status.ok() && !last_response_.has_error()) {
     return ScanRpcStatus{ScanRpcStatus::OK, Status::OK()};
   }
@@ -194,22 +193,22 @@ ScanRpcStatus KuduScanner::Data::AnalyzeResponse(const Status& rpc_status,
   }
 }
 
-Status KuduScanner::Data::OpenNextTablet(const MonoTime& deadline,
-                                         std::set<std::string>* blacklist) {
+Status Scanner::OpenNextTablet(const MonoTime& deadline,
+                               std::set<std::string>* blacklist) {
   return OpenTablet(partition_pruner_.NextPartitionKey(),
                     deadline,
                     blacklist);
 }
 
-Status KuduScanner::Data::ReopenCurrentTablet(const MonoTime& deadline,
-                                              std::set<std::string>* blacklist) {
+Status Scanner::ReopenCurrentTablet(const MonoTime& deadline,
+                                    std::set<std::string>* blacklist) {
   return OpenTablet(remote_->partition().partition_key_start(),
                     deadline,
                     blacklist);
 }
 
-ScanRpcStatus KuduScanner::Data::SendScanRpc(const MonoTime& overall_deadline,
-                                             bool allow_time_for_failover) {
+ScanRpcStatus Scanner::SendScanRpc(const MonoTime& overall_deadline,
+                                   bool allow_time_for_failover) {
   // The user has specified a timeout which should apply to the total time for each call
   // to NextBatch(). However, for fault-tolerant scans, or for when we are first opening
   // a scanner, it's preferable to set a shorter timeout (the "default RPC timeout") for
@@ -218,7 +217,7 @@ ScanRpcStatus KuduScanner::Data::SendScanRpc(const MonoTime& overall_deadline,
   MonoTime rpc_deadline;
   if (allow_time_for_failover) {
     rpc_deadline = MonoTime::Now(MonoTime::FINE);
-    rpc_deadline.AddDelta(table_->client()->default_rpc_timeout());
+    rpc_deadline.AddDelta(table_->client().default_rpc_timeout());
     rpc_deadline = MonoTime::Earliest(overall_deadline, rpc_deadline);
   } else {
     rpc_deadline = overall_deadline;
@@ -236,16 +235,16 @@ ScanRpcStatus KuduScanner::Data::SendScanRpc(const MonoTime& overall_deadline,
       rpc_deadline, overall_deadline);
 }
 
-Status KuduScanner::Data::OpenTablet(const string& partition_key,
-                                     const MonoTime& deadline,
-                                     set<string>* blacklist) {
+Status Scanner::OpenTablet(const string& partition_key,
+                           const MonoTime& deadline,
+                           set<string>* blacklist) {
 
-  PrepareRequest(KuduScanner::Data::NEW);
+  PrepareRequest(Scanner::NEW);
   next_req_.clear_scanner_id();
   NewScanRequestPB* scan = next_req_.mutable_new_scan_request();
   switch (configuration_.read_mode()) {
-    case READ_LATEST: scan->set_read_mode(kudu::READ_LATEST); break;
-    case READ_AT_SNAPSHOT: scan->set_read_mode(kudu::READ_AT_SNAPSHOT); break;
+    case KuduScanner::READ_LATEST: scan->set_read_mode(kudu::READ_LATEST); break;
+    case KuduScanner::READ_AT_SNAPSHOT: scan->set_read_mode(kudu::READ_AT_SNAPSHOT); break;
     default: LOG(FATAL) << "Unexpected read mode.";
   }
 
@@ -264,7 +263,7 @@ Status KuduScanner::Data::OpenTablet(const string& partition_key,
   scan->set_cache_blocks(configuration_.spec().cache_blocks());
 
   if (configuration_.snapshot_timestamp() != ScanConfiguration::kNoTimestamp) {
-    if (PREDICT_FALSE(configuration_.read_mode() != READ_AT_SNAPSHOT)) {
+    if (PREDICT_FALSE(configuration_.read_mode() != KuduScanner::READ_AT_SNAPSHOT)) {
       LOG(WARNING) << "Scan snapshot timestamp set but read mode was READ_LATEST."
           " Ignoring timestamp.";
     } else {
@@ -297,23 +296,22 @@ Status KuduScanner::Data::OpenTablet(const string& partition_key,
 
   for (int attempt = 1;; attempt++) {
     Synchronizer sync;
-    table_->client()->data_->get()->meta_cache_->LookupTabletByKey(table_.get(),
-                                                                   partition_key,
-                                                                   deadline,
-                                                                   &remote_,
-                                                                   sync.AsStatusCallback());
+    table_->client().meta_cache_->LookupTabletByKey(table_.get(),
+                                                    partition_key,
+                                                    deadline,
+                                                    &remote_,
+                                                    sync.AsStatusCallback());
     RETURN_NOT_OK(sync.Wait());
 
     scan->set_tablet_id(remote_->tablet_id());
 
     RemoteTabletServer *ts;
     vector<RemoteTabletServer*> candidates;
-    Status lookup_status = table_->client()->data_->get()->GetTabletServer(
-        remote_,
-        configuration_.selection(),
-        *blacklist,
-        &candidates,
-        &ts);
+    Status lookup_status = table_->client().GetTabletServer(remote_,
+                                                            configuration_.selection(),
+                                                            *blacklist,
+                                                            &candidates,
+                                                            &ts);
     // If we get ServiceUnavailable, this indicates that the tablet doesn't
     // currently have any known leader. We should sleep and retry, since
     // it's likely that the tablet is undergoing a leader election and will
@@ -375,13 +373,13 @@ Status KuduScanner::Data::OpenTablet(const string& partition_key,
   }
 
   if (last_response_.has_snap_timestamp()) {
-    table_->client()->data_->get()->UpdateLatestObservedTimestamp(last_response_.snap_timestamp());
+    table_->client().UpdateLatestObservedTimestamp(last_response_.snap_timestamp());
   }
 
   return Status::OK();
 }
 
-Status KuduScanner::Data::KeepAlive() {
+Status Scanner::KeepAlive() {
   if (!open_) return Status::IllegalState("Scanner was not open.");
   // If there is no scanner to keep alive, we still return Status::OK().
   if (!last_response_.IsInitialized() || !last_response_.has_more_results() ||
@@ -401,14 +399,14 @@ Status KuduScanner::Data::KeepAlive() {
   return Status::OK();
 }
 
-bool KuduScanner::Data::MoreTablets() const {
+bool Scanner::MoreTablets() const {
   CHECK(open_);
   // TODO(KUDU-565): add a test which has a scan end on a tablet boundary
   return partition_pruner_.HasMorePartitionKeyRanges();
 }
 
-void KuduScanner::Data::PrepareRequest(RequestType state) {
-  if (state == KuduScanner::Data::CLOSE) {
+void Scanner::PrepareRequest(RequestType state) {
+  if (state == Scanner::CLOSE) {
     next_req_.set_batch_size_bytes(0);
   } else if (configuration_.has_batch_size_bytes()) {
     next_req_.set_batch_size_bytes(configuration_.batch_size_bytes());
@@ -416,27 +414,26 @@ void KuduScanner::Data::PrepareRequest(RequestType state) {
     next_req_.clear_batch_size_bytes();
   }
 
-  if (state == KuduScanner::Data::NEW) {
+  if (state == Scanner::NEW) {
     next_req_.set_call_seq_id(0);
   } else {
     next_req_.set_call_seq_id(next_req_.call_seq_id() + 1);
   }
 }
 
-void KuduScanner::Data::UpdateLastError(const Status& error) {
+void Scanner::UpdateLastError(const Status& error) {
   if (last_error_.ok() || last_error_.IsTimedOut()) {
     last_error_ = error;
   }
 }
 
-string KuduScanner::Data::ToString() const {
+string Scanner::ToString() const {
   return strings::Substitute("$0: $1",
                              table_->name(),
-                             configuration_.spec()
-                                            .ToString(*table_->schema().schema_));
+                             configuration_.spec().ToString(table_->schema()));
 }
 
-bool KuduScanner::Data::HasMoreRows() const {
+bool Scanner::HasMoreRows() const {
   CHECK(open_);
   return !short_circuit_ &&                 // The scan is not short circuited
       (data_in_open_ ||                     // more data in hand
@@ -444,7 +441,7 @@ bool KuduScanner::Data::HasMoreRows() const {
        MoreTablets());                      // more tablets to scan, possibly with more data
 }
 
-Status KuduScanner::Data::NextBatch(KuduScanBatch* batch) {
+Status Scanner::NextBatch(KuduScanBatch* batch) {
   // TODO: do some double-buffering here -- when we return this batch
   // we should already have fired off the RPC for the next batch, but
   // need to do some swapping of the response objects around to avoid
@@ -464,7 +461,6 @@ Status KuduScanner::Data::NextBatch(KuduScanBatch* batch) {
     data_in_open_ = false;
     return batch->data_->Reset(&controller_,
                                configuration().projection(),
-                               configuration().client_projection(),
                                make_gscoped_ptr(last_response_.release_data()));
   } else if (last_response_.has_more_results()) {
     // More data is available in this tablet.
@@ -472,7 +468,7 @@ Status KuduScanner::Data::NextBatch(KuduScanBatch* batch) {
 
     MonoTime batch_deadline = MonoTime::Now(MonoTime::FINE);
     batch_deadline.AddDelta(configuration().timeout());
-    PrepareRequest(KuduScanner::Data::CONTINUE);
+    PrepareRequest(Scanner::CONTINUE);
 
     while (true) {
       bool allow_time_for_failover = configuration().is_fault_tolerant();
@@ -486,7 +482,6 @@ Status KuduScanner::Data::NextBatch(KuduScanBatch* batch) {
         scan_attempts_ = 0;
         return batch->data_->Reset(&controller_,
                                    configuration().projection(),
-                                   configuration().client_projection(),
                                    make_gscoped_ptr(last_response_.release_data()));
       }
 
@@ -531,9 +526,9 @@ Status KuduScanner::Data::NextBatch(KuduScanBatch* batch) {
   }
 }
 
-Status KuduScanner::Data::GetCurrentServer(KuduTabletServer** server) {
+Status Scanner::GetCurrentServer(KuduTabletServer** server) {
   CHECK(open_);
-  internal::RemoteTabletServer* rts = ts_;
+  RemoteTabletServer* rts = ts_;
   CHECK(rts);
   vector<HostPort> host_ports;
   rts->GetHostPorts(&host_ports);
@@ -542,15 +537,15 @@ Status KuduScanner::Data::GetCurrentServer(KuduTabletServer** server) {
                                                     rts->ToString()));
   }
   *server = new KuduTabletServer();
-  (*server)->data_ = new KuduTabletServer::Data(rts->permanent_uuid(), host_ports[0].host());
+  (*server)->data_ = new TabletServer(rts->permanent_uuid(), host_ports[0].host());
   return Status::OK();
 }
 
-Status KuduScanner::Data::Open() {
+Status Scanner::Open() {
   CHECK(!open_) << "Scanner already open";
 
-  mutable_configuration()->OptimizeScanSpec();
-  partition_pruner_.Init(*table_->schema().schema_,
+  configuration().OptimizeScanSpec();
+  partition_pruner_.Init(table_->schema(),
                          table_->partition_schema(),
                          configuration().spec());
 
@@ -593,7 +588,7 @@ struct CloseCallback {
 };
 } // anonymous namespace
 
-void KuduScanner::Data::Close() {
+void Scanner::Close() {
   if (!open_) return;
 
   VLOG(1) << "Ending scan " << ToString();
@@ -607,7 +602,7 @@ void KuduScanner::Data::Close() {
     CHECK(proxy_);
     gscoped_ptr<CloseCallback> closer(new CloseCallback);
     closer->scanner_id = next_req_.scanner_id();
-    PrepareRequest(KuduScanner::Data::CLOSE);
+    PrepareRequest(Scanner::CLOSE);
     next_req_.set_close_scanner(true);
     closer->controller.set_timeout(configuration_.timeout());
     proxy_->ScanAsync(next_req_, &closer->response, &closer->controller,
@@ -622,23 +617,21 @@ void KuduScanner::Data::Close() {
 // KuduScanBatch
 ////////////////////////////////////////////////////////////
 
-KuduScanBatch::Data::Data() : projection_(NULL) {}
+ScanBatch::ScanBatch() : projection_(nullptr) {}
 
-KuduScanBatch::Data::~Data() {}
+ScanBatch::~ScanBatch() {}
 
-size_t KuduScanBatch::Data::CalculateProjectedRowSize(const Schema& proj) {
+size_t ScanBatch::CalculateProjectedRowSize(const Schema& proj) {
   return proj.byte_size() +
         (proj.has_nullables() ? BitmapSize(proj.num_columns()) : 0);
 }
 
-Status KuduScanBatch::Data::Reset(RpcController* controller,
+Status ScanBatch::Reset(RpcController* controller,
                                   const Schema* projection,
-                                  const KuduSchema* client_projection,
                                   gscoped_ptr<RowwiseRowBlockPB> data) {
   CHECK(controller->finished());
   controller_.Swap(controller);
   projection_ = projection;
-  client_projection_ = client_projection;
   resp_data_.Swap(data.get());
 
   // First, rewrite the relative addresses into absolute ones.
@@ -666,7 +659,7 @@ Status KuduScanBatch::Data::Reset(RpcController* controller,
   return Status::OK();
 }
 
-void KuduScanBatch::Data::ExtractRows(vector<KuduScanBatch::RowPtr>* rows) {
+void ScanBatch::ExtractRows(vector<KuduScanBatch::RowPtr>* rows) {
   int n_rows = resp_data_.num_rows();
   rows->resize(n_rows);
 
@@ -691,10 +684,11 @@ void KuduScanBatch::Data::ExtractRows(vector<KuduScanBatch::RowPtr>* rows) {
   VLOG(1) << "Extracted " << rows->size() << " rows";
 }
 
-void KuduScanBatch::Data::Clear() {
+void ScanBatch::Clear() {
   resp_data_.Clear();
   controller_.Reset();
 }
 
+} // namespace internal
 } // namespace client
 } // namespace kudu

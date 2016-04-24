@@ -29,6 +29,7 @@
 
 namespace kudu {
 namespace client {
+namespace internal {
 
 // A configuration object which holds Kudu scan options.
 //
@@ -40,7 +41,7 @@ class ScanConfiguration {
   static const int64_t kNoTimestamp = -1;
   static const int kHtTimestampBitsToShift = 12;
 
-  explicit ScanConfiguration(KuduTable* table);
+  explicit ScanConfiguration(Table* table);
   ~ScanConfiguration() = default;
 
   Status SetProjectedColumnNames(const std::vector<std::string>& col_names) WARN_UNUSED_RESULT;
@@ -81,22 +82,11 @@ class ScanConfiguration {
 
   void OptimizeScanSpec();
 
-  const KuduTable& table() {
-    return *table_;
-  }
-
   // Returns the projection schema.
   //
   // The ScanConfiguration retains ownership of the projection.
   const Schema* projection() const {
     return projection_;
-  }
-
-  // Returns the client projection schema.
-  //
-  // The ScanConfiguration retains ownership of the projection.
-  const KuduSchema* client_projection() const {
-    return &client_projection_;
   }
 
   const ScanSpec& spec() const {
@@ -132,6 +122,10 @@ class ScanConfiguration {
     return timeout_;
   }
 
+  Table* table() const {
+    return table_;
+  }
+
   Arena* arena() {
     return &arena_;
   }
@@ -140,13 +134,10 @@ class ScanConfiguration {
   friend class KuduScanTokenBuilder;
 
   // Non-owned, non-null table.
-  KuduTable* table_;
+  Table* table_;
 
   // Non-owned, non-null projection schema.
-  Schema* projection_;
-
-  // Owned client projection.
-  KuduSchema client_projection_;
+  const Schema* projection_;
 
   ScanSpec spec_;
 
@@ -171,6 +162,6 @@ class ScanConfiguration {
   AutoReleasePool pool_;
 };
 
+} // namespace internal
 } // namespace client
 } // namespace kudu
-

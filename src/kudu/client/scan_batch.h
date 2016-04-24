@@ -37,6 +37,10 @@ class TsAdminClient;
 } // namespace tools
 
 namespace client {
+namespace internal {
+class ScanBatch;
+class Scanner;
+} // namespace internal
 class KuduSchema;
 
 // A batch of zero or more rows returned from a KuduScanner.
@@ -84,11 +88,11 @@ class KUDU_EXPORT KuduScanBatch {
   const KuduSchema* projection_schema() const;
 
  private:
-  class KUDU_NO_EXPORT Data;
   friend class KuduScanner;
+  friend class internal::Scanner;
   friend class kudu::tools::TsAdminClient;
 
-  Data* data_;
+  internal::ScanBatch* data_;
   DISALLOW_COPY_AND_ASSIGN(KuduScanBatch);
 };
 

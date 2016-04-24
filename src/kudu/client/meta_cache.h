@@ -56,7 +56,6 @@ class TSInfoPB;
 namespace client {
 
 class ClientTest_TestMasterLookupPermits_Test;
-class KuduTable;
 
 namespace internal {
 
@@ -217,7 +216,7 @@ class MetaCache : public RefCountedThreadSafe<MetaCache> {
   //
   // NOTE: the memory referenced by 'table' must remain valid until 'callback'
   // is invoked.
-  void LookupTabletByKey(const KuduTable* table,
+  void LookupTabletByKey(Table* table,
                          const std::string& partition_key,
                          const MonoTime& deadline,
                          scoped_refptr<RemoteTablet>* remote_tablet,
@@ -245,7 +244,7 @@ class MetaCache : public RefCountedThreadSafe<MetaCache> {
 
   // Lookup the given tablet by key, only consulting local information.
   // Returns true and sets *remote_tablet if successful.
-  bool LookupTabletByKeyFastPath(const KuduTable* table,
+  bool LookupTabletByKeyFastPath(const Table* table,
                                  const std::string& partition_key,
                                  scoped_refptr<RemoteTablet>* remote_tablet);
 

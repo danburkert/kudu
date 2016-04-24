@@ -36,7 +36,7 @@ namespace client {
 // KuduScanBatch
 ////////////////////////////////////////////////////////////
 
-KuduScanBatch::KuduScanBatch() : data_(new Data()) {}
+KuduScanBatch::KuduScanBatch() : data_(new internal::ScanBatch()) {}
 
 KuduScanBatch::~KuduScanBatch() {
   delete data_;
@@ -51,7 +51,8 @@ KuduRowResult KuduScanBatch::Row(int idx) const {
 }
 
 const KuduSchema* KuduScanBatch::projection_schema() const {
-  return data_->client_projection_;
+  // TODO: reintroduce KuduScanBatch::Data
+  return nullptr;
 }
 
 ////////////////////////////////////////////////////////////

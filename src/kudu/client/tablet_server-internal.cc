@@ -21,14 +21,13 @@ using std::string;
 
 namespace kudu {
 namespace client {
+namespace internal {
 
-KuduTabletServer::Data::Data(string uuid, string hostname)
+TabletServer::TabletServer(string uuid, string hostname)
     : uuid_(std::move(uuid)),
       hostname_(std::move(hostname)) {
 }
 
-KuduTabletServer::Data::~Data() {
-}
-
+} // namespace internal
 } // namespace client
 } // namespace kudu

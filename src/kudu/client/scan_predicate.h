@@ -29,6 +29,9 @@
 
 namespace kudu {
 namespace client {
+namespace internal {
+class ScanConfiguration;
+} // namespace internal
 
 class KUDU_EXPORT KuduPredicate {
  public:
@@ -50,7 +53,7 @@ class KUDU_EXPORT KuduPredicate {
   friend class ComparisonPredicateData;
   friend class ErrorPredicateData;
   friend class KuduTable;
-  friend class ScanConfiguration;
+  friend class internal::ScanConfiguration;
 
   explicit KuduPredicate(Data* d);
 

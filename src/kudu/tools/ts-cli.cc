@@ -43,14 +43,15 @@
 #include "kudu/rpc/messenger.h"
 #include "kudu/rpc/rpc_controller.h"
 
+using kudu::client::internal::ScanBatch;
 using kudu::client::KuduRowResult;
+using kudu::client::KuduScanBatch;
 using kudu::HostPort;
 using kudu::rpc::Messenger;
 using kudu::rpc::MessengerBuilder;
 using kudu::rpc::RpcController;
 using kudu::server::ServerStatusPB;
 using kudu::Sockaddr;
-using kudu::client::KuduScanBatch;
 using kudu::tablet::TabletStatusPB;
 using kudu::tserver::DeleteTabletRequestPB;
 using kudu::tserver::DeleteTabletResponsePB;
@@ -248,7 +249,6 @@ Status TsAdminClient::DumpTablet(const std::string& tablet_id) {
   RETURN_NOT_OK(GetTabletSchema(tablet_id, &schema_pb));
   Schema schema;
   RETURN_NOT_OK(SchemaFromPB(schema_pb, &schema));
-  kudu::client::KuduSchema client_schema(schema);
 
   ScanRequestPB req;
   ScanResponsePB resp;
@@ -274,11 +274,8 @@ Status TsAdminClient::DumpTablet(const std::string& tablet_id) {
     }
 
     rows.clear();
-    KuduScanBatch::Data results;
-    RETURN_NOT_OK(results.Reset(&rpc,
-                                &schema,
-                                &client_schema,
-                                make_gscoped_ptr(resp.release_data())));
+    ScanBatch results;
+    RETURN_NOT_OK(results.Reset(&rpc, &schema, make_gscoped_ptr(resp.release_data())));
     results.ExtractRows(&rows);
     for (const KuduRowResult& r : rows) {
       std::cout << r.ToString() << std::endl;

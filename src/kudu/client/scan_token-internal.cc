@@ -38,33 +38,30 @@ using std::vector;
 
 namespace kudu {
 namespace client {
+namespace internal {
 
-KuduScanToken::Data::Data(KuduTable* table,
-                          ScanTokenPB message,
-                          vector<KuduTabletServer*> tablet_servers)
+ScanToken::ScanToken(Table* table,
+                     ScanTokenPB message,
+                     vector<TabletServer> tablet_servers)
     : table_(table),
       message_(std::move(message)),
       tablet_servers_(std::move(tablet_servers)) {
 }
 
-KuduScanToken::Data::~Data() {
-  ElementDeleter deleter(&tablet_servers_);
+Status ScanToken::IntoKuduScanner(KuduScanner** scanner) const {
+  return PBIntoScanner(&table_->client(), message_, scanner);
 }
 
-Status KuduScanToken::Data::IntoKuduScanner(KuduScanner** scanner) const {
-  return PBIntoScanner(table_->client(), message_, scanner);
-}
-
-Status KuduScanToken::Data::Serialize(string* buf) const {
+Status ScanToken::Serialize(string* buf) const {
   if (!message_.SerializeToString(buf)) {
     return Status::Corruption("unable to serialize scan token");
   }
   return Status::OK();
 }
 
-Status KuduScanToken::Data::DeserializeIntoScanner(KuduClient* client,
-                                                   const std::string& serialized_token,
-                                                   KuduScanner** scanner) {
+Status ScanToken::DeserializeIntoScanner(Client* client,
+                                         const std::string& serialized_token,
+                                         KuduScanner** scanner) {
   ScanTokenPB message;
   if (!message.ParseFromString(serialized_token)) {
     return Status::Corruption("unable to deserialize scan token");
@@ -72,9 +69,9 @@ Status KuduScanToken::Data::DeserializeIntoScanner(KuduClient* client,
   return PBIntoScanner(client, message, scanner);
 }
 
-Status KuduScanToken::Data::PBIntoScanner(KuduClient* client,
-                                          const ScanTokenPB& message,
-                                          KuduScanner** scanner) {
+Status ScanToken::PBIntoScanner(Client* client,
+                                const ScanTokenPB& message,
+                                KuduScanner** scanner) {
   for (int32_t feature : message.feature_flags()) {
     if (!ScanTokenPB::Feature_IsValid(feature) || feature == ScanTokenPB::Unknown) {
       return Status::NotSupported(
@@ -82,11 +79,13 @@ Status KuduScanToken::Data::PBIntoScanner(KuduClient* client,
     }
   }
 
-  sp::shared_ptr<KuduTable> table;
-  RETURN_NOT_OK(client->OpenTable(message.table_name(), &table));
-  Schema* schema = table->schema().schema_;
+  sp::shared_ptr<Table> table;
+  MonoTime deadline = MonoTime::Now(MonoTime::FINE);
+  deadline.AddDelta(client->default_admin_operation_timeout());
+  RETURN_NOT_OK(client->OpenTable(message.table_name(), deadline, &table));
+  const Schema* schema = &table->schema();
 
-  unique_ptr<KuduScanner> scan_builder(new KuduScanner(table.get()));
+  unique_ptr<KuduScanner> scan_builder(new KuduScanner(new Scanner(table)));
 
   vector<int> column_indexes;
   for (const ColumnSchemaPB& column : message.projected_columns()) {
@@ -104,11 +103,11 @@ Status KuduScanToken::Data::PBIntoScanner(KuduClient* client,
   }
   RETURN_NOT_OK(scan_builder->SetProjectedColumnIndexes(column_indexes));
 
-  ScanConfiguration* configuration = scan_builder->data_->mutable_configuration();
+  ScanConfiguration& configuration = scan_builder->data_->configuration();
   for (const ColumnPredicatePB& pb : message.column_predicates()) {
     boost::optional<ColumnPredicate> predicate;
-    RETURN_NOT_OK(ColumnPredicateFromPB(*schema, configuration->arena(), pb, &predicate));
-    configuration->AddConjunctPredicate(std::move(*predicate));
+    RETURN_NOT_OK(ColumnPredicateFromPB(*schema, configuration.arena(), pb, &predicate));
+    configuration.AddConjunctPredicate(std::move(*predicate));
   }
 
   if (message.has_lower_bound_primary_key()) {
@@ -162,13 +161,13 @@ Status KuduScanToken::Data::PBIntoScanner(KuduClient* client,
   return Status::OK();
 }
 
-KuduScanTokenBuilder::Data::Data(KuduTable* table)
+ScanTokenBuilder::ScanTokenBuilder(Table* table)
     : configuration_(table) {
 }
 
-Status KuduScanTokenBuilder::Data::Build(vector<KuduScanToken*>* tokens) {
-  KuduTable* table = configuration_.table_;
-  KuduClient* client = table->client();
+Status ScanTokenBuilder::Build(vector<KuduScanToken*>* tokens) {
+  Table* table = configuration_.table();
+  Client& client = table->client();
   configuration_.OptimizeScanSpec();
 
   ScanTokenPB pb;
@@ -211,26 +210,25 @@ Status KuduScanTokenBuilder::Data::Build(vector<KuduScanToken*>* tokens) {
   pb.set_fault_tolerant(configuration_.is_fault_tolerant());
 
   MonoTime deadline = MonoTime::Now(MonoTime::FINE);
-  deadline.AddDelta(client->default_admin_operation_timeout());
+  deadline.AddDelta(client.default_admin_operation_timeout());
 
   PartitionPruner pruner;
-  pruner.Init(*table->schema().schema_, table->partition_schema(), configuration_.spec());
+  pruner.Init(table->schema(), table->partition_schema(), configuration_.spec());
   while (pruner.HasMorePartitionKeyRanges()) {
     scoped_refptr<internal::RemoteTablet> tablet;
     Synchronizer sync;
-    client->data_->get()->meta_cache_->LookupTabletByKey(table,
-                                                         pruner.NextPartitionKey(),
-                                                         deadline,
-                                                         &tablet,
-                                                         sync.AsStatusCallback());
+    client.meta_cache_->LookupTabletByKey(table,
+                                          pruner.NextPartitionKey(),
+                                          deadline,
+                                          &tablet,
+                                          sync.AsStatusCallback());
     RETURN_NOT_OK(sync.Wait());
     CHECK(tablet);
 
     vector<internal::RemoteTabletServer*> remote_tablet_servers;
     tablet->GetRemoteTabletServers(&remote_tablet_servers);
 
-    vector<KuduTabletServer*> tablet_servers;
-    ElementDeleter deleter(&tablet_servers);
+    vector<TabletServer> tablet_servers;
 
     for (internal::RemoteTabletServer* remote_tablet_server : remote_tablet_servers) {
       vector<HostPort> host_ports;
@@ -239,22 +237,18 @@ Status KuduScanTokenBuilder::Data::Build(vector<KuduScanToken*>* tokens) {
         return Status::IllegalState(strings::Substitute("No host found for tablet server $0",
                                                         remote_tablet_server->ToString()));
       }
-      KuduTabletServer* tablet_server = new KuduTabletServer;
-      tablet_server->data_ = new KuduTabletServer::Data(remote_tablet_server->permanent_uuid(),
-                                                        host_ports[0].host());
-      tablet_servers.push_back(tablet_server);
+      tablet_servers.emplace_back(remote_tablet_server->permanent_uuid(), host_ports[0].host());
     }
     ScanTokenPB message;
     message.CopyFrom(pb);
     message.set_lower_bound_partition_key(tablet->partition().partition_key_start());
     message.set_upper_bound_partition_key(tablet->partition().partition_key_end());
-    tokens->push_back(new KuduScanToken(new KuduScanToken::Data(table,
-                                                                std::move(message),
-                                                                std::move(tablet_servers))));
+    tokens->push_back(new KuduScanToken(new ScanToken(table, std::move(message), std::move(tablet_servers))));
     pruner.RemovePartitionKeyRange(tablet->partition().partition_key_end());
   }
   return Status::OK();
 }
 
+} // namespace internal
 } // namespace client
 } // namespace kudu

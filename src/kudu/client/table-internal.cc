@@ -43,12 +43,12 @@ namespace internal {
 Table::Table(shared_ptr<Client> client,
              string name,
              string id,
-             const KuduSchema& schema,
+             Schema schema,
              PartitionSchema partition_schema)
     : client_(std::move(client)),
       name_(std::move(name)),
       id_(std::move(id)),
-      schema_(schema),
+      schema_(std::move(schema)),
       partition_schema_(std::move(partition_schema)) {
 }
 

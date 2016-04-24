@@ -1041,7 +1041,7 @@ TEST_F(ClientTest, TestGetTabletServerBlacklist) {
   scoped_refptr<internal::RemoteTablet> rt;
   while (true) {
     Synchronizer sync;
-    client_->data_->get()->meta_cache_->LookupTabletByKey(table.get(), "", MonoTime::Max(), &rt,
+    client_->data_->get()->meta_cache_->LookupTabletByKey(table->data_->get(), "", MonoTime::Max(), &rt,
                                                           sync.AsStatusCallback());
     ASSERT_OK(sync.Wait());
     ASSERT_TRUE(rt.get() != nullptr);
@@ -2134,7 +2134,7 @@ TEST_F(ClientTest, TestReplicatedMultiTabletTableFailover) {
   // Find the leader of the first tablet.
   Synchronizer sync;
   scoped_refptr<internal::RemoteTablet> rt;
-  client_->data_->get()->meta_cache_->LookupTabletByKey(table.get(), "",
+  client_->data_->get()->meta_cache_->LookupTabletByKey(table->data_->get(), "",
                                                         MonoTime::Max(),
                                                         &rt, sync.AsStatusCallback());
   ASSERT_OK(sync.Wait());
@@ -2202,7 +2202,7 @@ TEST_F(ClientTest, TestReplicatedTabletWritesWithLeaderElection) {
   // Find the leader replica
   Synchronizer sync;
   scoped_refptr<internal::RemoteTablet> rt;
-  client_->data_->get()->meta_cache_->LookupTabletByKey(table.get(), "",
+  client_->data_->get()->meta_cache_->LookupTabletByKey(table->data_->get(), "",
                                                         MonoTime::Max(),
                                                         &rt, sync.AsStatusCallback());
   ASSERT_OK(sync.Wait());

@@ -145,10 +145,10 @@ class KUDU_EXPORT KuduColumnSchema {
   // TODO: Expose default column value and attributes?
 
  private:
-  friend class internal::TableAlterer;
   friend class KuduColumnSpec;
   friend class KuduSchema;
   friend class KuduSchemaBuilder;
+  friend class internal::TableAlterer;
 
   KuduColumnSchema();
 
@@ -334,11 +334,13 @@ class KUDU_EXPORT KuduSchema {
   friend class internal::TableCreator;
   friend class internal::WriteRpc;
   friend class kudu::tools::TsAdminClient;
+  friend class KuduClient;
   friend class KuduScanner;
   friend class KuduScanToken;
   friend class KuduScanTokenBuilder;
   friend class KuduSchemaBuilder;
   friend class KuduTable;
+  friend class KuduTableCreator;
   friend class KuduWriteOperation;
   friend class ScanConfiguration;
 

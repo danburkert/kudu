@@ -47,7 +47,6 @@ class RpcController;
 } // namespace rpc
 
 namespace client {
-
 namespace internal {
 
 class Client : public std::enable_shared_from_this<Client> {
@@ -70,8 +69,12 @@ class Client : public std::enable_shared_from_this<Client> {
                          internal::RemoteTabletServer** ts);
 
   Status CreateTable(const master::CreateTableRequestPB& req,
-                     const KuduSchema& schema,
+                     const Schema& schema,
                      const MonoTime& deadline);
+
+  Status OpenTable(string table_name,
+                   const MonoTime& deadline,
+                   std::shared_ptr<Table>* table);
 
   Status IsCreateTableInProgress(const std::string& table_name,
                                  const MonoTime& deadline,
@@ -95,7 +98,7 @@ class Client : public std::enable_shared_from_this<Client> {
 
   Status GetTableSchema(const std::string& table_name,
                         const MonoTime& deadline,
-                        KuduSchema* schema,
+                        Schema* schema,
                         PartitionSchema* partition_schema,
                         std::string* table_id);
 

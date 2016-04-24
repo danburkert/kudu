@@ -20,8 +20,9 @@
 #include <boost/bind.hpp>
 #include <glog/logging.h>
 
-#include "kudu/client/client.h"
 #include "kudu/client/client-internal.h"
+#include "kudu/client/client.h"
+#include "kudu/client/table-internal.h"
 #include "kudu/common/schema.h"
 #include "kudu/common/wire_protocol.h"
 #include "kudu/gutil/map-util.h"
@@ -313,7 +314,7 @@ class LookupRpc : public Rpc {
  public:
   LookupRpc(const scoped_refptr<MetaCache>& meta_cache,
             StatusCallback user_cb,
-            const KuduTable* table,
+            Table* table,
             string partition_key,
             scoped_refptr<RemoteTablet>* remote_tablet,
             const MonoTime& deadline,
@@ -330,7 +331,7 @@ class LookupRpc : public Rpc {
   virtual void SendRpcCb(const Status& status) OVERRIDE;
 
   std::shared_ptr<MasterServiceProxy> master_proxy() const {
-    return table_->client()->data_->get()->master_proxy();
+    return table_->client().master_proxy();
   }
 
   void ResetMasterLeaderAndRetry();
@@ -356,7 +357,7 @@ class LookupRpc : public Rpc {
   StatusCallback user_cb_;
 
   // Table to lookup.
-  const KuduTable* table_;
+  Table* table_;
 
   // Encoded partition key to lookup.
   string partition_key_;
@@ -370,7 +371,7 @@ class LookupRpc : public Rpc {
 };
 
 LookupRpc::LookupRpc(const scoped_refptr<MetaCache>& meta_cache,
-                     StatusCallback user_cb, const KuduTable* table,
+                     StatusCallback user_cb, Table* table,
                      string partition_key,
                      scoped_refptr<RemoteTablet>* remote_tablet,
                      const MonoTime& deadline,
@@ -398,7 +399,7 @@ void LookupRpc::SendRpc() {
       result->HasLeader()) {
     VLOG(3) << "Fast lookup: found tablet " << result->tablet_id()
             << " for " << table_->partition_schema()
-                                 .PartitionKeyDebugString(partition_key_, *table_->schema().schema_)
+                                 .PartitionKeyDebugString(partition_key_, table_->schema())
             << " of " << table_->name();
     if (remote_tablet_) {
       *remote_tablet_ = result;
@@ -411,7 +412,7 @@ void LookupRpc::SendRpc() {
   // Slow path: must lookup the tablet in the master.
   VLOG(3) << "Fast lookup: no known tablet"
           << " for " << table_->partition_schema()
-                               .PartitionKeyDebugString(partition_key_, *table_->schema().schema_)
+                               .PartitionKeyDebugString(partition_key_, table_->schema())
           << " of " << table_->name()
           << ": refreshing our metadata from the Master";
 
@@ -452,12 +453,12 @@ string LookupRpc::ToString() const {
   return Substitute("GetTableLocations($0, $1, $2)",
                     table_->name(),
                     table_->partition_schema()
-                           .PartitionKeyDebugString(partition_key_, *table_->schema().schema_),
+                           .PartitionKeyDebugString(partition_key_, table_->schema()),
                     num_attempts());
 }
 
 void LookupRpc::ResetMasterLeaderAndRetry() {
-  table_->client()->data_->get()->SetMasterServerProxyAsync(
+  table_->client().SetMasterServerProxyAsync(
       retrier().deadline(),
       Bind(&LookupRpc::NewLeaderMasterDeterminedCb,
            Unretained(this)));
@@ -590,7 +591,7 @@ const scoped_refptr<RemoteTablet>& MetaCache::ProcessLookupResponse(const Lookup
   return FindOrDie(tablets_by_id_, rpc.resp().tablet_locations(0).tablet_id());
 }
 
-bool MetaCache::LookupTabletByKeyFastPath(const KuduTable* table,
+bool MetaCache::LookupTabletByKeyFastPath(const Table* table,
                                           const string& partition_key,
                                           scoped_refptr<RemoteTablet>* remote_tablet) {
   shared_lock<rw_spinlock> l(&lock_);
@@ -621,7 +622,7 @@ bool MetaCache::LookupTabletByKeyFastPath(const KuduTable* table,
   return false;
 }
 
-void MetaCache::LookupTabletByKey(const KuduTable* table,
+void MetaCache::LookupTabletByKey(Table* table,
                                   const string& partition_key,
                                   const MonoTime& deadline,
                                   scoped_refptr<RemoteTablet>* remote_tablet,

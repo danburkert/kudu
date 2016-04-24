@@ -28,13 +28,14 @@
 #include <vector>
 
 #include "kudu/client/callbacks.h"
-#include "kudu/client/client.h"
 #include "kudu/client/client-internal.h"
+#include "kudu/client/client.h"
 #include "kudu/client/error_collector.h"
 #include "kudu/client/meta_cache.h"
 #include "kudu/client/session-internal.h"
-#include "kudu/client/write_op.h"
+#include "kudu/client/table-internal.h"
 #include "kudu/client/write_op-internal.h"
+#include "kudu/client/write_op.h"
 #include "kudu/common/encoded_key.h"
 #include "kudu/common/row_operations.h"
 #include "kudu/common/wire_protocol.h"
@@ -189,10 +190,10 @@ class WriteRpc : public Rpc {
   virtual void SendRpc() OVERRIDE;
   virtual string ToString() const OVERRIDE;
 
-  const KuduTable* table() const {
+  Table* table() const {
     // All of the ops for a given tablet obviously correspond to the same table,
     // so we'll just grab the table from the first.
-    return ops_[0]->write_op->table();
+    return ops_[0]->write_op->table()->data_->get();
   }
   const RemoteTablet* tablet() const { return tablet_; }
   const vector<InFlightOp*>& ops() const { return ops_; }
@@ -248,7 +249,7 @@ WriteRpc::WriteRpc(const scoped_refptr<Batcher>& batcher,
       tablet_(tablet),
       current_ts_(NULL),
       ops_(std::move(ops)) {
-  const Schema* schema = table()->schema().schema_;
+  const Schema& schema = table()->schema();
 
   req_.set_tablet_id(tablet->tablet_id());
   switch (batcher->external_consistency_mode()) {
@@ -264,7 +265,7 @@ WriteRpc::WriteRpc(const scoped_refptr<Batcher>& batcher,
   }
 
   // Set up schema
-  CHECK_OK(SchemaToPB(*schema, req_.mutable_schema(),
+  CHECK_OK(SchemaToPB(schema, req_.mutable_schema(),
                       SCHEMA_PB_WITHOUT_STORAGE_ATTRIBUTES | SCHEMA_PB_WITHOUT_IDS));
 
   RowOperationsPB* requested = req_.mutable_row_operations();
@@ -282,7 +283,7 @@ WriteRpc::WriteRpc(const scoped_refptr<Batcher>& batcher,
     CHECK(partition_schema.PartitionContainsRow(partition, row, &partition_contains_row).ok());
     CHECK(partition_contains_row)
         << "Row " << partition_schema.RowDebugString(row)
-        << "not in partition " << partition_schema.PartitionDebugString(partition, *schema);
+        << "not in partition " << partition_schema.PartitionDebugString(partition, schema);
 #endif
 
     enc.Add(ToInternalWriteType(op->write_op->type()), op->write_op->row());
@@ -375,10 +376,9 @@ void WriteRpc::SendRpc() {
   // the write to another tablet (i.e. if it's since been split).
   if (!current_ts_) {
     batcher_->client_->meta_cache_->LookupTabletByKey(table(),
-                                                      tablet_->partition()
-                                                              .partition_key_start(),
+                                                      tablet_->partition().partition_key_start(),
                                                       retrier().deadline(),
-                                                      NULL,
+                                                      nullptr,
                                                       Bind(&WriteRpc::LookupTabletCb,
                                                           Unretained(this)));
     return;
@@ -669,7 +669,7 @@ Status Batcher::Add(KuduWriteOperation* write_op) {
   MonoTime deadline = ComputeDeadlineUnlocked();
   base::RefCountInc(&outstanding_lookups_);
   client_->meta_cache_->LookupTabletByKey(
-      op->write_op->table(),
+      op->write_op->table()->data_->get(),
       op->partition_key,
       deadline,
       &op->tablet,
