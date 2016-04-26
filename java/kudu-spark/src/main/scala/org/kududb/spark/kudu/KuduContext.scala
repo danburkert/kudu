@@ -25,7 +25,7 @@ import org.kududb.annotations.InterfaceStability
 import org.kududb.client.{AsyncKuduClient, KuduClient}
 
 /**
-  * KuduContext is a façade for Kudu operations.
+  * KuduContext is a serializable container for Kudu client connections.
   *
   * If a Kudu client connection is needed as part of a Spark application, a
   * [[KuduContext]] should used as a broadcast variable in the job in order to
@@ -39,7 +39,7 @@ class KuduContext(kuduMaster: String) extends Serializable {
     * [[org.apache.spark.util.ShutdownHookManager.DEFAULT_SHUTDOWN_PRIORITY]].
     * The client instances are closed through the JVM shutdown hook
     * mechanism in order to make sure that any unflushed writes are cleaned up
-    * properly. Spark has no way of notifying the [[DefaultSource]] on shutdown.
+    * properly. Spark has no shutdown notifications.
     */
   private val ShutdownHookPriority = 100
 
@@ -50,6 +50,7 @@ class KuduContext(kuduMaster: String) extends Serializable {
     }, ShutdownHookPriority)
     syncClient
   }
+
   @transient lazy val asyncClient = {
     val asyncClient = new AsyncKuduClient.AsyncKuduClientBuilder(kuduMaster).build()
     ShutdownHookManager.get().addShutdownHook(
@@ -71,6 +72,7 @@ class KuduContext(kuduMaster: String) extends Serializable {
   def kuduRDD(sc: SparkContext,
               tableName: String,
               columnProjection: Seq[String] = Nil): RDD[Row] = {
-    new KuduRDD(sc, kuduMaster, tableName, 1024*1024*20, columnProjection.toArray, Array())
+    new KuduRDD(kuduMaster, 1024*1024*20, columnProjection.toArray, Array(),
+                syncClient.openTable(tableName), this, sc)
   }
 }

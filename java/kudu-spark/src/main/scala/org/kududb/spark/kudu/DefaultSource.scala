@@ -25,7 +25,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Row, SQLContext}
 import org.kududb.Type
 import org.kududb.annotations.InterfaceStability
-import org.kududb.client.KuduPredicate
+import org.kududb.client.{KuduPredicate, KuduTable}
 import org.kududb.client.KuduPredicate.ComparisonOp
 
 import scala.collection.JavaConverters._
@@ -69,24 +69,18 @@ class DefaultSource extends RelationProvider {
   * @param sqlContext SparkSQL context
   */
 @InterfaceStability.Unstable
-class KuduRelation(val tableName: String,
-                   val kuduMaster: String)(
-                   @transient val sqlContext: SQLContext)
+class KuduRelation(private val tableName: String,
+                   private val kuduMaster: String)(
+                   val sqlContext: SQLContext)
 extends BaseRelation
-with PrunedFilteredScan
-with Serializable {
+with PrunedFilteredScan {
   import KuduRelation._
 
-  // Using lazy val for the following because we can't serialize them but we need them once we
-  // deserialize them.
-  @transient lazy val kuduContext = new KuduContext(kuduMaster)
-  @transient lazy val kuduTable = kuduContext.syncClient.openTable(tableName)
-  @transient lazy val tableColumns = kuduTable.getSchema.getColumns.asScala
+  private val context: KuduContext = new KuduContext(kuduMaster)
+  private val table: KuduTable = context.syncClient.openTable(tableName)
 
-  override def unhandledFilters(filters: Array[Filter]): Array[Filter] = {
-    val unhandled = filters.filterNot(supportsFilter)
-    unhandled
-  }
+  override def unhandledFilters(filters: Array[Filter]): Array[Filter] =
+    filters.filterNot(supportsFilter)
 
   /**
     * Generates a SparkSQL schema object so SparkSQL knows what is being
@@ -95,15 +89,13 @@ with Serializable {
     * @return schema generated from the Kudu table's schema
     */
   override def schema: StructType = {
-    val metadataBuilder = new MetadataBuilder()
-
-    val structFieldArray: Array[StructField] =
-      tableColumns.map { columnSchema =>
+    val fields: Array[StructField] =
+      table.getSchema.getColumns.asScala.map { columnSchema =>
         val sparkType = kuduTypeToSparkType(columnSchema.getType)
         new StructField(columnSchema.getName, sparkType, columnSchema.isNullable)
       }.toArray
 
-    new StructType(structFieldArray)
+    new StructType(fields)
   }
 
   /**
@@ -115,8 +107,8 @@ with Serializable {
     */
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
     val predicates = filters.flatMap(filterToPredicate)
-    new KuduRDD(sqlContext.sparkContext, kuduMaster, tableName,
-                1024*1024*20, requiredColumns, predicates)
+    new KuduRDD(kuduMaster, 1024*1024*20, requiredColumns, predicates,
+                table, context, sqlContext.sparkContext)
   }
 
   /**
@@ -153,7 +145,7 @@ with Serializable {
   private def comparisonPredicate(column: String,
                                   operator: ComparisonOp,
                                   value: Any): KuduPredicate = {
-    val columnSchema = kuduTable.getSchema.getColumn(column)
+    val columnSchema = table.getSchema.getColumn(column)
     value match {
       case value: Boolean => KuduPredicate.newComparisonPredicate(columnSchema, operator, value)
       case value: Byte => KuduPredicate.newComparisonPredicate(columnSchema, operator, value)
@@ -169,7 +161,7 @@ with Serializable {
   }
 }
 
-object KuduRelation {
+private[spark] object KuduRelation {
   /**
     * Converts a Kudu [[Type]] to a Spark SQL [[DataType]].
     *

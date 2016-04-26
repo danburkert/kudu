@@ -4,27 +4,40 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Row
 import org.apache.spark.{Partition, SparkContext, TaskContext}
 import org.kududb.client._
-import org.kududb.{ColumnSchema, Schema, Type, client}
+import org.kududb.{Type, client}
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 
-class KuduRDD(@transient sc: SparkContext,
-              val kuduMaster: String,
-              val tableName: String,
+/**
+  * A Resilient Distributed Dataset backed by a Kudu table.
+  */
+class KuduRDD(val kuduMaster: String,
               @transient batchSize: Integer,
               @transient projectedCols: Array[String],
-              @transient predicates: Array[client.KuduPredicate]) extends RDD[Row](sc, Nil) {
+              @transient predicates: Array[client.KuduPredicate],
+              @transient table: KuduTable,
+              @transient kc: KuduContext,
+              @transient sc: SparkContext) extends RDD[Row](sc, Nil) {
+
+  /**
+    * The [[KuduContext]] for this `KuduRDD`.
+    *
+    * The `KuduContext` manages the Kudu client instances for the `KuduRDD`.
+    * When the `KuduRDD` is first constructed it uses the context passed in as
+    * `kc`. After deserialization, a new `KuduContext` is created as necessary.
+    * The `kc` field should not be used, since it will not be rehydrated after
+    * serialization.
+    */
+  @transient private lazy val kuduContext: KuduContext = {
+    if (kc != null) kc else new KuduContext(kuduMaster)
+  }
 
   override protected def getPartitions: Array[Partition] = {
-    val client: KuduClient = new KuduContext(kuduMaster).syncClient
-
-    val table: KuduTable = client.openTable(tableName)
-
-    val builder = client.newScanTokenBuilder(table)
-                        .batchSizeBytes(batchSize)
-                        .setProjectedColumnNames(projectedCols.toSeq.asJava)
-                        .cacheBlocks(true)
+    val builder = kuduContext.syncClient
+                         .newScanTokenBuilder(table)
+                         .batchSizeBytes(batchSize)
+                         .setProjectedColumnNames(projectedCols.toSeq.asJava)
+                         .cacheBlocks(true)
 
     for (predicate <- predicates) {
       builder.addPredicate(predicate)
@@ -38,22 +51,10 @@ class KuduRDD(@transient sc: SparkContext,
   }
 
   override def compute(part: Partition, taskContext: TaskContext): Iterator[Row] = {
-    val client: KuduClient = new KuduContext(kuduMaster).syncClient
+    val client: KuduClient = kuduContext.syncClient
     val partition: KuduPartition = part.asInstanceOf[KuduPartition]
     val scanner = KuduScanToken.deserializeIntoScanner(partition.scanToken, client)
     new RowResultIteratorScala(scanner)
-  }
-
-  def buildKuduSchemaColumnMap(kuduSchema: Schema): mutable.HashMap[String, ColumnSchema] = {
-
-    var kuduSchemaColumnMap = new mutable.HashMap[String, ColumnSchema]()
-
-    val columnIt = kuduSchema.getColumns.iterator()
-    while (columnIt.hasNext) {
-      val c = columnIt.next()
-      kuduSchemaColumnMap.+=((c.getName, c))
-    }
-    kuduSchemaColumnMap
   }
 
   override def getPreferredLocations(partition: Partition): Seq[String] = {
@@ -61,13 +62,20 @@ class KuduRDD(@transient sc: SparkContext,
   }
 }
 
+/**
+  * A Spark SQL [[Partition]] which wraps a [[KuduScanToken]].
+  */
 private[spark] class KuduPartition(val index: Int,
                                    val scanToken: Array[Byte],
                                    val locations : Array[String]) extends Partition {}
 
-private[spark] class RowResultIteratorScala(scanner: KuduScanner) extends Iterator[Row] {
+/**
+  * A Spark SQL [[Row]] iterator which wraps a [[KuduScanner]].
+  * @param scanner the wrapped scanner
+  */
+private[spark] class RowResultIteratorScala(private val scanner: KuduScanner) extends Iterator[Row] {
 
-  var currentIterator: RowResultIterator = null
+  private var currentIterator: RowResultIterator = null
 
   override def hasNext: Boolean = {
     if ((currentIterator != null && !currentIterator.hasNext && scanner.hasMoreRows) ||
@@ -84,7 +92,7 @@ private[spark] class RowResultIteratorScala(scanner: KuduScanner) extends Iterat
   * A Spark SQL [[Row]] which wraps a Kudu [[RowResult]].
   * @param rowResult the wrapped row result
   */
-class KuduRow(private val rowResult: RowResult) extends Row {
+private[spark] class KuduRow(private val rowResult: RowResult) extends Row {
   override def length: Int = rowResult.getColumnProjection.getColumnCount
 
   override def get(i: Int): Any = {
