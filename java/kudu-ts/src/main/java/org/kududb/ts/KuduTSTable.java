@@ -19,11 +19,41 @@
 
 package org.kududb.ts;
 
+import javax.annotation.concurrent.NotThreadSafe;
+
 import org.kududb.annotations.InterfaceAudience;
 import org.kududb.annotations.InterfaceStability;
+import org.kududb.client.KuduTable;
 
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
-public class KuduTS {
+@NotThreadSafe
+public class KuduTSTable {
 
+  private final String tableName;
+  private final KuduTSSchema schema;
+
+  private final KuduTable metricsTable;
+  private final KuduTable tagsetsTable;
+  private final KuduTable tagsTable;
+
+  public String getTableName() {
+    return tableName;
+  }
+
+  public KuduTSSchema getSchema() {
+    return schema;
+  }
+
+  KuduTSTable(String tableName,
+              KuduTSSchema schema,
+              KuduTable metricsTable,
+              KuduTable tagsetsTable,
+              KuduTable tagsTable) {
+    this.tableName = tableName;
+    this.schema = schema;
+    this.metricsTable = metricsTable;
+    this.tagsetsTable = tagsetsTable;
+    this.tagsTable = tagsTable;
+  }
 }
