@@ -50,19 +50,19 @@ public class KuduTSClient implements AutoCloseable {
     KuduTable tagsetsTable = client.createTable(schema.getTagsetsTableName(), schema.getTagsetsSchema());
     KuduTable tagsTable = client.createTable(schema.getTagsTableName(), schema.getTagsSchema());
 
-    return new KuduTSTable(schema, metricsTable, tagsetsTable, tagsTable);
+    return new KuduTSTable(tableName, schema, metricsTable, tagsetsTable, tagsTable);
   }
 
   public KuduTSTable OpenTable(String tableName) throws Exception {
     KuduTable metricsTable = client.openTable(KuduTSSchema.metricsTableName(tableName));
-    KuduTable tagsetsTable = client.openTable(KuduTSSchema.tagsetsTableName(tableName);
-    KuduTable tagsTable = client.openTable(KuduTSSchema.tagsTableName(tableName);
+    KuduTable tagsetsTable = client.openTable(KuduTSSchema.tagsetsTableName(tableName));
+    KuduTable tagsTable = client.openTable(KuduTSSchema.tagsTableName(tableName));
 
     KuduTSSchema schema = new KuduTSSchema(tableName,
                                            metricsTable.getSchema(),
                                            tagsetsTable.getSchema(),
                                            tagsTable.getSchema());
-    return new KuduTSTable(schema, metricsTable, tagsetsTable, tagsTable);
+    return new KuduTSTable(tableName, schema, metricsTable, tagsetsTable, tagsTable);
   }
 
   @Override
