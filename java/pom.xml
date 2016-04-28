@@ -75,6 +75,7 @@
         <module>kudu-mapreduce</module>
         <module>kudu-spark</module>
         <module>kudu-flume-sink</module>
+        <module>kudu-ts</module>
     </modules>
 
     <build>
