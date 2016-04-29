@@ -24,7 +24,9 @@ import com.google.common.annotations.VisibleForTesting;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
+import com.google.common.collect.PeekingIterator;
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
 import org.kududb.annotations.InterfaceAudience;
@@ -35,9 +37,12 @@ import org.kududb.client.KuduPredicate;
 import org.kududb.client.KuduTable;
 import org.kududb.client.RowResult;
 import org.kududb.client.RowResultIterator;
+import org.kududb.util.Pair;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -85,8 +90,8 @@ public class KuduTSTable {
     this.tagsetsTable = tagsetsTable;
     this.tagsTable = tagsTable;
     this.tagsetCache = new TagsetCache(client, schema, tagsetsTable, tagsTable);
-    this.metricsQueryProjection = Lists.newArrayList(2, 3);
-    this.tagsQueryProjection = Lists.newArrayList(2);
+    this.metricsQueryProjection = Lists.newArrayList(2, 3); // time, value
+    this.tagsQueryProjection = Lists.newArrayList(2); // tagset_id
   }
 
   public QueryResult queryMetrics(long startTimestampMs,
@@ -107,7 +112,22 @@ public class KuduTSTable {
       }
     }
 
-    List<Deferred<Void>> deferreds = new ArrayList<>(tagsetIDs.size());
+    List<TimeAndValue> dataPoints =
+        getDataPoints(startTimestampMs, endTimestampMs, metricName, tagsetIDs);
+
+    qr.setTags(tags);
+    qr.setDatapoints(dataPoints);
+
+    // TODO need to grab all the tags for each tagsets?
+
+    return qr;
+  }
+
+  private List<TimeAndValue> getDataPoints(long startTimestampMs,
+                             long endTimestampMs,
+                             String metricName,
+                             Set<Long> tagsetIDs) throws Exception {
+    List<Deferred<PeekingIterator<Pair<Long, Double>>>> deferreds = new ArrayList<>(tagsetIDs.size());
 
     // Launch scanners for all the tagsetIDs.
     for (Long tagsetId : tagsetIDs) {
@@ -139,30 +159,72 @@ public class KuduTSTable {
           new MetricsScannerCB(metricScanner)));
     }
 
-    // TODO need to grab all the tags for each tagsets?
+    List<PeekingIterator<Pair<Long, Double>>> iterators = Deferred.group(deferreds).join(10000);
+    List<TimeAndValue> finalDataPoints = new ArrayList<>();
 
-    return qr;
+
+    while (!iterators.isEmpty()) {
+      long lowestValue = Long.MAX_VALUE;
+      List<PeekingIterator<Pair<Long, Double>>> iteratorsToNextOn = new ArrayList<>(iterators.size());
+      Iterator<PeekingIterator<Pair<Long, Double>>> iteratorOfIterators = iterators.iterator();
+
+      // First peek all the iterators, find the lowest timestamps and keep a list of the iterators
+      // that have it.
+      while (iteratorOfIterators.hasNext()) {
+        PeekingIterator<Pair<Long, Double>> iterator = iteratorOfIterators.next();
+        if (!iterator.hasNext()) {
+          iteratorOfIterators.remove();
+        }
+
+        long currentVal = iterator.peek().getFirst();
+        if (currentVal < lowestValue) {
+          iteratorsToNextOn.clear();
+          lowestValue = currentVal;
+          iteratorsToNextOn.add(iterator);
+        } else if (currentVal == lowestValue) {
+          iteratorsToNextOn.add(iterator);
+        }
+      }
+
+      if (lowestValue == Long.MAX_VALUE) {
+        assert (iterators.isEmpty());
+        continue;
+      }
+
+      // TODO we'd normally call an aggregation function here.
+      // Right now we average.
+      double sum = 0.0;
+      for (PeekingIterator<Pair<Long, Double>> iterator : iteratorsToNextOn) {
+        sum += iterator.next().getSecond();
+      }
+      finalDataPoints.add(new TimeAndValue(lowestValue, sum / iteratorsToNextOn.size()));
+    }
+
+    return finalDataPoints;
   }
 
-  private class MetricsScannerCB implements Callback<Deferred<Void>, RowResultIterator> {
+  private class MetricsScannerCB implements
+      Callback<Deferred<PeekingIterator<Pair<Long, Double>>>, RowResultIterator> {
 
     private final AsyncKuduScanner metricsScanner;
+    private final List<Pair<Long, Double>> datapoints = new ArrayList<>();
 
     MetricsScannerCB(AsyncKuduScanner metricsScanner) {
       this.metricsScanner = metricsScanner;
     }
 
     @Override
-    public Deferred<Void> call(RowResultIterator rowResults) throws Exception {
+    public Deferred<PeekingIterator<Pair<Long, Double>>> call(RowResultIterator rowResults) throws Exception {
 
       for (RowResult rr : rowResults) {
-        //ids.add(rr.getLong(0));
+        datapoints.add(new Pair<Long, Double>(rr.getLong(0), rr.getDouble(1)));
       }
 
       if (metricsScanner.hasMoreRows()) {
         return metricsScanner.nextRows().addCallbackDeferring(this);
       }
-      return Deferred.fromResult(null);
+      PeekingIterator<Pair<Long, Double>> iterator = Iterators.peekingIterator(datapoints.iterator());
+      return Deferred.fromResult(iterator);
     }
   }
 

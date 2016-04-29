@@ -19,13 +19,14 @@
 
 package org.kududb.ts;
 
+import java.util.List;
 import java.util.Map;
 
 public class QueryResult {
 
   private final String name;
   private Map<String, String> tags;
-  private Map<Long, String> datapoints;
+  private List<TimeAndValue> datapoints;
 
   public QueryResult(String name) {
     this.name = name;
@@ -43,11 +44,11 @@ public class QueryResult {
     this.tags = tags;
   }
 
-  public Map<Long, String> getDatapoints() {
+  public List<TimeAndValue> getDatapoints() {
     return datapoints;
   }
 
-  public void setDatapoints(Map<Long, String> datapoints) {
+  public void setDatapoints(List<TimeAndValue> datapoints) {
     this.datapoints = datapoints;
   }
 }
