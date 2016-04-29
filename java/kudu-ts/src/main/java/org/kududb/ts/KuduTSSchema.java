@@ -56,7 +56,7 @@ public class KuduTSSchema {
     Schema tagsSchema = new Schema(ImmutableList.of(
         new ColumnSchema.ColumnSchemaBuilder("key", Type.STRING).nullable(false).key(true).build(),
         new ColumnSchema.ColumnSchemaBuilder("value", Type.STRING).nullable(false).key(true).build(),
-        new ColumnSchema.ColumnSchemaBuilder("id", Type.INT64).build()));
+        new ColumnSchema.ColumnSchemaBuilder("id", Type.INT64).nullable(false).key(true).build()));
 
     return new KuduTSSchema(tableName, metricsSchema, tagsetsSchema, tagsSchema);
   }

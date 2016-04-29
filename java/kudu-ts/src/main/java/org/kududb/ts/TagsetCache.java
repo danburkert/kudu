@@ -369,7 +369,7 @@ class TagsetCache {
   }
 
   private Deferred<Long> insertTags(ByteBuffer tagset, final long id) {
-    LOG.debug("Inserting tags: {}", deserializeTagset(tagset));
+    LOG.debug("Inserting tags. ID: {}, tags: {}", id, deserializeTagset(tagset));
     Messages.Tagset tags = deserializeTagset(tagset);
     AsyncKuduSession session = client.newSession();
     session.setFlushMode(SessionConfiguration.FlushMode.AUTO_FLUSH_BACKGROUND);

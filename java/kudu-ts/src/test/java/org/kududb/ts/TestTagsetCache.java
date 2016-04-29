@@ -23,6 +23,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.stumbleupon.async.Deferred;
 
@@ -39,7 +40,7 @@ public class TestTagsetCache extends BaseKuduTest {
   @Test(timeout = 10000)
   public void testTimeseriesLookup() throws Exception {
     KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
-    KuduTSTable table = client.CreateTable("test");
+    KuduTSTable table = client.CreateTable("testTimeseriesLookup");
     TagsetCache cache = table.getTagsetCache();
     SortedMap<String, String> tagset = ImmutableSortedMap.of("k1", "v1");
 
@@ -56,7 +57,7 @@ public class TestTagsetCache extends BaseKuduTest {
   @Test(timeout = 10000)
   public void testConcurrentLookup() throws Exception {
     KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
-    KuduTSTable table = client.CreateTable("test");
+    KuduTSTable table = client.CreateTable("testConcurrentLookup");
     TagsetCache cache = table.getTagsetCache();
     SortedMap<String, String> tagset = ImmutableSortedMap.of("k1", "v1");
 
@@ -75,13 +76,13 @@ public class TestTagsetCache extends BaseKuduTest {
   @Test
   public void testMultipleTagsets() throws Exception {
     KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
-    KuduTSTable table = client.CreateTable("test");
+    KuduTSTable table = client.CreateTable("testMultipleTagsets");
     TagsetCache cache = table.getTagsetCache();
     long id1 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v1")).join();
     long id2 = cache.getTagsetID(ImmutableSortedMap.of("k2", "v2")).join();
-//    loa id3 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v1", "k2", "v2", "k3", "v3")).join();
-//    long id4 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v2")).join();
-//    long id5 = cache.getTagsetID(ImmutableSortedMap.of("k2", "v1")).join();
-//    assertEquals(id1, ImmutableSet.of(id1, id2, id3, id4, id5).size());
+    long id3 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v1", "k2", "v2", "k3", "v3")).join();
+    long id4 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v2")).join();
+    long id5 = cache.getTagsetID(ImmutableSortedMap.of("k2", "v1")).join();
+    assertEquals(5, ImmutableSet.of(id1, id2, id3, id4, id5).size());
   }
 }
