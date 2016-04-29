@@ -39,7 +39,7 @@ public abstract class AbstractKuduScannerBuilder
   /** Map of column name to predicate */
   final Map<String, KuduPredicate> predicates = new HashMap<>();
 
-  AsyncKuduScanner.ReadMode readMode = AsyncKuduScanner.ReadMode.READ_LATEST;
+  AsyncKuduScanner.ReadMode readMode = AsyncKuduScanner.ReadMode.READ_AT_SNAPSHOT;
   int batchSizeBytes = 1024*1024;
   long limit = Long.MAX_VALUE;
   boolean prefetching = false;
