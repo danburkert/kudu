@@ -33,10 +33,16 @@ import org.kududb.annotations.InterfaceAudience;
 import org.kududb.annotations.InterfaceStability;
 import org.kududb.client.AsyncKuduClient;
 import org.kududb.client.AsyncKuduScanner;
+import org.kududb.client.AsyncKuduSession;
+import org.kududb.client.Insert;
 import org.kududb.client.KuduPredicate;
 import org.kududb.client.KuduTable;
+import org.kududb.client.OperationResponse;
+import org.kududb.client.PartialRow;
+import org.kududb.client.PleaseThrottleException;
 import org.kududb.client.RowResult;
 import org.kududb.client.RowResultIterator;
+import org.kududb.client.SessionConfiguration;
 import org.kududb.util.Pair;
 
 import java.util.ArrayList;
@@ -46,6 +52,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
 
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
@@ -59,6 +66,7 @@ public class KuduTSTable {
   private final KuduTable metricsTable;
   private final KuduTable tagsetsTable;
   private final KuduTable tagsTable;
+  private final AsyncKuduSession session;
 
   private final TagsetCache tagsetCache;
   private final List<Integer> metricsQueryProjection;
@@ -92,12 +100,37 @@ public class KuduTSTable {
     this.tagsetCache = new TagsetCache(client, schema, tagsetsTable, tagsTable);
     this.metricsQueryProjection = Lists.newArrayList(2, 3); // time, value
     this.tagsQueryProjection = Lists.newArrayList(2); // tagset_id
+    this.session = client.newSession();
+    session.setFlushMode(SessionConfiguration.FlushMode.AUTO_FLUSH_BACKGROUND);
+  }
+
+  public void writeMetric(String metricName, SortedMap<String, String> tags,
+                          long timestamp, double value) throws Exception {
+    long id = tagsetCache.getTagsetID(tags).join(10000);
+    Insert insert = metricsTable.newInsert();
+    PartialRow row = insert.getRow();
+    row.addString(0, metricName);
+    row.addLong(1, id);
+    row.addLong(2, timestamp);
+    row.addDouble(3, value);
+    while (true) {
+      try {
+        session.apply(insert);
+        break;
+      } catch (PleaseThrottleException ex) {
+        ex.getDeferred().join(10000);
+      }
+    }
+  }
+
+  public void flush() throws Exception {
+    session.flush().join(10000);
   }
 
   public QueryResult queryMetrics(long startTimestampMs,
                                   long endTimestampMs,
                                   String metricName,
-                                  Map<String, String> tags) throws Exception {
+                                  SortedMap<String, String> tags) throws Exception {
 
     QueryResult qr  = new QueryResult(metricName);
     // If the user doesn't provide tags, then we want all the data points for the specified metric.
@@ -132,19 +165,19 @@ public class KuduTSTable {
     // Launch scanners for all the tagsetIDs.
     for (Long tagsetId : tagsetIDs) {
       KuduPredicate metricPred = KuduPredicate.newComparisonPredicate(
-          tagsTable.getSchema().getColumnByIndex(0),
+          metricsTable.getSchema().getColumnByIndex(0),
           KuduPredicate.ComparisonOp.EQUAL, metricName);
 
       KuduPredicate tagsetIdPred = KuduPredicate.newComparisonPredicate(
-          tagsTable.getSchema().getColumnByIndex(1),
+          metricsTable.getSchema().getColumnByIndex(1),
           KuduPredicate.ComparisonOp.EQUAL, tagsetId);
 
       KuduPredicate startTimestampPred = KuduPredicate.newComparisonPredicate(
-          tagsTable.getSchema().getColumnByIndex(2),
+          metricsTable.getSchema().getColumnByIndex(2),
           KuduPredicate.ComparisonOp.GREATER, startTimestampMs);
 
       KuduPredicate endTimestampPred = KuduPredicate.newComparisonPredicate(
-          tagsTable.getSchema().getColumnByIndex(2),
+          metricsTable.getSchema().getColumnByIndex(2),
           KuduPredicate.ComparisonOp.LESS, endTimestampMs);
 
       AsyncKuduScanner metricScanner = client.newScannerBuilder(metricsTable)
@@ -174,6 +207,7 @@ public class KuduTSTable {
         PeekingIterator<Pair<Long, Double>> iterator = iteratorOfIterators.next();
         if (!iterator.hasNext()) {
           iteratorOfIterators.remove();
+          continue;
         }
 
         long currentVal = iterator.peek().getFirst();
