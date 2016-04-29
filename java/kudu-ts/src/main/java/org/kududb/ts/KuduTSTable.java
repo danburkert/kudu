@@ -19,10 +19,13 @@
 
 package org.kududb.ts;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import javax.annotation.concurrent.NotThreadSafe;
 
 import org.kududb.annotations.InterfaceAudience;
 import org.kududb.annotations.InterfaceStability;
+import org.kududb.client.AsyncKuduClient;
 import org.kududb.client.KuduTable;
 
 @InterfaceAudience.Public
@@ -30,12 +33,15 @@ import org.kududb.client.KuduTable;
 @NotThreadSafe
 public class KuduTSTable {
 
+  private final AsyncKuduClient client;
   private final String tableName;
   private final KuduTSSchema schema;
 
   private final KuduTable metricsTable;
   private final KuduTable tagsetsTable;
   private final KuduTable tagsTable;
+
+  private final TagsetCache tagsetCache;
 
   public String getTableName() {
     return tableName;
@@ -45,15 +51,23 @@ public class KuduTSTable {
     return schema;
   }
 
-  KuduTSTable(String tableName,
+  @VisibleForTesting
+  public TagsetCache getTagsetCache() {
+    return tagsetCache;
+  }
+
+  KuduTSTable(AsyncKuduClient client,
+              String tableName,
               KuduTSSchema schema,
               KuduTable metricsTable,
               KuduTable tagsetsTable,
               KuduTable tagsTable) {
+    this.client = client;
     this.tableName = tableName;
     this.schema = schema;
     this.metricsTable = metricsTable;
     this.tagsetsTable = tagsetsTable;
     this.tagsTable = tagsTable;
+    this.tagsetCache = new TagsetCache(client, schema, tagsetsTable, tagsTable);
   }
 }

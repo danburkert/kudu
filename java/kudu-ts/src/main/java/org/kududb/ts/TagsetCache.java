@@ -19,7 +19,7 @@
 
 package org.kududb.ts;
 
-import com.google.common.base.Charsets;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -28,7 +28,13 @@ import com.sangupta.murmur.Murmur2;
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Map;
+import java.util.SortedMap;
 import javax.annotation.concurrent.ThreadSafe;
 
 import org.kududb.ColumnSchema;
@@ -45,39 +51,95 @@ import org.kududb.client.PleaseThrottleException;
 import org.kududb.client.RowError;
 import org.kududb.client.RowResult;
 import org.kududb.client.RowResultIterator;
+import org.kududb.client.SessionConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @InterfaceAudience.Private
 @ThreadSafe
 public class TagsetCache {
-  private final KuduTSSchema schema;
+  private static final Logger LOG = LoggerFactory.getLogger(TagsetCache.class);
+
   private final AsyncKuduClient client;
   private final KuduTable tagsetsTable;
-  private final ColumnSchema tagsetColumn;
+  private final KuduTable tagsTable;
+  private final ColumnSchema tagsetIDColumn;
   private final int tagsetIDColumnIndex;
   private final int tagsetColumnIndex;
+  private final int tagsKeyColumnIndex;
+  private final int tagsValueColumnIndex;
+  private final int tagsTagsetIDColumnIndex;
   private final List<Integer> columnIndexes;
 
   private static final long SEED = 0X9883143CFDDB5C3FL;
 
   /** Map of tagset to tagset ID. */
-  private final LoadingCache<String, Deferred<Long>> tagsets;
+  private final LoadingCache<ByteBuffer, Deferred<Long>> tagsets;
 
-  public TagsetCache(KuduTSSchema schema, AsyncKuduClient client, KuduTable tagsetsTable) {
-    this.schema = schema;
+  public TagsetCache(AsyncKuduClient client, KuduTSSchema schema,
+                     KuduTable tagsetsTable, KuduTable tagsTable) {
     this.client = client;
     this.tagsetsTable = tagsetsTable;
+    this.tagsTable = tagsTable;
     this.tagsetIDColumnIndex = schema.getTagsetsSchema().getColumnIndex("id");
     this.tagsetColumnIndex = schema.getTagsetsSchema().getColumnIndex("tagset");
     this.columnIndexes = ImmutableList.of(tagsetIDColumnIndex, tagsetColumnIndex);
-    this.tagsetColumn = schema.getTagsetsSchema().getColumnByIndex(tagsetColumnIndex);
+    this.tagsetIDColumn = schema.getTagsetsSchema().getColumnByIndex(tagsetIDColumnIndex);
+    this.tagsKeyColumnIndex = schema.getTagsSchema().getColumnIndex("key");
+    this.tagsValueColumnIndex = schema.getTagsSchema().getColumnIndex("value");
+    this.tagsTagsetIDColumnIndex = schema.getTagsSchema().getColumnIndex("id");
     this.tagsets = CacheBuilder.newBuilder()
                                .maximumSize(1024 * 1024)
-                               .build(new CacheLoader<String, Deferred<Long>>() {
+                               .build(new CacheLoader<ByteBuffer, Deferred<Long>>() {
                                  @Override
-                                 public Deferred<Long> load(String tagset) throws Exception {
-                                   return getTagsetID(tagset);
+                                 public Deferred<Long> load(ByteBuffer tagset) throws Exception {
+                                   return lookupTagsetID(tagset);
                                  }
                                });
+  }
+
+  /**
+   * Get the ID for a tagset. If the tagset doesn't already have an assigned ID,
+   * then a new ID entry will be inserted into the {@code tagset} table, and new
+   * tag entries added to the {@code tags} table.
+   * @param tagset the tagset
+   * @return the ID for the tagset
+   */
+  public Deferred<Long> getTagsetID(SortedMap<String, String> tagset) {
+    return tagsets.getUnchecked(serializeTagset(tagset));
+  }
+
+  @VisibleForTesting
+  void clear() {
+    tagsets.invalidateAll();
+  }
+
+  @VisibleForTesting
+  static ByteBuffer serializeTagset(SortedMap<String, String> tagset) {
+    Messages.Tagset.Builder builder = Messages.Tagset.newBuilder();
+    for (Map.Entry<String, String> tag : tagset.entrySet()) {
+      builder.addTagsBuilder().setKey(tag.getKey()).setValue(tag.getValue());
+    }
+
+    try {
+      Messages.Tagset pb = builder.build();
+      ByteArrayOutputStream baos = new ByteArrayOutputStream(pb.getSerializedSize());
+      pb.writeTo(baos);
+      byte[] bytes = baos.toByteArray();
+      ByteBuffer buf = ByteBuffer.wrap(bytes);
+      return buf;
+    } catch (IOException e) {
+      // This should be impossible with ByteArrayOutputStream
+      throw new RuntimeException(e);
+    }
+  }
+
+  @VisibleForTesting
+  static long hashSerializedTagset(ByteBuffer tagset) {
+    if (!tagset.hasArray()) {
+      throw new IllegalArgumentException("serialized tagset ByteBuffer must have an array");
+    }
+    return Murmur2.hash64(tagset.array(), tagset.position(), SEED);
   }
 
   /**
@@ -85,12 +147,11 @@ public class TagsetCache {
    * doesn't exist in the table, then it is added along with corresponding
    * entries in the {@code tags} table.
    *
-   * @param tagset the tagset
+   * @param tagset the serialized tagset
    * @return the tagset ID
    */
-  private Deferred<Long> getTagsetID(final String tagset) {
-    byte[] tagsetBuf = tagset.getBytes(Charsets.UTF_8);
-    final long hash = Murmur2.hash64(tagsetBuf, tagsetBuf.length, SEED);
+  private Deferred<Long> lookupTagsetID(final ByteBuffer tagset) {
+    final long hash = hashSerializedTagset(tagset);
     return lookupTagset(tagset, hash).addCallbackDeferring(
         new Callback<Deferred<Long>, TagsetLookupResult>() {
           @Override
@@ -98,7 +159,7 @@ public class TagsetCache {
             if (result.isFound()) {
               return Deferred.fromResult(result.id);
             } else {
-              return insertTagset(tagset, hash).addCallbackDeferring(new InsertTags());
+              return insertTagset(tagset, hash).addCallbackDeferring(new InsertTags(tagset));
             }
           }
         });
@@ -111,11 +172,11 @@ public class TagsetCache {
    */
   private AsyncKuduScanner tagsetScanner(long from) {
     AsyncKuduScanner.AsyncKuduScannerBuilder scanBuilder = client.newScannerBuilder(tagsetsTable);
-    scanBuilder.addPredicate(KuduPredicate.newComparisonPredicate(tagsetColumn,
+    scanBuilder.addPredicate(KuduPredicate.newComparisonPredicate(tagsetIDColumn,
                                                                   ComparisonOp.GREATER_EQUAL,
                                                                   from));
     if (from < Long.MAX_VALUE - 10) {
-      scanBuilder.addPredicate(KuduPredicate.newComparisonPredicate(tagsetColumn,
+      scanBuilder.addPredicate(KuduPredicate.newComparisonPredicate(tagsetIDColumn,
                                                                     ComparisonOp.LESS,
                                                                     from + 10));
     }
@@ -123,7 +184,7 @@ public class TagsetCache {
     return scanBuilder.build();
   }
 
-  private Deferred<TagsetLookupResult> lookupTagset(String tagset, long hash) {
+  private Deferred<TagsetLookupResult> lookupTagset(ByteBuffer tagset, long hash) {
     AsyncKuduScanner tagsetScanner = tagsetScanner(hash);
 
     return tagsetScanner.nextRows().addCallbackDeferring(
@@ -136,11 +197,11 @@ public class TagsetCache {
    * @param id the ID to insert the tagset with
    * @return the completion
    */
-  private Deferred<OperationResponse> insertTagsetWithID(final String tagset, final long id) {
+  private Deferred<OperationResponse> insertTagsetWithID(final ByteBuffer tagset, final long id) {
     final AsyncKuduSession session = client.newSession();
     Insert insert = tagsetsTable.newInsert();
     insert.getRow().addLong(tagsetIDColumnIndex, id);
-    insert.getRow().addString(tagsetColumnIndex, tagset);
+    insert.getRow().addBinary(tagsetColumnIndex, tagset);
     try {
       return session.apply(insert);
     } catch (PleaseThrottleException e) {
@@ -159,15 +220,8 @@ public class TagsetCache {
    * @param hash the hash of the tagset
    * @return the tagset ID
    */
-  private Deferred<Long> insertTagset(String tagset, long hash) {
+  private Deferred<Long> insertTagset(ByteBuffer tagset, long hash) {
     return insertTagsetWithID(tagset, hash).addCallbackDeferring(new TagsetInsert(tagset, hash));
-  }
-
-  private final class Loader extends CacheLoader<String, Deferred<Long>> {
-    @Override
-    public Deferred<Long> load(String tagset) throws Exception {
-      return getTagsetID(tagset);
-    }
   }
 
   private static class TagsetLookupResult {
@@ -193,14 +247,16 @@ public class TagsetCache {
   }
 
   private final class TagsetLookup implements Callback<Deferred<TagsetLookupResult>, RowResultIterator> {
-    private final String tagset;
+    private final ByteBuffer tagset;
     private AsyncKuduScanner scanner;
+    private final long hash;
     private long probe;
 
-    public TagsetLookup(String tagset, long probeFrom, AsyncKuduScanner scanner) {
+    public TagsetLookup(ByteBuffer tagset, long hash, AsyncKuduScanner scanner) {
       this.tagset = tagset;
       this.scanner = scanner;
-      this.probe = probeFrom;
+      this.hash = hash;
+      this.probe = hash;
     }
 
     @Override
@@ -222,6 +278,10 @@ public class TagsetCache {
       // We probed through the entire RowResult and didn't find the tagset.
 
       if (!scanner.hasMoreRows()) {
+        if (hash == probe) {
+          // The scan returned no results
+          return Deferred.fromResult(TagsetLookupResult.notFound(probe));
+        }
         scanner = tagsetScanner(probe);
       }
       return scanner.nextRows().addCallbackDeferring(this);
@@ -229,10 +289,10 @@ public class TagsetCache {
   }
 
   private final class TagsetInsert implements Callback<Deferred<Long>, OperationResponse> {
-    private final String tagset;
+    private final ByteBuffer tagset;
     private long id;
 
-    public TagsetInsert(String tagset, long id) {
+    public TagsetInsert(ByteBuffer tagset, long id) {
       this.tagset = tagset;
       this.id = id;
     }
@@ -256,9 +316,49 @@ public class TagsetCache {
   }
 
   private final class InsertTags implements Callback<Deferred<Long>, Long> {
+    Messages.Tagset tagset;
+
+    public InsertTags(ByteBuffer tagset) {
+      if (!tagset.hasArray()) {
+        throw new IllegalArgumentException("serialized tagset ByteBuffer must have an array");
+      }
+      ByteArrayInputStream bais = new ByteArrayInputStream(tagset.array(),
+                                                           tagset.position(),
+                                                           tagset.limit() - tagset.position());
+      try {
+        this.tagset = Messages.Tagset.parseFrom(bais);
+      } catch (IOException e) {
+        // Should never happen with ByteArrayInputStream.
+        throw new RuntimeException(e);
+      }
+    }
+
     @Override
-    public Deferred<Long> call(Long id) throws Exception {
-      return Deferred.fromResult(id);
+    public Deferred<Long> call(final Long id) throws Exception {
+      AsyncKuduSession session = client.newSession();
+      session.setFlushMode(SessionConfiguration.FlushMode.AUTO_FLUSH_BACKGROUND);
+      for (Messages.Tagset.Tag tag : tagset.getTagsList()) {
+        Insert insert = tagsTable.newInsert();
+        insert.getRow().addString(tagsKeyColumnIndex, tag.getKey());
+        insert.getRow().addString(tagsValueColumnIndex, tag.getValue());
+        insert.getRow().addLong(tagsTagsetIDColumnIndex, id);
+        // TODO: check with JD if the below fails, it will be caught in the flush
+        session.apply(insert);
+      }
+
+      return session.flush().addCallbackDeferring(new Callback<Deferred<Long>,
+                                                  List<OperationResponse>>() {
+        @Override
+        public Deferred<Long> call(List<OperationResponse> responses) throws Exception {
+          for (OperationResponse response : responses) {
+            if (response.hasRowError()) {
+              return Deferred.fromError(new RuntimeException(
+                  String.format("Unable to insert tag: %s", response.getRowError())));
+            }
+          }
+          return Deferred.fromResult(id);
+        }
+      });
     }
   }
 }

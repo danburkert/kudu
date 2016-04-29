@@ -19,13 +19,14 @@
 
 package org.kududb.ts;
 
-import java.util.List;
+import com.stumbleupon.async.Deferred;
 
+import java.util.List;
 import javax.annotation.concurrent.ThreadSafe;
 
 import org.kududb.annotations.InterfaceAudience;
 import org.kududb.annotations.InterfaceStability;
-import org.kududb.client.KuduClient;
+import org.kududb.client.AsyncKuduClient;
 import org.kududb.client.KuduTable;
 
 @InterfaceAudience.Public
@@ -33,10 +34,10 @@ import org.kududb.client.KuduTable;
 @ThreadSafe
 public class KuduTSClient implements AutoCloseable {
 
-  private final KuduClient client;
+  private final AsyncKuduClient client;
 
   private KuduTSClient(List<String> masterAddresses) {
-    client = new KuduClient.KuduClientBuilder(masterAddresses).build();
+    client = new AsyncKuduClient.AsyncKuduClientBuilder(masterAddresses).build();
   }
 
   public static KuduTSClient create(List<String> masterAddresses) {
@@ -46,23 +47,29 @@ public class KuduTSClient implements AutoCloseable {
   public KuduTSTable CreateTable(String tableName) throws Exception {
     KuduTSSchema schema = KuduTSSchema.create(tableName);
 
-    KuduTable metricsTable = client.createTable(schema.getMetricsTableName(), schema.getMetricsSchema());
-    KuduTable tagsetsTable = client.createTable(schema.getTagsetsTableName(), schema.getTagsetsSchema());
-    KuduTable tagsTable = client.createTable(schema.getTagsTableName(), schema.getTagsSchema());
+    Deferred<KuduTable> metricsTable = client.createTable(schema.getMetricsTableName(), schema.getMetricsSchema());
+    Deferred<KuduTable> tagsetsTable = client.createTable(schema.getTagsetsTableName(), schema.getTagsetsSchema());
+    Deferred<KuduTable> tagsTable = client.createTable(schema.getTagsTableName(), schema.getTagsSchema());
 
-    return new KuduTSTable(tableName, schema, metricsTable, tagsetsTable, tagsTable);
+    return new KuduTSTable(client, tableName, schema,
+                           metricsTable.join(client.getDefaultAdminOperationTimeoutMs()),
+                           tagsetsTable.join(client.getDefaultAdminOperationTimeoutMs()),
+                           tagsTable.join(client.getDefaultAdminOperationTimeoutMs()));
   }
 
   public KuduTSTable OpenTable(String tableName) throws Exception {
-    KuduTable metricsTable = client.openTable(KuduTSSchema.metricsTableName(tableName));
-    KuduTable tagsetsTable = client.openTable(KuduTSSchema.tagsetsTableName(tableName));
-    KuduTable tagsTable = client.openTable(KuduTSSchema.tagsTableName(tableName));
+    Deferred<KuduTable> metrics = client.openTable(KuduTSSchema.metricsTableName(tableName));
+    Deferred<KuduTable> tagsets = client.openTable(KuduTSSchema.tagsetsTableName(tableName));
+    Deferred<KuduTable> tags = client.openTable(KuduTSSchema.tagsTableName(tableName));
+    KuduTable metricsTable = metrics.join(client.getDefaultAdminOperationTimeoutMs());
+    KuduTable tagsetsTable = tagsets.join(client.getDefaultAdminOperationTimeoutMs());
+    KuduTable tagsTable = tags.join(client.getDefaultAdminOperationTimeoutMs());
 
     KuduTSSchema schema = new KuduTSSchema(tableName,
                                            metricsTable.getSchema(),
                                            tagsetsTable.getSchema(),
                                            tagsTable.getSchema());
-    return new KuduTSTable(tableName, schema, metricsTable, tagsetsTable, tagsTable);
+    return new KuduTSTable(client, tableName, schema, metricsTable, tagsetsTable, tagsTable);
   }
 
   @Override
