@@ -709,6 +709,7 @@ public final class AsyncKuduScanner {
           // is the easiest way.
           AsyncKuduScanner.this.tablet = super.getTablet();
           NewScanRequestPB.Builder newBuilder = NewScanRequestPB.newBuilder();
+          newBuilder.setOrderMode(Common.OrderMode.ORDERED);
           newBuilder.setLimit(limit); // currently ignored
           newBuilder.addAllProjectedColumns(ProtobufHelper.schemaToListPb(schema));
           newBuilder.setTabletId(ZeroCopyLiteralByteString.wrap(tablet.getTabletIdAsBytes()));
