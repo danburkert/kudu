@@ -36,21 +36,6 @@ import org.slf4j.LoggerFactory;
 public class TestTagsetCache extends BaseKuduTest {
   private static final Logger LOG = LoggerFactory.getLogger(TestTagsetCache.class);
 
-  @Test
-  public void test() throws Exception {
-    KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
-    KuduTSTable table = client.CreateTable("test");
-    TagsetCache cache = table.getTagsetCache();
-    long id1 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v1")).join();
-
-
-
-//    long id2 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v1", "k2", "v2")).join();
-//    long id3 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v1", "k2", "v2", "k3", "v3")).join();
-//    long id4 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v2")).join();
-//    long id5 = cache.getTagsetID(ImmutableSortedMap.of("k2", "v1")).join();
-  }
-
   @Test(timeout = 10000)
   public void testTimeseriesLookup() throws Exception {
     KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
@@ -85,5 +70,18 @@ public class TestTagsetCache extends BaseKuduTest {
     long id2 = d2.join();
 
     assertEquals(id1, id2);
+  }
+
+  @Test
+  public void testMultipleTagsets() throws Exception {
+    KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
+    KuduTSTable table = client.CreateTable("test");
+    TagsetCache cache = table.getTagsetCache();
+    long id1 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v1")).join();
+    long id2 = cache.getTagsetID(ImmutableSortedMap.of("k2", "v2")).join();
+//    loa id3 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v1", "k2", "v2", "k3", "v3")).join();
+//    long id4 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v2")).join();
+//    long id5 = cache.getTagsetID(ImmutableSortedMap.of("k2", "v1")).join();
+//    assertEquals(id1, ImmutableSet.of(id1, id2, id3, id4, id5).size());
   }
 }
