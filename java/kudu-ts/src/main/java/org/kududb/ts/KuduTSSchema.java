@@ -45,18 +45,18 @@ public class KuduTSSchema {
 
     Schema metricsSchema = new Schema(ImmutableList.of(
         new ColumnSchema.ColumnSchemaBuilder("metric", Type.STRING).nullable(false).key(true).build(),
-        new ColumnSchema.ColumnSchemaBuilder("tagset_id", Type.INT64).nullable(false).key(true).build(),
+        new ColumnSchema.ColumnSchemaBuilder("tagset_id", Type.INT32).nullable(false).key(true).build(),
         new ColumnSchema.ColumnSchemaBuilder("time", Type.TIMESTAMP).nullable(false).key(true).build(),
         new ColumnSchema.ColumnSchemaBuilder("value", Type.DOUBLE).nullable(false).build()));
 
     Schema tagsetsSchema = new Schema(ImmutableList.of(
-        new ColumnSchema.ColumnSchemaBuilder("id", Type.INT64).nullable(false).key(true).build(),
+        new ColumnSchema.ColumnSchemaBuilder("id", Type.INT32).nullable(false).key(true).build(),
         new ColumnSchema.ColumnSchemaBuilder("tagset", Type.BINARY).nullable(false).build()));
 
     Schema tagsSchema = new Schema(ImmutableList.of(
         new ColumnSchema.ColumnSchemaBuilder("key", Type.STRING).nullable(false).key(true).build(),
         new ColumnSchema.ColumnSchemaBuilder("value", Type.STRING).nullable(false).key(true).build(),
-        new ColumnSchema.ColumnSchemaBuilder("id", Type.INT64).nullable(false).key(true).build()));
+        new ColumnSchema.ColumnSchemaBuilder("id", Type.INT32).nullable(false).key(true).build()));
 
     return new KuduTSSchema(tableName, metricsSchema, tagsetsSchema, tagsSchema);
   }

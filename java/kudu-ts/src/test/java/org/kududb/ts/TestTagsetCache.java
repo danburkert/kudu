@@ -47,11 +47,11 @@ public class TestTagsetCache extends BaseKuduTest {
     TagsetCache cache = table.getTagsetCache();
     SortedMap<String, String> tagset = ImmutableSortedMap.of("k1", "v1");
 
-    long tagsetHash = cache.hashSerializedTagset(TagsetCache.serializeTagset(tagset));
+    int tagsetHash = cache.hashSerializedTagset(TagsetCache.serializeTagset(tagset));
 
-    long insertID = cache.getTagsetID(tagset).join();
+    int insertID = cache.getTagsetID(tagset).join();
     cache.clear();
-    long lookupID = cache.getTagsetID(tagset).join();
+    int lookupID = cache.getTagsetID(tagset).join();
 
     assertEquals(tagsetHash, insertID);
     assertEquals(insertID, lookupID);
@@ -64,16 +64,25 @@ public class TestTagsetCache extends BaseKuduTest {
     TagsetCache cache = table.getTagsetCache();
     SortedMap<String, String> tagset = ImmutableSortedMap.of("k1", "v1");
 
-    Deferred<Long> d1 = cache.getTagsetID(tagset);
+    Deferred<Integer> d1 = cache.getTagsetID(tagset);
     cache.clear();
-    Deferred<Long> d2 = cache.getTagsetID(tagset);
+    Deferred<Integer> d2 = cache.getTagsetID(tagset);
 
     assertNotEquals(d1, d2);
 
-    long id1 = d1.join();
-    long id2 = d2.join();
+    int id1 = d1.join();
+    int id2 = d2.join();
 
     assertEquals(id1, id2);
+  }
+
+  @Test//(timeout = 10000)
+  public void testEmptyTagsetLookup() throws Exception {
+    KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
+    KuduTSTable table = client.CreateTable("testEmptyTagsetLookup");
+    TagsetCache cache = table.getTagsetCache();
+    int id = cache.getTagsetID(ImmutableSortedMap.<String, String>of()).join();
+    assertEquals(0, id);
   }
 
   @Test
@@ -81,12 +90,13 @@ public class TestTagsetCache extends BaseKuduTest {
     KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
     KuduTSTable table = client.CreateTable("testMultipleTagsets");
     TagsetCache cache = table.getTagsetCache();
-    long id1 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v1")).join();
-    long id2 = cache.getTagsetID(ImmutableSortedMap.of("k2", "v2")).join();
-    long id3 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v1", "k2", "v2", "k3", "v3")).join();
-    long id4 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v2")).join();
-    long id5 = cache.getTagsetID(ImmutableSortedMap.of("k2", "v1")).join();
-    assertEquals(5, ImmutableSet.of(id1, id2, id3, id4, id5).size());
+    int id1 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v1")).join();
+    int id2 = cache.getTagsetID(ImmutableSortedMap.of("k2", "v2")).join();
+    int id3 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v1", "k2", "v2", "k3", "v3")).join();
+    int id4 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v2")).join();
+    int id5 = cache.getTagsetID(ImmutableSortedMap.of("k2", "v1")).join();
+    int id6 = cache.getTagsetID(ImmutableSortedMap.<String, String>of()).join();
+    assertEquals(6, ImmutableSet.of(id1, id2, id3, id4, id5, id6).size());
   }
 
   @Test
@@ -97,21 +107,21 @@ public class TestTagsetCache extends BaseKuduTest {
 
     int numTagsets = 100;
 
-    cache.setHashForTesting(Long.MAX_VALUE - 35);
+    cache.setHashForTesting(Integer.MAX_VALUE - 35);
 
-    List<Deferred<Long>> deferreds = new ArrayList<>();
-    for (long i = Long.MAX_VALUE - 35L; i <= Long.MAX_VALUE; i++) {
-      deferreds.add(cache.getTagsetID(ImmutableSortedMap.of("key", Long.toString(i))));
+    List<Deferred<Integer>> deferreds = new ArrayList<>();
+    for (int i = 0; i < 35; i++) {
+      deferreds.add(cache.getTagsetID(ImmutableSortedMap.of("key", Integer.toString((Integer.MAX_VALUE - 35) + i))));
     }
-    for (long i = 0; i <= numTagsets; i++) {
-      deferreds.add(cache.getTagsetID(ImmutableSortedMap.of("key", Long.toString(i))));
+    for (int i = 0; i <= numTagsets; i++) {
+      deferreds.add(cache.getTagsetID(ImmutableSortedMap.of("key", Integer.toString(i))));
     }
 
-    List<Long> ids = Deferred.group(deferreds).join();
+    List<Integer> ids = Deferred.group(deferreds).join();
     Collections.sort(ids);
 
-    for (long i = Long.MAX_VALUE - 35L; i < numTagsets; i++) {
-      assertEquals(i, ids.get((int) i).longValue());
+    for (int i = Integer.MAX_VALUE - 35; i < numTagsets; i++) {
+      assertEquals(i, ids.get(i).longValue());
     }
   }
 
@@ -123,22 +133,22 @@ public class TestTagsetCache extends BaseKuduTest {
 
     int numTagsets = 1;
 
-    cache.setHashForTesting(Long.MAX_VALUE - 9);
+    cache.setHashForTesting(Integer.MAX_VALUE - 9);
 
-    List<Deferred<Long>> deferreds = new ArrayList<>();
-    for (long i = 0; i < numTagsets; i++) {
-      deferreds.add(cache.getTagsetID(ImmutableSortedMap.of("key", Long.toString(i))));
+    List<Deferred<Integer>> deferreds = new ArrayList<>();
+    for (int i = 0; i < numTagsets; i++) {
+      deferreds.add(cache.getTagsetID(ImmutableSortedMap.of("key", Integer.toString(i))));
     }
 
-    List<Long> ids = Deferred.group(deferreds).join();
+    List<Integer> ids = Deferred.group(deferreds).join();
     Collections.sort(ids);
 
-    for (long i = 0; i < numTagsets - 35; i++) {
-      assertEquals(i, ids.get((int) i).longValue());
+    for (int i = 0; i < numTagsets - 35; i++) {
+      assertEquals(i, ids.get(i).intValue());
     }
 
-    for (long i = numTagsets - 35; i < numTagsets; i++) {
-      assertEquals(Long.MAX_VALUE - i, ids.get((int) i).longValue());
+    for (int i = numTagsets - 35; i < numTagsets; i++) {
+      assertEquals(Integer.MAX_VALUE - i, ids.get(i).intValue());
     }
   }
 }
