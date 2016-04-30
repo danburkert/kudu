@@ -83,10 +83,8 @@ public class RowError {
 
   @Override
   public String toString() {
-    return "Row error for primary key=" + Bytes.pretty(operation.getRow().encodePrimaryKey()) +
-        ", tablet=" + operation.getTablet().getTabletIdAsString() +
-        ", server=" + tsUUID +
-        ", status=" + status.toString();
+    return String.format("Row error for operation=%s, server=%s, status=%s",
+                         operation, tsUUID, status);
   }
 
   /**

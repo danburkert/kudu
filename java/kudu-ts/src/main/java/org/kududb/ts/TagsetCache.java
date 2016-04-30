@@ -26,6 +26,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Maps;
 import com.sangupta.murmur.Murmur2;
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
@@ -77,6 +78,9 @@ class TagsetCache {
   private final List<Integer> columnIndexes;
 
   private static final long SEED = 0X9883143CFDDB5C3FL;
+
+  private Long hashForTesting = null;
+
 
   /** Map of tagset to tagset ID. */
   private final LoadingCache<ByteBuffer, Deferred<Long>> tagsets;
@@ -153,12 +157,23 @@ class TagsetCache {
     }
   }
 
+  /**
+   * Sets a constant hash value for all tagsets. Allows simulating hash
+   * collisions in relatively small tables.
+   * @param hashForTesting the overflow hash value
+   */
   @VisibleForTesting
-  static long hashSerializedTagset(ByteBuffer tagset) {
+  void setHashForTesting(long hashForTesting) {
+    this.hashForTesting = hashForTesting;
+  }
+
+  @VisibleForTesting
+  long hashSerializedTagset(ByteBuffer tagset) {
+    if (hashForTesting != null) { return hashForTesting; }
     if (!tagset.hasArray()) {
       throw new IllegalArgumentException("serialized tagset ByteBuffer must have an array");
     }
-    return Murmur2.hash64(tagset.array(), tagset.position(), SEED);
+    return Murmur2.hash64(tagset.array(), tagset.limit(), SEED);
   }
 
   /**
@@ -195,7 +210,7 @@ class TagsetCache {
   }
 
   private Deferred<TagsetLookupResult> lookupTagset(ByteBuffer tagset, long id) {
-    LOG.info("looking up tagset: {}, id: {}", deserializeTagset(tagset), id);
+    LOG.info("looking up tagset: {}, id: {}", tagsetToString(tagset), id);
     AsyncKuduScanner tagsetScanner = tagsetScanner(id);
 
     return tagsetScanner.nextRows().addCallbackDeferring(
@@ -231,7 +246,7 @@ class TagsetCache {
    * @return whether the write succeeded
    */
   private Deferred<Boolean> insertTagset(final ByteBuffer tagset, final long id) {
-    LOG.debug("Inserting tagset: {}", deserializeTagset(tagset));
+    LOG.debug("Inserting tagset: {}, id: {}", tagsetToString(tagset), id);
     final AsyncKuduSession session = client.newSession();
     final Insert insert = tagsetsTable.newInsert();
     insert.getRow().addLong(tagsetIDColumnIndex, id);
@@ -354,22 +369,17 @@ class TagsetCache {
 
     @Override
     public String toString() {
-      Messages.Tagset tags = deserializeTagset(tagset);
-      StringBuilder sb = new StringBuilder("TagsetLookupCB { ID: ");
+      StringBuilder sb = new StringBuilder("TagsetLookupCB { id: ");
       sb.append(id);
-      sb.append(", tags: [");
-      List<String> tagStrings = new ArrayList<>();
-      for (Messages.Tagset.Tag tag : tags.getTagsList()) {
-        tagStrings.add(String.format("%s = %s", tag.getKey(), tag.getValue()));
-      }
-      Joiner.on(", ").appendTo(sb, tagStrings);
-      sb.append("] }");
+      sb.append(", tags: ");
+      sb.append(tagsetToString(tagset));
+      sb.append(" }");
       return sb.toString();
     }
   }
 
   private Deferred<Long> insertTags(ByteBuffer tagset, final long id) {
-    LOG.debug("Inserting tags. ID: {}, tags: {}", id, deserializeTagset(tagset));
+    LOG.debug("Inserting tags. ID: {}, tags: {}", id, tagsetToString(tagset));
     Messages.Tagset tags = deserializeTagset(tagset);
     AsyncKuduSession session = client.newSession();
     session.setFlushMode(SessionConfiguration.FlushMode.AUTO_FLUSH_BACKGROUND);
@@ -395,5 +405,20 @@ class TagsetCache {
         return Deferred.fromResult(id);
       }
     });
+  }
+
+  private static String tagsetToString(ByteBuffer tagset) {
+    Messages.Tagset tags = deserializeTagset(tagset);
+    List<Map.Entry<String, String>> tagEntries = new ArrayList<>();
+    for (Messages.Tagset.Tag tag : tags.getTagsList()) {
+      tagEntries.add(Maps.immutableEntry(tag.getKey(), tag.getValue()));
+    }
+
+    StringBuilder sb = new StringBuilder();
+    sb.append('[');
+
+    Joiner.on(", ").withKeyValueSeparator("=").appendTo(sb, tagEntries);
+    sb.append(']');
+    return sb.toString();
   }
 }

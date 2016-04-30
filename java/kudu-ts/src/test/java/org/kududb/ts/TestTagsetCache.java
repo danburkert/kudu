@@ -27,6 +27,9 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.stumbleupon.async.Deferred;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.SortedMap;
 
 import org.junit.Test;
@@ -44,7 +47,7 @@ public class TestTagsetCache extends BaseKuduTest {
     TagsetCache cache = table.getTagsetCache();
     SortedMap<String, String> tagset = ImmutableSortedMap.of("k1", "v1");
 
-    long tagsetHash = TagsetCache.hashSerializedTagset(TagsetCache.serializeTagset(tagset));
+    long tagsetHash = cache.hashSerializedTagset(TagsetCache.serializeTagset(tagset));
 
     long insertID = cache.getTagsetID(tagset).join();
     cache.clear();
@@ -74,7 +77,7 @@ public class TestTagsetCache extends BaseKuduTest {
   }
 
   @Test
-  public void testMultipleTagsets() throws Exception {
+  public void testOverlappingTagsets() throws Exception {
     KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
     KuduTSTable table = client.CreateTable("testMultipleTagsets");
     TagsetCache cache = table.getTagsetCache();
@@ -84,5 +87,58 @@ public class TestTagsetCache extends BaseKuduTest {
     long id4 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v2")).join();
     long id5 = cache.getTagsetID(ImmutableSortedMap.of("k2", "v1")).join();
     assertEquals(5, ImmutableSet.of(id1, id2, id3, id4, id5).size());
+  }
+
+  @Test
+  public void testHashCollisions() throws Exception {
+    KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
+    KuduTSTable table = client.CreateTable("testHashCollisions");
+    TagsetCache cache = table.getTagsetCache();
+
+    int numTagsets = 100;
+
+    cache.setHashForTesting(Long.MAX_VALUE - 35);
+
+    List<Deferred<Long>> deferreds = new ArrayList<>();
+    for (long i = Long.MAX_VALUE - 35L; i <= Long.MAX_VALUE; i++) {
+      deferreds.add(cache.getTagsetID(ImmutableSortedMap.of("key", Long.toString(i))));
+    }
+    for (long i = 0; i <= numTagsets; i++) {
+      deferreds.add(cache.getTagsetID(ImmutableSortedMap.of("key", Long.toString(i))));
+    }
+
+    List<Long> ids = Deferred.group(deferreds).join();
+    Collections.sort(ids);
+
+    for (long i = Long.MAX_VALUE - 35L; i < numTagsets; i++) {
+      assertEquals(i, ids.get((int) i).longValue());
+    }
+  }
+
+  @Test
+  public void testHashWraparound() throws Exception {
+    KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
+    KuduTSTable table = client.CreateTable("testHashCollisions");
+    TagsetCache cache = table.getTagsetCache();
+
+    int numTagsets = 1;
+
+    cache.setHashForTesting(Long.MAX_VALUE - 9);
+
+    List<Deferred<Long>> deferreds = new ArrayList<>();
+    for (long i = 0; i < numTagsets; i++) {
+      deferreds.add(cache.getTagsetID(ImmutableSortedMap.of("key", Long.toString(i))));
+    }
+
+    List<Long> ids = Deferred.group(deferreds).join();
+    Collections.sort(ids);
+
+    for (long i = 0; i < numTagsets - 35; i++) {
+      assertEquals(i, ids.get((int) i).longValue());
+    }
+
+    for (long i = numTagsets - 35; i < numTagsets; i++) {
+      assertEquals(Long.MAX_VALUE - i, ids.get((int) i).longValue());
+    }
   }
 }
