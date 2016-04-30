@@ -20,7 +20,6 @@
 package org.kududb.ts;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -41,9 +40,9 @@ public class TestTagsetCache extends BaseKuduTest {
   private static final Logger LOG = LoggerFactory.getLogger(TestTagsetCache.class);
 
   @Test(timeout = 10000)
-  public void testTimeseriesLookup() throws Exception {
+  public void testTagsetLookup() throws Exception {
     KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
-    KuduTSTable table = client.CreateTable("testTimeseriesLookup");
+    KuduTSTable table = client.CreateTable("testTagsetLookup");
     TagsetCache cache = table.getTagsetCache();
     SortedMap<String, String> tagset = ImmutableSortedMap.of("k1", "v1");
 
@@ -64,19 +63,17 @@ public class TestTagsetCache extends BaseKuduTest {
     TagsetCache cache = table.getTagsetCache();
     SortedMap<String, String> tagset = ImmutableSortedMap.of("k1", "v1");
 
-    Deferred<Integer> d1 = cache.getTagsetID(tagset);
-    cache.clear();
-    Deferred<Integer> d2 = cache.getTagsetID(tagset);
+    List<Deferred<Integer>> deferreds = new ArrayList<>();
 
-    assertNotEquals(d1, d2);
+    for (int i = 0; i < 10; i++) {
+      deferreds.add(cache.getTagsetID(tagset));
+      cache.clear();
+    }
 
-    int id1 = d1.join();
-    int id2 = d2.join();
-
-    assertEquals(id1, id2);
+    assertEquals(1, ImmutableSet.copyOf(Deferred.group(deferreds).join()).size());
   }
 
-  @Test//(timeout = 10000)
+  @Test(timeout = 10000)
   public void testEmptyTagsetLookup() throws Exception {
     KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
     KuduTSTable table = client.CreateTable("testEmptyTagsetLookup");
@@ -85,10 +82,22 @@ public class TestTagsetCache extends BaseKuduTest {
     assertEquals(0, id);
   }
 
-  @Test
+  @Test(timeout = 10000)
+  public void testHashWraparound() throws Exception {
+    KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
+    KuduTSTable table = client.CreateTable("testHashWraparound");
+    TagsetCache cache = table.getTagsetCache();
+
+    cache.setHashForTesting(Integer.MAX_VALUE - 9);
+
+    int id = cache.getTagsetID(ImmutableSortedMap.of("key", "val")).join();
+    assertEquals(Integer.MAX_VALUE - 9, id);
+  }
+
+  @Test(timeout = 10000)
   public void testOverlappingTagsets() throws Exception {
     KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
-    KuduTSTable table = client.CreateTable("testMultipleTagsets");
+    KuduTSTable table = client.CreateTable("testOverlappingTagsets");
     TagsetCache cache = table.getTagsetCache();
     int id1 = cache.getTagsetID(ImmutableSortedMap.of("k1", "v1")).join();
     int id2 = cache.getTagsetID(ImmutableSortedMap.of("k2", "v2")).join();
@@ -99,20 +108,16 @@ public class TestTagsetCache extends BaseKuduTest {
     assertEquals(6, ImmutableSet.of(id1, id2, id3, id4, id5, id6).size());
   }
 
-  @Test
+  @Test(timeout = 10000)
   public void testHashCollisions() throws Exception {
     KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
     KuduTSTable table = client.CreateTable("testHashCollisions");
     TagsetCache cache = table.getTagsetCache();
 
     int numTagsets = 100;
-
-    cache.setHashForTesting(Integer.MAX_VALUE - 35);
+    cache.setHashForTesting(0);
 
     List<Deferred<Integer>> deferreds = new ArrayList<>();
-    for (int i = 0; i < 35; i++) {
-      deferreds.add(cache.getTagsetID(ImmutableSortedMap.of("key", Integer.toString((Integer.MAX_VALUE - 35) + i))));
-    }
     for (int i = 0; i <= numTagsets; i++) {
       deferreds.add(cache.getTagsetID(ImmutableSortedMap.of("key", Integer.toString(i))));
     }
@@ -120,20 +125,21 @@ public class TestTagsetCache extends BaseKuduTest {
     List<Integer> ids = Deferred.group(deferreds).join();
     Collections.sort(ids);
 
-    for (int i = Integer.MAX_VALUE - 35; i < numTagsets; i++) {
-      assertEquals(i, ids.get(i).longValue());
+    for (int i = 0; i < numTagsets; i++) {
+      assertEquals(i, ids.get(i).intValue());
     }
   }
 
-  @Test
-  public void testHashWraparound() throws Exception {
+  @Test(timeout = 10000)
+  public void testHashCollisionsWraparound() throws Exception {
     KuduTSClient client = KuduTSClient.create(ImmutableList.of(masterAddresses));
-    KuduTSTable table = client.CreateTable("testHashCollisions");
+    KuduTSTable table = client.CreateTable("testHashCollisionsWraparound");
     TagsetCache cache = table.getTagsetCache();
 
-    int numTagsets = 1;
+    int numTagsets = 30;
+    int offset = 15;
 
-    cache.setHashForTesting(Integer.MAX_VALUE - 9);
+    cache.setHashForTesting(Integer.MAX_VALUE - offset);
 
     List<Deferred<Integer>> deferreds = new ArrayList<>();
     for (int i = 0; i < numTagsets; i++) {
@@ -143,12 +149,26 @@ public class TestTagsetCache extends BaseKuduTest {
     List<Integer> ids = Deferred.group(deferreds).join();
     Collections.sort(ids);
 
-    for (int i = 0; i < numTagsets - 35; i++) {
-      assertEquals(i, ids.get(i).intValue());
+    List<Integer> expectedIds = new ArrayList<>();
+    for (int i = 0; i < numTagsets; i++) {
+      expectedIds.add((Integer.MAX_VALUE - offset) + i);
     }
+    Collections.sort(expectedIds);
+    assertEquals(expectedIds, ids);
+  }
 
-    for (int i = numTagsets - 35; i < numTagsets; i++) {
-      assertEquals(Integer.MAX_VALUE - i, ids.get(i).intValue());
-    }
+  @Test(timeout = 10000)
+  public void testSaturatingAdd() throws Exception {
+    assertEquals(10, TagsetCache.saturatingAdd(10, 0));
+    assertEquals(10, TagsetCache.saturatingAdd(0, 10));
+    assertEquals(10, TagsetCache.saturatingAdd(5, 5));
+    assertEquals(10, TagsetCache.saturatingAdd(-15, 25));
+    assertEquals(10, TagsetCache.saturatingAdd(150, -140));
+
+    assertEquals(Integer.MAX_VALUE, TagsetCache.saturatingAdd(Integer.MAX_VALUE, 22));
+    assertEquals(Integer.MAX_VALUE - 22, TagsetCache.saturatingAdd(Integer.MAX_VALUE, -22 ));
+    assertEquals(Integer.MAX_VALUE, TagsetCache.saturatingAdd(Integer.MAX_VALUE - 35, 35));
+    assertEquals(Integer.MAX_VALUE, TagsetCache.saturatingAdd(Integer.MAX_VALUE - 35, 36));
+    assertEquals(Integer.MAX_VALUE, TagsetCache.saturatingAdd(Integer.MAX_VALUE, Integer.MAX_VALUE));
   }
 }

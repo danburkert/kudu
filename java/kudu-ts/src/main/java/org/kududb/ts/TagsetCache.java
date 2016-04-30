@@ -58,13 +58,55 @@ import org.kududb.client.SessionConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * The tagset cache manages inserting into the {@code tagsets} and {@code tags} tables.
+ * If allows finding the tagset ID of a tagset. If the tagset isn't found, it automatically
+ * inserts it with a new, unique ID into {@code tagsets}, and inserts the corresponding tags
+ * into {@code tags}.
+ *
+ * To guarantee that tagset IDs are unique, the {@code tagsets} table is
+ * structured as a linear-probe hash table. The tagset is transformed into a
+ * canonical byte representation using a protobuf format, and the hash of this
+ * canonical value is used as the tagset ID. On ID collision, linear probing
+ * is used to find a new ID.
+ *
+ * Internally, {@code TagsetCache} keeps an LRU cache of tagsets and IDs so that
+ * the IDs of frequently used tagsets can be remembered.
+ *
+ * Steps for looking up a new tagset:
+ *
+ *  1) the tagset is converted to a canonical byte string format
+ *     (see {@link #serializeTagset}).
+ *  2) the internal LRU cache is queried with the byte string, but the lookup fails.
+ *  3) a hash of the tagset's byte string is created with the MurmurHash3_32
+ *     algorithm (see {@link #hashSerializedTagset}).
+ *  4) up to {@link #TAGSETS_PER_SCAN} tagsets are scanned from the {@code tagsets}
+ *     table beginning with the computed hash as the ID.
+ *  5) the tagsets returned in the scan are checked in ID order. If the tagset
+ *     is found, the corresponding ID is returned. If there is an ID missing
+ *     in the results, then the tagset is inserted with that ID (go to step 6).
+ *     If every ID is present, but the tagset isn't found, then a new scan is
+ *     started (step 4), but using the next available ID as the start.
+ *  6) the ID from step 5 is used to insert the rowset into the {@code rowsets}
+ *     table. If the insert results in a duplicate primary key error, then
+ *     another client has concurrently inserted a rowset using the ID. The
+ *     concurrently inserted rowset may or may not match the rowset we tried to
+ *     insert, so we return to step 4, but using the duplicate ID instead of the
+ *     hash of the tagset.
+ *  7) After inserting the tagset successfully in step 6, every tag in the
+ *     tagset is inserted into the {@code tags} table. No errors are expected
+ *     in this step.
+ *
+ * Tagset IDs are 32bits, which allows for hundreds of millions of tagset IDs without
+ * risking excessive hash collisions.
+ */
 @InterfaceAudience.Private
 @ThreadSafe
 class TagsetCache {
   private static final Logger LOG = LoggerFactory.getLogger(TagsetCache.class);
 
-  // Number of tags to return per tagset scanner.
-  private int TAGS_PER_SCAN = 10;
+  /** Number of tags to return per tagset scanner. */
+  private int TAGSETS_PER_SCAN = 10;
 
   private final AsyncKuduClient client;
   private final KuduTable tagsetsTable;
@@ -210,7 +252,7 @@ class TagsetCache {
   }
 
   private Deferred<TagsetLookupResult> lookupTagset(ByteBuffer tagset, int id) {
-    LOG.debug("looking up tagset; id: {}, tags: {}", id, tagsetToString(tagset));
+    LOG.debug("Looking up tagset; id: {}, tags: {}", id, tagsetToString(tagset));
     AsyncKuduScanner tagsetScanner = tagsetScanner(id);
 
     return tagsetScanner.nextRows().addCallbackDeferring(
@@ -228,10 +270,10 @@ class TagsetCache {
     scanBuilder.addPredicate(KuduPredicate.newComparisonPredicate(tagsetIDColumn,
                                                                   ComparisonOp.GREATER_EQUAL,
                                                                   id));
-    if (id < Integer.MAX_VALUE - TAGS_PER_SCAN) {
+    if (id < Integer.MAX_VALUE - TAGSETS_PER_SCAN) {
       scanBuilder.addPredicate(KuduPredicate.newComparisonPredicate(tagsetIDColumn,
                                                                     ComparisonOp.LESS,
-                                                                    id + TAGS_PER_SCAN));
+                                                                    id + TAGSETS_PER_SCAN));
     }
     scanBuilder.setProjectedColumnIndexes(columnIndexes);
     return scanBuilder.build();
@@ -269,12 +311,15 @@ class TagsetCache {
           public Deferred<Boolean> call(OperationResponse response) throws Exception {
             if (response.hasRowError()) {
               if (response.getRowError().getErrorStatus().isAlreadyPresent()) {
-                LOG.info("Attempted to insert duplicate tagset; id: {}, error: {}",
-                         id, response.getRowError());
+                LOG.info("Attempted to insert duplicate tagset; id: {}, tagset: {}",
+                         id, tagsetToString(tagset));
+                // TODO: Consider adding a backoff with jitter before attempting
+                //       the insert again (if the lookup fails).
                 return Deferred.fromResult(false);
               }
               return Deferred.fromError(new RuntimeException(
-                  String.format("Unable to insert tagset: %s", response.getRowError())));
+                  String.format("Unable to insert tagset; id: %s, tagset: %s, error: %s",
+                                id, tagsetToString(tagset), response.getRowError())));
             } else {
               return Deferred.fromResult(true);
             }
@@ -318,7 +363,8 @@ class TagsetCache {
   /**
    * Finds a tagset in the {@code tagset} table.
    */
-  private final class TagsetLookupCB implements Callback<Deferred<TagsetLookupResult>, RowResultIterator> {
+  private final class TagsetLookupCB implements Callback<Deferred<TagsetLookupResult>,
+                                                         RowResultIterator> {
     private final ByteBuffer tagset;
     private AsyncKuduScanner scanner;
     private int id;
@@ -357,7 +403,7 @@ class TagsetCache {
 
       // We probed through the entire RowResult and didn't find the tagset.
       if (!scanner.hasMoreRows()) {
-        if (probe < id + TAGS_PER_SCAN) {
+        if (probe <= saturatingAdd(id, TAGSETS_PER_SCAN)) {
           // We found a hole at the end of the scan.
           return Deferred.fromResult(TagsetLookupResult.notFound(probe));
         }
@@ -432,5 +478,14 @@ class TagsetCache {
     Joiner.on(", ").withKeyValueSeparator("=").appendTo(sb, tagEntries);
     sb.append(']');
     return sb.toString();
+  }
+
+  /**
+   * Adds a and b. If the result overflows, {@link Integer#MAX_VALUE} is returned.
+   */
+  @VisibleForTesting
+  static int saturatingAdd(int a, int b) {
+    // Cast from double to int is saturating.
+    return (int)(a + (double) b);
   }
 }
