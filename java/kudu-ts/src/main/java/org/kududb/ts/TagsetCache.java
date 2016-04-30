@@ -136,7 +136,7 @@ class TagsetCache {
     this.tagsetIDColumn = schema.getTagsetsSchema().getColumnByIndex(tagsetIDColumnIndex);
     this.tagsKeyColumnIndex = schema.getTagsSchema().getColumnIndex("key");
     this.tagsValueColumnIndex = schema.getTagsSchema().getColumnIndex("value");
-    this.tagsTagsetIDColumnIndex = schema.getTagsSchema().getColumnIndex("id");
+    this.tagsTagsetIDColumnIndex = schema.getTagsSchema().getColumnIndex("tagset_id");
     this.tagsets = CacheBuilder.newBuilder()
                                .maximumSize(1024 * 1024)
                                .build(new CacheLoader<ByteBuffer, Deferred<Integer>>() {
@@ -385,7 +385,7 @@ class TagsetCache {
 
     @Override
     public Deferred<TagsetLookupResult> call(RowResultIterator rows) throws Exception {
-      LOG.debug("Received tagset lookup results: {}", this);
+      LOG.debug("Received tagset lookup results: id: {}, tags: {}", id, tagsetToString(tagset));
       for (RowResult row : rows) {
         int rowID = row.getInt(tagsetIDColumnIndex);
         Preconditions.checkState(rowID >= probe);

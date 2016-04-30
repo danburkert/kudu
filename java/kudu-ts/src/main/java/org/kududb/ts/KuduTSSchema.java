@@ -41,6 +41,18 @@ public class KuduTSSchema {
   private final Schema tagsetsSchema;
   private final Schema tagsSchema;
 
+  static int METRICS_METRIC_INDEX = 0;
+  static int METRICS_TAGSET_ID_INDEX = 1;
+  static int METRICS_TIME_INDEX = 2;
+  static int METRICS_VALUE_INDEX = 3;
+
+  static int TAGSETS_ID_INDEX = 0;
+  static int TAGSETS_TAGSET_INDEX = 1;
+
+  static int TAGS_KEY_INDEX = 0;
+  static int TAGS_VALUE_INDEX = 1;
+  static int TAGS_TAGSET_ID_INDEX = 2;
+
   public static KuduTSSchema create(String tableName) {
 
     Schema metricsSchema = new Schema(ImmutableList.of(
@@ -56,7 +68,7 @@ public class KuduTSSchema {
     Schema tagsSchema = new Schema(ImmutableList.of(
         new ColumnSchema.ColumnSchemaBuilder("key", Type.STRING).nullable(false).key(true).build(),
         new ColumnSchema.ColumnSchemaBuilder("value", Type.STRING).nullable(false).key(true).build(),
-        new ColumnSchema.ColumnSchemaBuilder("id", Type.INT32).nullable(false).key(true).build()));
+        new ColumnSchema.ColumnSchemaBuilder("tagset_id", Type.INT32).nullable(false).key(true).build()));
 
     return new KuduTSSchema(tableName, metricsSchema, tagsetsSchema, tagsSchema);
   }

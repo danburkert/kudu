@@ -19,46 +19,60 @@
 
 package org.kududb.ts;
 
-import com.google.common.collect.Lists;
-import org.junit.Assert;
+import static org.junit.Assert.assertEquals;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSortedMap;
+
+import java.util.SortedMap;
+
 import org.junit.Test;
+import org.kududb.client.AsyncKuduClient;
 import org.kududb.client.BaseKuduTest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.SortedMap;
-import java.util.TreeMap;
-
 public class TestKuduTS extends BaseKuduTest {
   private static final Logger LOG = LoggerFactory.getLogger(TestKuduTS.class);
 
+  @Test
+  public void testWriteMetric() throws Exception {
+    KuduTSClient client = KuduTSClient.create(ImmutableList.of(getMasterAddresses()));
+    KuduTSTable table = client.CreateTable("testWriteMetric");
+    AsyncKuduClient kuduClient = table.getClient();
+
+
+  }
+
   @Test(timeout = 100000)
   public void test() throws Exception {
-    KuduTSClient client = KuduTSClient.create(Lists.<String>newArrayList(getMasterAddresses()));
+    KuduTSClient client = KuduTSClient.create(ImmutableList.of(getMasterAddresses()));
 
     KuduTSTable table = client.CreateTable("test");
 
-    SortedMap<String, String> tags = new TreeMap<>();
-    tags.put("host", "localhost");
-    tags.put("dc", "oregon");
+    SortedMap<String, String> tags = ImmutableSortedMap.of("host", "localhost", "dc", "oregon");
     for (int i = 0; i < 10; i++) {
       table.writeMetric("test", tags, i, i);
     }
     table.flush();
 
     QueryResult qr = table.queryMetrics(-1, 11, "test", tags);
-    Assert.assertEquals(10, qr.getDatapoints().size());
+    assertEquals(10, qr.getDatapoints().size());
 
-    tags = new TreeMap<>();
-    tags.put("host", "otherhost");
-    tags.put("dc", "oregon");
+    tags = ImmutableSortedMap.of("host", "otherhost", "dc", "oregon");
     for (int i = 0; i < 10; i += 2) {
       table.writeMetric("test", tags, i, i * 2);
     }
+    table.flush();
 
-    tags = new TreeMap<>();
-    tags.put("dc", "oregon");
+    tags = ImmutableSortedMap.of("dc", "orgeon");
+    qr = table.queryMetrics(0, 11, "test", tags);
+    assertEquals(10, qr.getDatapoints().size());
+
+    /*
+    tags = ImmutableSortedMap.of("host", "localhost");
     qr = table.queryMetrics(-1, 11, "test", tags);
-    Assert.assertEquals(10, qr.getDatapoints().size());
+    assertEquals(5, qr.getDatapoints().size());
+    */
   }
 }

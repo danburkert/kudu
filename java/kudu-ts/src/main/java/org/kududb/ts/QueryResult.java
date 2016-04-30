@@ -25,11 +25,15 @@ import java.util.Map;
 public class QueryResult {
 
   private final String name;
-  private Map<String, String> tags;
-  private List<TimeAndValue> datapoints;
+  private final Map<String, String> tags;
+  private final List<TimeAndValue> datapoints;
 
-  public QueryResult(String name) {
+  public QueryResult(String name,
+                     Map<String, String> tags,
+                     List<TimeAndValue> datapoints) {
     this.name = name;
+    this.tags = tags;
+    this.datapoints = datapoints;
   }
 
   public String getName() {
@@ -40,15 +44,7 @@ public class QueryResult {
     return tags;
   }
 
-  public void setTags(Map<String, String> tags) {
-    this.tags = tags;
-  }
-
   public List<TimeAndValue> getDatapoints() {
     return datapoints;
-  }
-
-  public void setDatapoints(List<TimeAndValue> datapoints) {
-    this.datapoints = datapoints;
   }
 }
