@@ -32,104 +32,59 @@ import org.kududb.annotations.InterfaceStability;
 @InterfaceAudience.Public
 @InterfaceStability.Unstable
 @ThreadSafe
-public class KuduTSSchema {
-  private final String metricsTableName;
-  private final String tagsetsTableName;
-  private final String tagsTableName;
+class KuduTSSchema {
+  static final int METRICS_METRIC_INDEX = 0;
+  static final int METRICS_TAGSET_ID_INDEX = 1;
+  static final int METRICS_TIME_INDEX = 2;
+  static final int METRICS_VALUE_INDEX = 3;
 
-  private final Schema metricsSchema;
-  private final Schema tagsetsSchema;
-  private final Schema tagsSchema;
+  static final int TAGSETS_ID_INDEX = 0;
+  static final int TAGSETS_TAGSET_INDEX = 1;
 
-  static int METRICS_METRIC_INDEX = 0;
-  static int METRICS_TAGSET_ID_INDEX = 1;
-  static int METRICS_TIME_INDEX = 2;
-  static int METRICS_VALUE_INDEX = 3;
+  static final int TAGS_KEY_INDEX = 0;
+  static final int TAGS_VALUE_INDEX = 1;
+  static final int TAGS_TAGSET_ID_INDEX = 2;
 
-  static int TAGSETS_ID_INDEX = 0;
-  static int TAGSETS_TAGSET_INDEX = 1;
+  static final ColumnSchema METRICS_METRIC_COLUMN =
+      new ColumnSchema.ColumnSchemaBuilder("metric", Type.STRING).nullable(false).key(true).build();
+  static final ColumnSchema METRICS_TAGSET_ID_COLUMN =
+      new ColumnSchema.ColumnSchemaBuilder("tagset_id", Type.INT32).nullable(false).key(true).build();
+  static final ColumnSchema METRICS_TIME_COLUMN =
+      new ColumnSchema.ColumnSchemaBuilder("time", Type.TIMESTAMP).nullable(false).key(true).build();
+  static final ColumnSchema METRICS_VALUE_COLUMN =
+      new ColumnSchema.ColumnSchemaBuilder("value", Type.DOUBLE).nullable(false).build();
 
-  static int TAGS_KEY_INDEX = 0;
-  static int TAGS_VALUE_INDEX = 1;
-  static int TAGS_TAGSET_ID_INDEX = 2;
+  static final ColumnSchema TAGSETS_ID_COLUMN =
+      new ColumnSchema.ColumnSchemaBuilder("id", Type.INT32).nullable(false).key(true).build();
+  static final ColumnSchema TAGSETS_TAGSET_COLUMN =
+      new ColumnSchema.ColumnSchemaBuilder("tagset", Type.BINARY).nullable(false).build();
 
-  public static KuduTSSchema create(String tableName) {
+  static final ColumnSchema TAGS_KEY_COLUMN =
+      new ColumnSchema.ColumnSchemaBuilder("key", Type.STRING).nullable(false).key(true).build();
+  static final ColumnSchema TAGS_VALUE_COLUMN =
+      new ColumnSchema.ColumnSchemaBuilder("value", Type.STRING).nullable(false).key(true).build();
+  static final ColumnSchema TAGS_TAGSET_ID_COLUMN =
+      new ColumnSchema.ColumnSchemaBuilder("tagset_id", Type.INT32).nullable(false).key(true).build();
 
-    Schema metricsSchema = new Schema(ImmutableList.of(
-        new ColumnSchema.ColumnSchemaBuilder("metric", Type.STRING).nullable(false).key(true).build(),
-        new ColumnSchema.ColumnSchemaBuilder("tagset_id", Type.INT32).nullable(false).key(true).build(),
-        new ColumnSchema.ColumnSchemaBuilder("time", Type.TIMESTAMP).nullable(false).key(true).build(),
-        new ColumnSchema.ColumnSchemaBuilder("value", Type.DOUBLE).nullable(false).build()));
+  static final Schema METRICS_SCHEMA = new Schema(ImmutableList.of(METRICS_METRIC_COLUMN,
+                                                                   METRICS_TAGSET_ID_COLUMN,
+                                                                   METRICS_TIME_COLUMN,
+                                                                   METRICS_VALUE_COLUMN));
+  static final Schema TAGSETS_SCHEMA = new Schema(ImmutableList.of(TAGSETS_ID_COLUMN,
+                                                                   TAGSETS_TAGSET_COLUMN));
+  static final Schema TAGS_SCHEMA = new Schema(ImmutableList.of(TAGS_KEY_COLUMN,
+                                                                TAGS_VALUE_COLUMN,
+                                                                TAGS_TAGSET_ID_COLUMN));
 
-    Schema tagsetsSchema = new Schema(ImmutableList.of(
-        new ColumnSchema.ColumnSchemaBuilder("id", Type.INT32).nullable(false).key(true).build(),
-        new ColumnSchema.ColumnSchemaBuilder("tagset", Type.BINARY).nullable(false).build()));
-
-    Schema tagsSchema = new Schema(ImmutableList.of(
-        new ColumnSchema.ColumnSchemaBuilder("key", Type.STRING).nullable(false).key(true).build(),
-        new ColumnSchema.ColumnSchemaBuilder("value", Type.STRING).nullable(false).key(true).build(),
-        new ColumnSchema.ColumnSchemaBuilder("tagset_id", Type.INT32).nullable(false).key(true).build()));
-
-    return new KuduTSSchema(tableName, metricsSchema, tagsetsSchema, tagsSchema);
+  static String metricsTableName(String databaseName) {
+    return String.format("kuduts.%s.metrics", databaseName);
   }
 
-  public Schema getMetricsSchema() {
-    return metricsSchema;
+  static String tagsetsTableName(String databaseName) {
+    return String.format("kuduts.%s.tagsets", databaseName);
   }
 
-  public Schema getTagsetsSchema() {
-    return tagsetsSchema;
-  }
-
-  public Schema getTagsSchema() {
-    return tagsSchema;
-  }
-
-  public String getMetricsTableName() {
-    return metricsTableName;
-  }
-
-  public String getTagsetsTableName() {
-    return tagsetsTableName;
-  }
-
-  public String getTagsTableName() {
-    return tagsTableName;
-  }
-
-  public static String metricsTableName(String tableName) {
-    return String.format("kuduts.%s.metrics", tableName);
-  }
-
-  public static String tagsetsTableName(String tableName) {
-    return String.format("kuduts.%s.tagsets", tableName);
-  }
-
-  public static String tagsTableName(String tableName) {
-    return String.format("kuduts.%s.tags", tableName);
-  }
-
-  private static Schema validateMetricsSchema(Schema metricsSchema) {
-    // TODO: validate
-    return metricsSchema;
-  }
-
-  private static Schema validateTagsetsSchema(Schema tagsetsSchema) {
-    // TODO: validate
-    return tagsetsSchema;
-  }
-
-  private static Schema validateTagsSchema(Schema tagsSchema) {
-    // TODO: validate
-    return tagsSchema;
-  }
-
-  KuduTSSchema(String tableName, Schema metricsSchema, Schema tagsetsSchema, Schema tagsSchema) {
-    this.metricsTableName = metricsTableName(tableName);
-    this.tagsetsTableName = tagsetsTableName(tableName);
-    this.tagsTableName = tagsTableName(tableName);
-    this.metricsSchema = validateMetricsSchema(metricsSchema);
-    this.tagsetsSchema = validateTagsetsSchema(tagsetsSchema);
-    this.tagsSchema = validateTagsSchema(tagsSchema);
+  static String tagsTableName(String databaseName) {
+    return String.format("kuduts.%s.tags", databaseName);
   }
 }

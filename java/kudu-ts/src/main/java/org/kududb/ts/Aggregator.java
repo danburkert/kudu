@@ -19,32 +19,5 @@
 
 package org.kududb.ts;
 
-import java.util.List;
-import java.util.Map;
-
-public class QueryResult {
-
-  private final String name;
-  private final Map<String, String> tags;
-  private final List<Datapoint> datapoints;
-
-  public QueryResult(String name,
-                     Map<String, String> tags,
-                     List<Datapoint> datapoints) {
-    this.name = name;
-    this.tags = tags;
-    this.datapoints = datapoints;
-  }
-
-  public String getName() {
-    return name;
-  }
-
-  public Map<String, String> getTags() {
-    return tags;
-  }
-
-  public List<Datapoint> getDatapoints() {
-    return datapoints;
-  }
+public class Aggregator {
 }

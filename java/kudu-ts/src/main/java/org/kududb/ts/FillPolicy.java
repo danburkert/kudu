@@ -16,22 +16,42 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.kududb.ts;
 
-public class TimeAndValue {
-  private final long time;
-  private final double value;
+public enum FillPolicy {
+  NONE("none"),
+  ZERO("zero"),
+  NOT_A_NUMBER("nan"),
+  NULL("null");
 
-  public TimeAndValue(long time, double value) {
-    this.time = time;
-    this.value = value;
+  private final String name;
+
+  FillPolicy(final String name) {
+    this.name = name;
   }
 
-  public long getTime() {
-    return time;
+  /**
+   * Get this fill policy's user-friendly name.
+   * @return this fill policy's user-friendly name.
+   */
+  public String getName() {
+    return name;
   }
 
-  public double getValue() {
-    return value;
+  /**
+   * Get an instance of this enumeration from a user-friendly name.
+   * @param name The user-friendly name of a fill policy.
+   * @return an instance of {@link FillPolicy}, or {@code null} if the name
+   * does not match any instance.
+   */
+  public static FillPolicy fromString(final String name) {
+    for (final FillPolicy policy : FillPolicy.values()) {
+      if (policy.name.equalsIgnoreCase(name)) {
+        return policy;
+      }
+    }
+
+    return null;
   }
 }

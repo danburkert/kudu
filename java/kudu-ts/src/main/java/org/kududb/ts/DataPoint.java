@@ -16,35 +16,47 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.kududb.ts;
 
-import java.util.List;
-import java.util.Map;
+import com.google.common.base.Objects;
 
-public class QueryResult {
+import javax.annotation.concurrent.NotThreadSafe;
 
-  private final String name;
-  private final Map<String, String> tags;
-  private final List<Datapoint> datapoints;
+@NotThreadSafe
+public class Datapoint {
+  private long time;
+  private double value;
 
-  public QueryResult(String name,
-                     Map<String, String> tags,
-                     List<Datapoint> datapoints) {
-    this.name = name;
-    this.tags = tags;
-    this.datapoints = datapoints;
+  private Datapoint(long time, double value) {
+    this.time = time;
+    this.value = value;
   }
 
-  public String getName() {
-    return name;
+  public static Datapoint create(long microseconds, double value) {
+    return new Datapoint(microseconds, value);
   }
 
-  public Map<String, String> getTags() {
-    return tags;
+  public long getTime() {
+    return time;
   }
 
-  public List<Datapoint> getDatapoints() {
-    return datapoints;
+  public double getValue() {
+    return value;
+  }
+
+  public void setTime(long microseconds) {
+    time = microseconds;
+  }
+
+  public void setValue(double value) {
+    this.value = value;
+  }
+
+  @Override
+  public String toString() {
+    return Objects.toStringHelper(this)
+                  .add("time", time)
+                  .add("value", value)
+                  .toString();
   }
 }

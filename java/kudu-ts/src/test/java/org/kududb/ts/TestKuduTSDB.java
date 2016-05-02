@@ -19,32 +19,19 @@
 
 package org.kududb.ts;
 
-import java.util.List;
-import java.util.Map;
+import com.google.common.collect.ImmutableList;
 
-public class QueryResult {
+import org.junit.Test;
+import org.kududb.client.BaseKuduTest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-  private final String name;
-  private final Map<String, String> tags;
-  private final List<Datapoint> datapoints;
+public class TestKuduTSDB extends BaseKuduTest {
+  private static final Logger LOG = LoggerFactory.getLogger(TestKuduTSDB.class);
 
-  public QueryResult(String name,
-                     Map<String, String> tags,
-                     List<Datapoint> datapoints) {
-    this.name = name;
-    this.tags = tags;
-    this.datapoints = datapoints;
-  }
-
-  public String getName() {
-    return name;
-  }
-
-  public Map<String, String> getTags() {
-    return tags;
-  }
-
-  public List<Datapoint> getDatapoints() {
-    return datapoints;
+  @Test
+  public void testCreateAndOpenDB() throws Exception {
+    try (KuduTSDB tsdb = KuduTSDB.open(ImmutableList.of(getMasterAddresses()), "testOpenNewDatabase")) {}
+    try (KuduTSDB tsdb = KuduTSDB.open(ImmutableList.of(getMasterAddresses()), "testOpenNewDatabase")) {}
   }
 }

@@ -115,7 +115,6 @@
         </executions>
       </plugin>
 
-
       <plugin>
         <groupId>com.google.protobuf.tools</groupId>
         <artifactId>maven-protoc-plugin</artifactId>

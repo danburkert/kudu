@@ -62,14 +62,14 @@ public class KuduTSTable {
   private static final Logger LOG = LoggerFactory.getLogger(KuduTSTable.class);
 
   private final String tableName;
-  private final KuduTSSchema schema;
 
   private final AsyncKuduClient client;
   private final KuduTable metricsTable;
   private final KuduTable tagsTable;
   private final AsyncKuduSession session;
 
-  private final TagsetCache tagsetCache;
+  private final Tags tags;
+  private final Tagsets tagsets;
 
   private static final List<Integer> METRICS_PROJECTION =
       ImmutableList.of(KuduTSSchema.METRICS_TIME_INDEX,
@@ -82,13 +82,9 @@ public class KuduTSTable {
     return tableName;
   }
 
-  public KuduTSSchema getSchema() {
-    return schema;
-  }
-
   @VisibleForTesting
-  TagsetCache getTagsetCache() {
-    return tagsetCache;
+  Tagsets getTagsets() {
+    return tagsets;
   }
 
   @VisibleForTesting
@@ -98,23 +94,22 @@ public class KuduTSTable {
 
   KuduTSTable(AsyncKuduClient client,
               String tableName,
-              KuduTSSchema schema,
               KuduTable metricsTable,
               KuduTable tagsetsTable,
               KuduTable tagsTable) {
     this.client = client;
     this.tableName = tableName;
-    this.schema = schema;
     this.metricsTable = metricsTable;
     this.tagsTable = tagsTable;
-    this.tagsetCache = new TagsetCache(client, schema, tagsetsTable, tagsTable);
+    this.tags = new Tags(client, tagsTable);
+    this.tagsets = new Tagsets(client, tags, tagsetsTable);
     this.session = client.newSession();
     session.setFlushMode(SessionConfiguration.FlushMode.AUTO_FLUSH_BACKGROUND);
   }
 
   public void writeMetric(String metricName, SortedMap<String, String> tags,
                           long timestamp, double value) throws Exception {
-    int id = tagsetCache.getTagsetID(tags).join(10000);
+    int id = tagsets.getTagsetID(tags).join(10000);
     Insert insert = metricsTable.newInsert();
     PartialRow row = insert.getRow();
     row.addString(0, metricName);
@@ -148,18 +143,18 @@ public class KuduTSTable {
       tagsetIDs = getTagsetIdsForTags(tags);
     }
 
-    List<TimeAndValue> dataPoints =
+    List<Datapoint> datapoints =
         getDataPoints(startTimestampMs, endTimestampMs, metricName, tagsetIDs);
 
 
     // TODO need to grab all the tags for each tagsets?
-    return new QueryResult(metricName, tags, dataPoints);
+    return new QueryResult(metricName, tags, datapoints);
   }
 
-  private List<TimeAndValue> getDataPoints(long startTimestampMs,
-                                           long endTimestampMs,
-                                           String metricName,
-                                           Set<Integer> tagsetIDs) throws Exception {
+  private List<Datapoint> getDataPoints(long startTimestampMs,
+                                        long endTimestampMs,
+                                        String metricName,
+                                        Set<Integer> tagsetIDs) throws Exception {
     List<Deferred<PeekingIterator<Pair<Long, Double>>>> deferreds = new ArrayList<>(tagsetIDs.size());
 
     // Launch scanners for all the tagsetIDs.
@@ -193,7 +188,7 @@ public class KuduTSTable {
     }
 
     List<PeekingIterator<Pair<Long, Double>>> iterators = Deferred.group(deferreds).join(10000);
-    List<TimeAndValue> finalDataPoints = new ArrayList<>();
+    List<Datapoint> finalDatapoints = new ArrayList<>();
 
 
     while (!iterators.isEmpty()) {
@@ -231,10 +226,10 @@ public class KuduTSTable {
       for (PeekingIterator<Pair<Long, Double>> iterator : iteratorsToNextOn) {
         sum += iterator.next().getSecond();
       }
-      finalDataPoints.add(new TimeAndValue(lowestValue, sum / iteratorsToNextOn.size()));
+      finalDatapoints.add(Datapoint.create(lowestValue, sum / iteratorsToNextOn.size()));
     }
 
-    return finalDataPoints;
+    return finalDatapoints;
   }
 
   private class MetricsScannerCB implements
