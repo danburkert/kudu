@@ -22,32 +22,24 @@ package org.kududb.ts;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.UnmodifiableIterator;
-import com.google.common.primitives.Ints;
 import com.stumbleupon.async.Deferred;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.concurrent.NotThreadSafe;
 
-/**
- * Represents a read-only sequence of continuous data points.
- */
 @NotThreadSafe
 public class Datapoints implements Iterable<Datapoint> {
 
   private final String metric;
+  private final IntVec tagsetIDs;
+  private final LongVec timestamps;
+  private final DoubleVec values;
 
-  private final int[] tagsetIDs;
-
-  private final long[] timestamps;
-
-  private final double[] values;
-
-  public Datapoints(String metric, int[] tagsetIDs, long[] timestamps, double[] values) {
-    Preconditions.checkArgument(tagsetIDs.length > 0);
-    Preconditions.checkArgument(timestamps.length == values.length);
+  Datapoints(String metric, IntVec tagsetIDs, LongVec timestamps, DoubleVec values) {
+    Preconditions.checkArgument(tagsetIDs.len() > 0);
+    Preconditions.checkArgument(timestamps.len() == values.len());
     this.metric = metric;
     this.tagsetIDs = tagsetIDs;
     this.timestamps = timestamps;
@@ -93,14 +85,14 @@ public class Datapoints implements Iterable<Datapoint> {
    * @since 2.2
    */
   List<Integer> getTagsetIDs() {
-    return Collections.unmodifiableList(Ints.asList(tagsetIDs));
+    return Collections.unmodifiableList(tagsetIDs.asList());
   }
 
   /**
    * Returns the number of data points.
    */
   int size() {
-    return timestamps.length;
+    return timestamps.len();
   }
 
   /**
@@ -117,19 +109,19 @@ public class Datapoints implements Iterable<Datapoint> {
   }
 
   long timestamp(int i) {
-    return timestamps[i];
+    return timestamps.get(i);
   }
 
   double value(int i) {
-    return values[i];
+    return values.get(i);
   }
 
   @Override
   public String toString() {
     return Objects.toStringHelper(this)
         .add("metric", metric)
-        .add("series-count", tagsetIDs.length)
-        .add("datapoint-count", timestamps.length)
+        .add("series-count", tagsetIDs.len())
+        .add("datapoint-count", timestamps.len())
         .toString();
   }
 
@@ -143,18 +135,17 @@ public class Datapoints implements Iterable<Datapoint> {
   @NotThreadSafe
   public class DatapointIterator extends UnmodifiableIterator<Datapoint> {
     private final Datapoint datapoint = Datapoint.create(0, 0);
-    int index = 0;
+    private final LongVec.Iterator timestampIter = timestamps.iterator();
+    private final DoubleVec.Iterator valueIter = values.iterator();
 
-    @Override
     public boolean hasNext() {
-      return index < timestamps.length;
+      return timestampIter.hasNext();
     }
 
     @Override
     public Datapoint next() {
-      datapoint.setTime(timestamps[index]);
-      datapoint.setValue(values[index]);
-      index++;
+      datapoint.setTime(timestampIter.next());
+      datapoint.setValue(valueIter.next());
       return datapoint;
     }
 
@@ -163,8 +154,8 @@ public class Datapoints implements Iterable<Datapoint> {
      * @param microseconds the time to seek to
      */
     public void seek(long microseconds) {
-      int offset = Arrays.binarySearch(timestamps, microseconds);
-      index = offset >= 0 ? offset : -offset - 1;
+      timestampIter.seekToValue(microseconds);
+      valueIter.seek(timestampIter.getIndex());
     }
   }
 }

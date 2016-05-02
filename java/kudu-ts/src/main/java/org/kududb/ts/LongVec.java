@@ -2,7 +2,7 @@ package org.kududb.ts;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
-import com.google.common.primitives.Ints;
+import com.google.common.primitives.Longs;
 
 import java.util.Arrays;
 import java.util.List;
@@ -11,27 +11,27 @@ import javax.annotation.concurrent.NotThreadSafe;
 import org.kududb.annotations.InterfaceAudience;
 
 /**
- * A vector of primitive integers.
+ * A vector of primitive longs.
  *
  * The vector is backed by a contiguous array, and offers efficient random
  * access.
  */
 @InterfaceAudience.Private
 @NotThreadSafe
-final class IntVec {
+final class LongVec {
 
   /** Default initial capacity for new vectors. */
   @VisibleForTesting
   static final int DEFAULT_CAPACITY = 32;
 
   /** data backing the vector. */
-  private int[] data;
+  private long[] data;
 
   /** offset of first unused element in data. */
   private int len;
 
-  private IntVec(int capacity) {
-    data = new int[capacity];
+  private LongVec(int capacity) {
+    data = new long[capacity];
     len = 0;
   }
 
@@ -39,8 +39,8 @@ final class IntVec {
    * Creates a new vector.
    * @return the new vector.
    */
-  public static IntVec create() {
-    return new IntVec(DEFAULT_CAPACITY);
+  public static LongVec create() {
+    return new LongVec(DEFAULT_CAPACITY);
   }
 
   /**
@@ -48,8 +48,8 @@ final class IntVec {
    * @param capacity the initial capacity of the vector
    * @return a new vector with the specified capacity
    */
-  public static IntVec withCapacity(int capacity) {
-    return new IntVec(capacity);
+  public static LongVec withCapacity(int capacity) {
+    return new LongVec(capacity);
   }
 
   /** Returns the number of elements the vector can hold without reallocating. */
@@ -112,7 +112,7 @@ final class IntVec {
    * Appends an element to the vector.
    * @param element the element to append
    */
-  public void push(int element) {
+  public void push(long element) {
     reserve(1);
     data[len++] = element;
   }
@@ -123,7 +123,7 @@ final class IntVec {
    * @param value to set the element to
    * @throws IndexOutOfBoundsException if {@code} index is not valid
    */
-  public void set(int index, int value) {
+  public void set(int index, long value) {
     if (index >= len) throw new IndexOutOfBoundsException();
     data[index] = value;
   }
@@ -132,7 +132,7 @@ final class IntVec {
    * Concatenates another vector onto the end of this one.
    * @param other the other vector to concatenate onto this one
    */
-  public void concat(IntVec other) {
+  public void concat(LongVec other) {
     reserveExact(other.len);
     System.arraycopy(other.data, 0, data, len, other.len);
     len += other.len;
@@ -144,7 +144,7 @@ final class IntVec {
    * @return the element at the specified position
    * @throws IndexOutOfBoundsException if the index is out of range
    */
-  public int get(int index) {
+  public long get(int index) {
     if (index >= len) throw new IndexOutOfBoundsException();
     return data[index];
   }
@@ -162,7 +162,7 @@ final class IntVec {
    * modified.
    * @param other the vector to merge into this vector
    */
-  public void merge(IntVec other) {
+  public void merge(LongVec other) {
     // http://www.programcreek.com/2012/12/leetcode-merge-sorted-array-java/
     reserve(other.len());
 
@@ -194,7 +194,7 @@ final class IntVec {
    * will be preserved.
    * @param other the vector to intersect with this vector
    */
-  public void intersect(IntVec other) {
+  public void intersect(LongVec other) {
     int writeOffset = 0;
     int otherOffset = 0;
 
@@ -238,8 +238,8 @@ final class IntVec {
    * The vector should not be concurrently modified while the list is in use.
    * @return a list view of the vector
    */
-  public List<Integer> asList() {
-    List<Integer> list = Ints.asList(data);
+  public List<Long> asList() {
+    List<Long> list = Longs.asList(data);
     if (len < data.length) return list.subList(0, len);
     return list;
   }
@@ -266,7 +266,7 @@ final class IntVec {
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    IntVec other = (IntVec) o;
+    LongVec other = (LongVec) o;
     if (len != other.len) return false;
     for (int i = 0; i < len; i++) if (data[i] != other.data[i]) return false;
     return true;
@@ -275,21 +275,21 @@ final class IntVec {
   /** {@inheritDoc} */
   @Override
   public int hashCode() {
-    int result = len;
+    long result = len;
     for (int i = 0; i < len; i++) result = 31 * result + data[i];
-    return result;
+    return (int) result;
   }
 
   /** {@inheritDoc} */
   @Override
-  protected IntVec clone() {
-    IntVec clone = new IntVec(0);
+  protected LongVec clone() {
+    LongVec clone = new LongVec(0);
     clone.data = Arrays.copyOf(data, data.length);
     clone.len = len;
     return clone;
   }
 
-  /** An iterator of primitive integers. */
+  /** An iterator of primitive longs. */
   public class Iterator {
     int index = 0;
 
@@ -299,7 +299,7 @@ final class IntVec {
      * Returns the next element in the iterator.
      * @return the next element
      */
-    public int next() {
+    public long next() {
       return data[index++];
     }
 
@@ -325,7 +325,7 @@ final class IntVec {
      * Seek to the first datapoint greater than or equal to the provided value.
      * @param value to seek to
      */
-    public void seekToValue(int value) {
+    public void seekToValue(long value) {
       int offset = Arrays.binarySearch(data, value);
       index = offset >= 0 ? offset : -offset - 1;
     }
@@ -343,7 +343,7 @@ final class IntVec {
     public String toString() {
       return Objects.toStringHelper(this)
                     .add("index", index)
-                    .add("vec", IntVec.this)
+                    .add("vec", LongVec.this)
                     .toString();
     }
   }

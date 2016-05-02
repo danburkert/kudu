@@ -19,27 +19,27 @@ import java.util.TreeSet;
 
 import org.junit.Test;
 
-public class TestIntVec {
+public class TestLongVec {
   private static final Random RAND = new Random();
 
-  private List<Integer> random() {
+  private List<Long> random() {
     return random(RAND.nextInt(1024));
   }
 
-  private List<Integer> random(int len) {
-    List<Integer> list = new ArrayList<>();
+  private List<Long> random(int len) {
+    List<Long> list = new ArrayList<>();
     for (int i = 0; i < len; i++) {
-      list.add(RAND.nextInt(i + 1));
+      list.add((long) RAND.nextInt(i + 1));
     }
     return Collections.unmodifiableList(list);
   }
 
-  public void checkIntVec(List<Integer> vals) {
-    IntVec vec = IntVec.create();
+  public void checkLongVec(List<Long> vals) {
+    LongVec vec = LongVec.create();
     assertEquals(0, vec.len());
 
     // push
-    for (int i : vals) {
+    for (long i : vals) {
       vec.push(i);
     }
     assertEquals(vals, vec.asList());
@@ -48,7 +48,7 @@ public class TestIntVec {
     assertEquals(vals.toString(), vec.toString());
 
     // clone, equals
-    IntVec copy = vec.clone();
+    LongVec copy = vec.clone();
     assertEquals(copy, vec);
 
     // truncate
@@ -78,30 +78,30 @@ public class TestIntVec {
     assertEquals(vec.len(), vec.capacity());
 
     // sort
-    IntVec sorted = vec.clone();
+    LongVec sorted = vec.clone();
     sorted.sort();
-    List<Integer> sortedInts = new ArrayList<>(vals);
+    List<Long> sortedInts = new ArrayList<>(vals);
     Collections.sort(sortedInts);
     assertEquals(sortedInts, sorted.asList());
 
     // intersect
     for (int i = 0; i < 100; i++) {
-      List<Integer> rand = random(i);
+      List<Long> rand = random(i);
 
-      IntVec a = IntVec.create();
-      IntVec b = IntVec.create();
-      for (int j : vals) a.push(j);
-      for (int j : rand) b.push(j);
+      LongVec a = LongVec.create();
+      LongVec b = LongVec.create();
+      for (long j : vals) a.push(j);
+      for (long j : rand) b.push(j);
       a.sort();
       b.sort();
 
-      IntVec left = a.clone();
-      IntVec right = b.clone();
+      LongVec left = a.clone();
+      LongVec right = b.clone();
 
       left.intersect(b);
       right.intersect(a);
 
-      SortedSet<Integer> expected =
+      SortedSet<Long> expected =
           ImmutableSortedSet.copyOf(Sets.intersection(ImmutableSet.copyOf(vals),
                                                       ImmutableSet.copyOf(rand)));
 
@@ -120,25 +120,25 @@ public class TestIntVec {
 
     // merge
     for (int i = 0; i < 100; i++) {
-      List<Integer> rand = random(i);
+      List<Long> rand = random(i);
 
-      IntVec a = IntVec.create();
-      IntVec b = IntVec.create();
-      for (int j : vals) a.push(j);
-      for (int j : rand) b.push(j);
+      LongVec a = LongVec.create();
+      LongVec b = LongVec.create();
+      for (long j : vals) a.push(j);
+      for (long j : rand) b.push(j);
       a.sort();
       b.sort();
 
-      IntVec left = a.clone();
-      IntVec right = b.clone();
+      LongVec left = a.clone();
+      LongVec right = b.clone();
 
       left.merge(b);
       right.merge(a);
 
-      List<Integer> sortedRand = new ArrayList<>(rand);
+      List<Long> sortedRand = new ArrayList<>(rand);
       Collections.sort(sortedRand);
-      Iterable<Integer> expected = Iterables.mergeSorted(ImmutableList.of(sortedInts, sortedRand),
-                                                         Ordering.natural());
+      Iterable<Long> expected = Iterables.mergeSorted(ImmutableList.of(sortedInts, sortedRand),
+                                                      Ordering.natural());
 
       assertEquals(left, right);
       assertEquals(ImmutableList.copyOf(expected), left.asList());
@@ -154,33 +154,33 @@ public class TestIntVec {
       copy = vec.clone();
       int index = RAND.nextInt(vec.len());
       copy.set(index, index);
-      List<Integer> intsCopy = new ArrayList<>(vals);
-      intsCopy.set(index, index);
+      List<Long> intsCopy = new ArrayList<>(vals);
+      intsCopy.set(index, (long) index);
       assertEquals(intsCopy, copy.asList());
     }
   }
 
   @Test
-  public void testIntVec() throws Exception {
-    checkIntVec(random(0));
-    checkIntVec(random(1));
-    checkIntVec(random(2));
-    checkIntVec(random(3));
-    checkIntVec(random(IntVec.DEFAULT_CAPACITY - 2));
-    checkIntVec(random(IntVec.DEFAULT_CAPACITY - 1));
-    checkIntVec(random(IntVec.DEFAULT_CAPACITY));
-    checkIntVec(random(IntVec.DEFAULT_CAPACITY + 1));
-    checkIntVec(random(IntVec.DEFAULT_CAPACITY + 2));
+  public void testLongVec() throws Exception {
+    checkLongVec(random(0));
+    checkLongVec(random(1));
+    checkLongVec(random(2));
+    checkLongVec(random(3));
+    checkLongVec(random(LongVec.DEFAULT_CAPACITY - 2));
+    checkLongVec(random(LongVec.DEFAULT_CAPACITY - 1));
+    checkLongVec(random(LongVec.DEFAULT_CAPACITY));
+    checkLongVec(random(LongVec.DEFAULT_CAPACITY + 1));
+    checkLongVec(random(LongVec.DEFAULT_CAPACITY + 2));
 
     for (int i = 0; i < 100; i++) {
-      checkIntVec(random());
+      checkLongVec(random());
     }
   }
 
   @Test
   public void testIntersectionWithDuplicates() throws Exception {
-    IntVec a = IntVec.create();
-    IntVec b = IntVec.create();
+    LongVec a = LongVec.create();
+    LongVec b = LongVec.create();
 
     a.push(0);
     a.push(1);
@@ -189,15 +189,15 @@ public class TestIntVec {
     b.push(1);
     b.push(3);
 
-    IntVec left = a.clone();
+    LongVec left = a.clone();
     left.intersect(b);
 
     assertEquals(2, left.len());
 
-    IntVec right = b.clone();
+    LongVec right = b.clone();
     right.intersect(a);
 
     assertEquals(left, right);
-    assertEquals(ImmutableList.of(1, 1), left.asList());
+    assertEquals(ImmutableList.of(1L, 1L), left.asList());
   }
 }

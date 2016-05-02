@@ -20,6 +20,7 @@
 package org.kududb.ts;
 
 import com.google.common.base.Objects;
+import com.google.common.collect.ImmutableList;
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
 
@@ -28,10 +29,14 @@ import java.util.List;
 import java.util.SortedMap;
 
 import org.kududb.client.AsyncKuduClient;
+import org.kududb.client.AsyncKuduScanner;
 import org.kududb.client.AsyncKuduSession;
 import org.kududb.client.Insert;
+import org.kududb.client.KuduPredicate;
 import org.kududb.client.KuduTable;
 import org.kududb.client.OperationResponse;
+import org.kududb.client.RowResult;
+import org.kududb.client.RowResultIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +46,10 @@ import org.slf4j.LoggerFactory;
  */
 public class Metrics {
   private static final Logger LOG = LoggerFactory.getLogger(Metrics.class);
+
+  private static final List<Integer> TIME_VALUE_PROJECTION =
+      ImmutableList.of(KuduTSSchema.METRICS_TIME_INDEX,
+                       KuduTSSchema.METRICS_VALUE_INDEX);
 
   private final AsyncKuduClient client;
   private final KuduTable table;
@@ -91,4 +100,59 @@ public class Metrics {
     return null;
   }
 
+  public Deferred<Datapoints> getSeries(final String metric,
+                                        final int tagsetID,
+                                        final long startTime,
+                                        final long endTime) {
+
+
+    KuduPredicate metricPred =
+        KuduPredicate.newComparisonPredicate(KuduTSSchema.METRICS_METRIC_COLUMN,
+                                             KuduPredicate.ComparisonOp.EQUAL, metric);
+
+    KuduPredicate tagsetIdPred =
+        KuduPredicate.newComparisonPredicate(KuduTSSchema.METRICS_TAGSET_ID_COLUMN,
+                                             KuduPredicate.ComparisonOp.EQUAL, tagsetID);
+
+    KuduPredicate startTimestampPred =
+        KuduPredicate.newComparisonPredicate(KuduTSSchema.METRICS_TIME_COLUMN,
+                                             KuduPredicate.ComparisonOp.GREATER_EQUAL, startTime);
+
+    KuduPredicate endTimestampPred =
+        KuduPredicate.newComparisonPredicate(KuduTSSchema.METRICS_TIME_COLUMN,
+                                             KuduPredicate.ComparisonOp.LESS, endTime);
+
+    final AsyncKuduScanner scanner = client.newScannerBuilder(table)
+                                           .addPredicate(metricPred)
+                                           .addPredicate(tagsetIdPred)
+                                           .addPredicate(startTimestampPred)
+                                           .addPredicate(endTimestampPred)
+                                           .setProjectedColumnIndexes(TIME_VALUE_PROJECTION)
+                                           .build();
+
+    class GetSeriesCB implements Callback<Deferred<Datapoints>, RowResultIterator> {
+      private final LongVec times = LongVec.create();
+      private final DoubleVec values = DoubleVec.create();
+      @Override
+      public Deferred<Datapoints> call(RowResultIterator results) throws Exception {
+        times.reserve(results.getNumRows());
+        values.reserve(results.getNumRows());
+        for (RowResult result : results) {
+          times.push(result.getLong(0));
+          values.push(result.getDouble(1));
+        }
+
+        if (scanner.hasMoreRows()) {
+          return scanner.nextRows().addCallbackDeferring(this);
+        }
+        return Deferred.fromResult(new Datapoints(metric, IntVec.))
+
+
+
+      }
+    }
+
+
+    return scanner.nextRows().addCallbackDeferring(new GetSeriesCB());
+  }
 }
