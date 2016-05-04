@@ -263,6 +263,14 @@ public class AsyncKuduClient implements AutoCloseable {
   }
 
   /**
+   * Returns a synchronous {@link KuduClient} which wraps this asynchronous client.
+   * @return a new synchronous {@code KuduClient}
+   */
+  public KuduClient syncClient() {
+    return new KuduClient(this);
+  }
+
+  /**
    * Create a table on the cluster with the specified name and schema. Default table
    * configurations are used, mainly the table will have one tablet.
    * @param name the table's name
