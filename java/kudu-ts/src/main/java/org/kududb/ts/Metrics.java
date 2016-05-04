@@ -24,10 +24,11 @@ import com.google.common.collect.ImmutableList;
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.SortedMap;
 
+import javax.annotation.concurrent.ThreadSafe;
+
+import org.kududb.annotations.InterfaceAudience;
 import org.kududb.client.AsyncKuduClient;
 import org.kududb.client.AsyncKuduScanner;
 import org.kududb.client.AsyncKuduSession;
@@ -44,12 +45,14 @@ import org.slf4j.LoggerFactory;
  * {@code Metrics} manages inserting and retrieving datapoints from the
  * {@code metrics} table.
  */
+@InterfaceAudience.Private
+@ThreadSafe
 public class Metrics {
   private static final Logger LOG = LoggerFactory.getLogger(Metrics.class);
 
   private static final List<Integer> TIME_VALUE_PROJECTION =
-      ImmutableList.of(KuduTSSchema.METRICS_TIME_INDEX,
-                       KuduTSSchema.METRICS_VALUE_INDEX);
+      ImmutableList.of(Tables.METRICS_TIME_INDEX,
+                       Tables.METRICS_VALUE_INDEX);
 
   private final AsyncKuduClient client;
   private final KuduTable table;
@@ -61,65 +64,38 @@ public class Metrics {
     this.tagsets = tagsets;
   }
 
-  public Deferred<ArrayList<OperationResponse>> insertDataPoints(final AsyncKuduSession session,
-                                                                 final String metric,
-                                                                 final SortedMap<String, String> tagset,
-                                                                 final List<Datapoint> datapoints) {
-
-    class TagsetIDLookupCB implements Callback<Deferred<ArrayList<OperationResponse>>, Integer> {
-      @Override
-      public Deferred<ArrayList<OperationResponse>> call(Integer tagsetID) throws Exception {
-        List<Deferred<OperationResponse>> responses = new ArrayList<>(datapoints.size());
-        for (Datapoint dataPoint : datapoints) {
-          Insert insert = table.newInsert();
-          insert.getRow().addString(KuduTSSchema.METRICS_METRIC_INDEX, metric);
-          insert.getRow().addInt(KuduTSSchema.METRICS_TAGSET_ID_INDEX, tagsetID);
-          insert.getRow().addLong(KuduTSSchema.METRICS_TIME_INDEX, dataPoint.getTime());
-          insert.getRow().addDouble(KuduTSSchema.METRICS_VALUE_INDEX, dataPoint.getValue());
-          responses.add(session.apply(insert));
-        }
-        return Deferred.group(responses);
-      }
-
-      @Override
-      public String toString() {
-        return Objects.toStringHelper(this)
-                      .add("metric", metric)
-                      .add("tags", tagset)
-                      .add("datapoint-count", datapoints.size())
-                      .toString();
-      }
-    }
-
-    return tagsets.getTagsetID(tagset).addCallbackDeferring(new TagsetIDLookupCB());
+  public Insert insertDatapoint(final String metric,
+                                final int tagsetID,
+                                final long time,
+                                final double value) {
+    Insert insert = table.newInsert();
+    insert.getRow().addString(Tables.METRICS_METRIC_INDEX, metric);
+    insert.getRow().addInt(Tables.METRICS_TAGSET_ID_INDEX, tagsetID);
+    insert.getRow().addLong(Tables.METRICS_TIME_INDEX, time);
+    insert.getRow().addDouble(Tables.METRICS_VALUE_INDEX, value);
+    return insert;
   }
 
-  public Deferred<Datapoints> getSeries(final AsyncKuduSession session,
-                                        final String metric,
-                                        final SortedMap<String, String> tagset) {
-    return null;
-  }
-
-  public Deferred<Datapoints> getSeries(final String metric,
-                                        final int tagsetID,
-                                        final long startTime,
-                                        final long endTime) {
-
-
+  public Deferred<Datapoints> scanSeries(final String metric,
+                                         final int tagsetID,
+                                         final long startTime,
+                                         final long endTime,
+                                         final Aggregator downsampler,
+                                         final long downsampleInterval) {
     KuduPredicate metricPred =
-        KuduPredicate.newComparisonPredicate(KuduTSSchema.METRICS_METRIC_COLUMN,
+        KuduPredicate.newComparisonPredicate(Tables.METRICS_METRIC_COLUMN,
                                              KuduPredicate.ComparisonOp.EQUAL, metric);
 
     KuduPredicate tagsetIdPred =
-        KuduPredicate.newComparisonPredicate(KuduTSSchema.METRICS_TAGSET_ID_COLUMN,
+        KuduPredicate.newComparisonPredicate(Tables.METRICS_TAGSET_ID_COLUMN,
                                              KuduPredicate.ComparisonOp.EQUAL, tagsetID);
 
     KuduPredicate startTimestampPred =
-        KuduPredicate.newComparisonPredicate(KuduTSSchema.METRICS_TIME_COLUMN,
+        KuduPredicate.newComparisonPredicate(Tables.METRICS_TIME_COLUMN,
                                              KuduPredicate.ComparisonOp.GREATER_EQUAL, startTime);
 
     KuduPredicate endTimestampPred =
-        KuduPredicate.newComparisonPredicate(KuduTSSchema.METRICS_TIME_COLUMN,
+        KuduPredicate.newComparisonPredicate(Tables.METRICS_TIME_COLUMN,
                                              KuduPredicate.ComparisonOp.LESS, endTime);
 
     final AsyncKuduScanner scanner = client.newScannerBuilder(table)
@@ -130,7 +106,7 @@ public class Metrics {
                                            .setProjectedColumnIndexes(TIME_VALUE_PROJECTION)
                                            .build();
 
-    class GetSeriesCB implements Callback<Deferred<Datapoints>, RowResultIterator> {
+    class SeriesScanCB implements Callback<Deferred<Datapoints>, RowResultIterator> {
       private final LongVec times = LongVec.create();
       private final DoubleVec values = DoubleVec.create();
       @Override
@@ -145,14 +121,73 @@ public class Metrics {
         if (scanner.hasMoreRows()) {
           return scanner.nextRows().addCallbackDeferring(this);
         }
-        return Deferred.fromResult(new Datapoints(metric, IntVec.))
 
+        return Deferred.fromResult(new Datapoints(metric,
+                                                  IntVec.wrap(new int[] { tagsetID }),
+                                                  times,
+                                                  values));
+      }
 
-
+      @Override
+      public String toString() {
+        return Objects.toStringHelper(this)
+                      .add("datapoints-count", times.len())
+                      .toString();
       }
     }
 
+    class DownsamplingSeriesScanCB implements Callback<Deferred<Datapoints>, RowResultIterator> {
+      private final LongVec times = LongVec.create();
+      private final DoubleVec values = DoubleVec.create();
 
-    return scanner.nextRows().addCallbackDeferring(new GetSeriesCB());
+      private long currentInterval = 0;
+      private final DoubleVec intervalValues = DoubleVec.create();
+
+      @Override
+      public Deferred<Datapoints> call(RowResultIterator results) throws Exception {
+        for (RowResult result : results) {
+          long time = result.getLong(0);
+          double value = result.getDouble(1);
+          long interval = time - (time % downsampleInterval);
+          if (interval == currentInterval) {
+            intervalValues.push(value);
+          } else {
+            if (!intervalValues.isEmpty()) {
+              times.push(currentInterval);
+              values.concat(intervalValues);
+              intervalValues.clear();
+            }
+            currentInterval = interval;
+          }
+        }
+
+        if (scanner.hasMoreRows()) {
+          return scanner.nextRows().addCallbackDeferring(this);
+        }
+
+        if (!intervalValues.isEmpty()) {
+          times.push(currentInterval);
+          values.concat(intervalValues);
+          intervalValues.clear();
+        }
+
+        return Deferred.fromResult(new Datapoints(metric,
+                                                  IntVec.wrap(new int[] { tagsetID }),
+                                                  times,
+                                                  values));
+      }
+      @Override
+      public String toString() {
+        return Objects.toStringHelper(this)
+                      .add("datapoints-count", times.len() + (intervalValues.isEmpty() ? 0 : 1))
+                      .toString();
+      }
+    }
+
+    if (downsampler == null) {
+      return scanner.nextRows().addCallbackDeferring(new SeriesScanCB());
+    } else {
+      return scanner.nextRows().addCallbackDeferring(new DownsamplingSeriesScanCB());
+    }
   }
 }

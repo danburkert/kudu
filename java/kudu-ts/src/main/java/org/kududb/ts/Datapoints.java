@@ -21,28 +21,35 @@ package org.kududb.ts;
 
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.PeekingIterator;
 import com.google.common.collect.UnmodifiableIterator;
-import com.stumbleupon.async.Deferred;
+import com.google.common.primitives.Longs;
 
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
+import java.util.PriorityQueue;
 import javax.annotation.concurrent.NotThreadSafe;
 
+import org.kududb.annotations.InterfaceAudience;
+import org.kududb.annotations.InterfaceStability;
+
+@InterfaceAudience.Public
+@InterfaceStability.Unstable
 @NotThreadSafe
 public class Datapoints implements Iterable<Datapoint> {
 
   private final String metric;
   private final IntVec tagsetIDs;
-  private final LongVec timestamps;
+  private final LongVec times;
   private final DoubleVec values;
 
-  Datapoints(String metric, IntVec tagsetIDs, LongVec timestamps, DoubleVec values) {
+  Datapoints(String metric, IntVec tagsetIDs, LongVec times, DoubleVec values) {
     Preconditions.checkArgument(tagsetIDs.len() > 0);
-    Preconditions.checkArgument(timestamps.len() == values.len());
+    Preconditions.checkArgument(times.len() == values.len());
     this.metric = metric;
     this.tagsetIDs = tagsetIDs;
-    this.timestamps = timestamps;
+    this.times = times;
     this.values = values;
   }
 
@@ -54,88 +61,234 @@ public class Datapoints implements Iterable<Datapoint> {
   }
 
   /**
-   * Returns the tags associated with these data points.
-   * @return A non-{@code null} map of tag names (keys), tag values (values).
+   * Returns the tagset IDs of the datapoints.
+   * Package private because tagset IDs are an internal implementation detail.
+   * @return the tagset IDs
    */
-  Map<String, String> getTags() {
-    try {
-      return getTagsAsync().joinUninterruptibly();
-    } catch (RuntimeException e) {
-      throw e;
-    } catch (Exception e) {
-      throw new RuntimeException("Should never be here", e);
-    }
+  IntVec getTagsetIDs() {
+    return tagsetIDs;
   }
 
   /**
-   * Returns the tags associated with these data points.
-   * @return A non-{@code null} map of tag names (keys), tag values (values).
-   * @since 1.2
+   * Returns the time of the {@link Datapoint} at the provided index.
+   * @param index of the {@code Datapoint} whose time to return
+   * @return the time of the {@code Datapoint} at the provided index
    */
-  Deferred<Map<String, String>> getTagsAsync() {
-    throw new RuntimeException("not implemented");
+  long getTime(int index) {
+    return times.get(index);
   }
 
   /**
-   * Returns a map of tag pairs as UIDs.
-   * When used on a span or row, it returns the tag set. When used on a span
-   * group it will return only the tag pairs that are common across all
-   * time series in the group.
-   * @return A potentially empty map of tagk to tagv pairs as UIDs
-   * @since 2.2
+   * Returns the value of the {@link Datapoint} at the provided index.
+   * @param index of the {@code Datapoint} whose value to return
+   * @return the value of the {@code Datapoint} at the provided index
    */
-  List<Integer> getTagsetIDs() {
-    return Collections.unmodifiableList(tagsetIDs.asList());
+  double getValue(int index) {
+    return values.get(index);
   }
 
   /**
    * Returns the number of data points.
    */
   int size() {
-    return timestamps.len();
+    return times.len();
   }
 
   /**
-   * Returns a <em>zero-copy view</em> to go through {@code size()} data points.
-   * <p>
-   * The iterator returned must return each {@link Datapoint} in {@code O(1)}.
-   * <b>The {@link Datapoint} returned must not be stored</b> and gets
-   * invalidated as soon as {@code next} is called on the iterator.  If you
-   * want to store individual data points, you need to copy the timestamp
-   * and value out of each {@link Datapoint} into your own data structures.
+   * Returns an iterator over the {@link Datapoint}s of this {@code Datapoints}.
+   * The iterator reuses the same {@code Datapoint} instance to save allocations,
+   * see {@link Iterator} for details.
    */
-  public DatapointIterator iterator() {
-    return new DatapointIterator();
+  public Datapoints.Iterator iterator() {
+    return new Iterator();
   }
 
-  long timestamp(int i) {
-    return timestamps.get(i);
+  /**
+   * Returns the vector of datapoint times in microseconds.
+   * Callers should not modify the vector.
+   * Package private because {@link LongVec} is internal.
+   *
+   * @return the vector of datapoint times
+   */
+  LongVec getTimes() {
+    return times;
   }
 
-  double value(int i) {
-    return values.get(i);
+  /**
+   * Returns the vector of datapoint values.
+   * Callers should not modify the vector.
+   * Package private because {@link DoubleVec} is internal.
+   *
+   * @return the vector of datapoint times
+   */
+  DoubleVec getValues() {
+    return values;
+  }
+
+  /**
+   * Aggregate multiple {@code Datapoints}. The {@code Datapoints} must have the
+   * same {@code metric}, but may come from different time ranges or tagsets.
+   * This method takes ownership of the provided {@code series}, they should not
+   * be used after calling this.
+   * @param series the list of series to aggregate
+   * @param aggregator the aggregator
+   * @return an aggregated series
+   */
+  public static Datapoints aggregate(List<Datapoints> series, Aggregator aggregator) {
+    final class IteratorComparator implements Comparator<Iterator> {
+      @Override
+      public int compare(Iterator a, Iterator b) {
+        return Longs.compare(a.peek().getTime(), b.peek().getTime());
+      }
+
+      @Override
+      public String toString() {
+        return Objects.toStringHelper(this).toString();
+      }
+    }
+
+    PriorityQueue<Iterator> iterators =
+        new PriorityQueue<>(series.size(), new IteratorComparator());
+
+    String metric = series.get(0).getMetric();
+    IntVec tagsetIDs = IntVec.withCapacity(series.size());
+
+    for (Datapoints s : series) {
+      iterators.add(s.iterator());
+      tagsetIDs.concat(s.tagsetIDs);
+      if (!metric.equals(s.getMetric())) {
+        throw new IllegalArgumentException("unable to aggregate datapoints from different metrics");
+      }
+    }
+
+    LongVec times = LongVec.create();
+    DoubleVec values = DoubleVec.create();
+
+    while (!iterators.isEmpty()) {
+      long time;
+      {
+        Iterator iter = iterators.remove();
+        Datapoint point = iter.next();
+        time = point.getTime();
+        times.push(time);
+        aggregator.addValue(point.getValue());
+        if (iter.hasNext()) iterators.add(iter);
+      }
+      while (!iterators.isEmpty() && iterators.peek().peek().getTime() == time) {
+        Iterator i = iterators.remove();
+        aggregator.addValue(i.next().getValue());
+        if (i.hasNext()) iterators.add(i);
+      }
+      values.push(aggregator.aggregatedValue());
+    }
+
+    return new Datapoints(metric, tagsetIDs, times, values);
+  }
+
+  public static Datapoints aggregate(List<Datapoints> series,
+                                     Aggregator aggregator,
+                                     Interpolators.Interpolator interpolator)  {
+    String metric = series.get(0).getMetric();
+    IntVec tagsetIDs = IntVec.withCapacity(series.size());
+
+
+    List<Interpolation> active = new ArrayList<>(series.size());
+    List<Interpolation> inactive = new ArrayList<>(series.size());
+
+    LongVec times = null;
+    for (Datapoints s : series) {
+      tagsetIDs.concat(s.tagsetIDs);
+      if (!metric.equals(s.getMetric())) {
+        throw new IllegalArgumentException("unable to aggregate datapoints from different metrics");
+      }
+      if (times == null) times = s.getTimes();
+      else times.merge(s.getTimes());
+      inactive.add(interpolator.interpolate(s));
+    }
+
+    // TODO: use mergeUnique instead of merge above to get rid of dedup.
+    times.dedup();
+
+    DoubleVec values = DoubleVec.withCapacity(times.len());
+    long nextMinMaxTime = Long.MIN_VALUE;
+    LongVec.Iterator timeIter = times.iterator();
+    while (timeIter.hasNext()) {
+      long time = timeIter.next();
+
+      if (time >= nextMinMaxTime) {
+        nextMinMaxTime = Long.MAX_VALUE;
+        { // expire active interpolations, if possible
+          java.util.Iterator<Interpolation> iter = active.iterator();
+          while (iter.hasNext()) {
+            Interpolation next = iter.next();
+            if (next.maxTime() > time) {
+              iter.remove();
+            }
+          }
+        }
+        { // promote inactive interpolations to active, if possible
+          java.util.Iterator<Interpolation> iter = inactive.iterator();
+          while (iter.hasNext()) {
+            Interpolation next = iter.next();
+            if (next.maxTime() < time)
+              throw new IllegalStateException("inactive interpolation is expired");
+            if (next.minTime() <= time) {
+              iter.remove();
+              active.add(next);
+              nextMinMaxTime = Math.min(nextMinMaxTime, next.maxTime());
+            }
+          }
+        }
+      }
+
+      if (active.isEmpty()) throw new IllegalStateException("no active interpolations");
+
+      for (Interpolation interpolation : active) {
+        aggregator.addValue(interpolation.getValue(time));
+      }
+      values.push(aggregator.aggregatedValue());
+    }
+    return new Datapoints(metric, tagsetIDs, times, values);
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (this == other) return true;
+    if (other == null || getClass() != other.getClass()) return false;
+    Datapoints that = (Datapoints) other;
+    return Objects.equal(metric, that.metric) &&
+           Objects.equal(tagsetIDs, that.tagsetIDs) &&
+           Objects.equal(times, that.times) &&
+           Objects.equal(values, that.values);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hashCode(metric, tagsetIDs, times, values);
   }
 
   @Override
   public String toString() {
     return Objects.toStringHelper(this)
         .add("metric", metric)
-        .add("series-count", tagsetIDs.len())
-        .add("datapoint-count", timestamps.len())
+        .add("series", tagsetIDs.len())
+        .add("datapoints", times.len())
         .toString();
   }
 
   /**
    * A {@link Datapoint} iterator over a {@code Datapoints}. The
    * {@code Datapoint} returned by {@link #next} is reused, so callers should
-   * not hold on to it. If the {@code Datapoint}'s timestamp or value needs to
+   * not hold on to it. If the {@code Datapoint}'s time or value needs to
    * be saved between calls to {@link #next}, then the caller is reponsible for
    * copying them.
    */
+  @InterfaceAudience.Public
+  @InterfaceStability.Unstable
   @NotThreadSafe
-  public class DatapointIterator extends UnmodifiableIterator<Datapoint> {
+  public class Iterator extends UnmodifiableIterator<Datapoint> implements PeekingIterator<Datapoint> {
     private final Datapoint datapoint = Datapoint.create(0, 0);
-    private final LongVec.Iterator timestampIter = timestamps.iterator();
+    private final LongVec.Iterator timestampIter = times.iterator();
     private final DoubleVec.Iterator valueIter = values.iterator();
 
     public boolean hasNext() {
@@ -146,6 +299,13 @@ public class Datapoints implements Iterable<Datapoint> {
     public Datapoint next() {
       datapoint.setTime(timestampIter.next());
       datapoint.setValue(valueIter.next());
+      return datapoint;
+    }
+
+    @Override
+    public Datapoint peek() {
+      datapoint.setTime(timestampIter.peek());
+      datapoint.setValue(valueIter.peek());
       return datapoint;
     }
 

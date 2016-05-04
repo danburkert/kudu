@@ -41,8 +41,8 @@ public class TestTagsets extends BaseKuduTest {
 
   @Test(timeout = 10000)
   public void testTagsetLookup() throws Exception {
-    try (KuduTSDB tsdb = KuduTSDB.open(ImmutableList.of(masterAddresses), "testTagsetLookup")) {
-      Tagsets tagsets = tsdb.getTagsets();
+    try (KuduTS ts = KuduTS.open(ImmutableList.of(masterAddresses), "testTagsetLookup")) {
+      Tagsets tagsets = ts.getTagsets();
       SortedMap<String, String> tagset = ImmutableSortedMap.of("k1", "v1");
 
       int tagsetHash = tagsets.hashSerializedTagset(Tagsets.serializeTagset(tagset));
@@ -58,8 +58,8 @@ public class TestTagsets extends BaseKuduTest {
 
   @Test(timeout = 10000)
   public void testConcurrentLookup() throws Exception {
-    try (KuduTSDB tsdb = KuduTSDB.open(ImmutableList.of(masterAddresses), "testConcurrentLookup")) {
-      Tagsets tagsets = tsdb.getTagsets();
+    try (KuduTS ts = KuduTS.open(ImmutableList.of(masterAddresses), "testConcurrentLookup")) {
+      Tagsets tagsets = ts.getTagsets();
       SortedMap<String, String> tagset = ImmutableSortedMap.of("k1", "v1");
 
       List<Deferred<Integer>> deferreds = new ArrayList<>();
@@ -75,8 +75,8 @@ public class TestTagsets extends BaseKuduTest {
 
   @Test(timeout = 10000)
   public void testEmptyTagsetLookup() throws Exception {
-    try (KuduTSDB tsdb = KuduTSDB.open(ImmutableList.of(masterAddresses), "testEmptyTagsetLookup")) {
-      Tagsets tagsets = tsdb.getTagsets();
+    try (KuduTS ts = KuduTS.open(ImmutableList.of(masterAddresses), "testEmptyTagsetLookup")) {
+      Tagsets tagsets = ts.getTagsets();
       int id = tagsets.getTagsetID(ImmutableSortedMap.<String, String>of()).join();
       assertEquals(0, id);
     }
@@ -84,8 +84,8 @@ public class TestTagsets extends BaseKuduTest {
 
   @Test(timeout = 10000)
   public void testHashWraparound() throws Exception {
-    try (KuduTSDB tsdb = KuduTSDB.open(ImmutableList.of(masterAddresses), "testHashWraparound")) {
-      Tagsets tagsets = tsdb.getTagsets();
+    try (KuduTS ts = KuduTS.open(ImmutableList.of(masterAddresses), "testHashWraparound")) {
+      Tagsets tagsets = ts.getTagsets();
 
       tagsets.setHashForTesting(Integer.MAX_VALUE - 9);
 
@@ -96,8 +96,8 @@ public class TestTagsets extends BaseKuduTest {
 
   @Test(timeout = 10000)
   public void testOverlappingTagsets() throws Exception {
-    try (KuduTSDB tsdb = KuduTSDB.open(ImmutableList.of(masterAddresses), "testOverlappingTagsets")) {
-      Tagsets tagsets = tsdb.getTagsets();
+    try (KuduTS ts = KuduTS.open(ImmutableList.of(masterAddresses), "testOverlappingTagsets")) {
+      Tagsets tagsets = ts.getTagsets();
       int id1 = tagsets.getTagsetID(ImmutableSortedMap.of("k1", "v1")).join();
       int id2 = tagsets.getTagsetID(ImmutableSortedMap.of("k2", "v2")).join();
       int id3 = tagsets.getTagsetID(ImmutableSortedMap.of("k1", "v1", "k2", "v2", "k3", "v3")).join();
@@ -110,8 +110,8 @@ public class TestTagsets extends BaseKuduTest {
 
   @Test(timeout = 100000)
   public void testHashCollisions() throws Exception {
-    try (KuduTSDB tsdb = KuduTSDB.open(ImmutableList.of(masterAddresses), "testHashCollisions")) {
-      Tagsets tagsets = tsdb.getTagsets();
+    try (KuduTS ts = KuduTS.open(ImmutableList.of(masterAddresses), "testHashCollisions")) {
+      Tagsets tagsets = ts.getTagsets();
 
       int numTagsets = 100;
       tagsets.setHashForTesting(0);
@@ -132,8 +132,8 @@ public class TestTagsets extends BaseKuduTest {
 
   @Test(timeout = 10000)
   public void testHashCollisionsWraparound() throws Exception {
-    try (KuduTSDB tsdb = KuduTSDB.open(ImmutableList.of(masterAddresses), "testHashCollisionsWraparound")) {
-      Tagsets tagsets = tsdb.getTagsets();
+    try (KuduTS ts = KuduTS.open(ImmutableList.of(masterAddresses), "testHashCollisionsWraparound")) {
+      Tagsets tagsets = ts.getTagsets();
 
       int numTagsets = 30;
       int offset = 15;

@@ -1,104 +1,158 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- */
-
 package org.kududb.ts;
 
-import com.google.common.collect.ImmutableSortedMap;
-import com.stumbleupon.async.Deferred;
+import com.google.common.base.Objects;
+import com.google.common.base.Preconditions;
 
-import java.util.List;
 import java.util.Map;
-import java.util.SortedMap;
+import javax.annotation.concurrent.NotThreadSafe;
+import javax.annotation.concurrent.ThreadSafe;
 
-/**
- * A query to retrieve timeseries data from Kudu.
- */
+import org.kududb.annotations.InterfaceAudience;
+import org.kududb.annotations.InterfaceStability;
+import org.kududb.ts.Interpolators.Interpolator;
+
+@InterfaceAudience.Public
+@InterfaceStability.Evolving
+@NotThreadSafe
 public class Query {
+  private final String metric;
+  private final Map<String, String> tags;
+  private final Aggregator aggregator;
 
-  long start;
-  long end;
+  private long start = Long.MIN_VALUE;
+  private long end = Long.MAX_VALUE;
+  private Aggregator downsampler = null;
+  private long downsampleInterval = 0;
+  private Interpolator interpolator = null;
 
-  String metric;
+  private Query(String metric, Map<String, String> tags, Aggregator aggregator) {
+    Preconditions.checkNotNull(metric, "query must have a metric");
+    Preconditions.checkNotNull(tags, "query must have tags");
+    Preconditions.checkNotNull(aggregator, "query must have aggregator");
+    Preconditions.checkArgument(!tags.isEmpty(), "query must have at least one tag");
 
-  Map<String, List<String>> tags;
-  List<String> groupBys;
-  SortedMap<String, List<String>> filters;
-
-  Aggregator aggregator;
-
-  long downsampleInterval;
-  Aggregator downsampler;
-  FillPolicy fillPolicy;
-
-  void setStartTime(long microseconds) {
-    start = microseconds;
-  }
-
-  void setEndTime(long microseconds) {
-    end = microseconds;
-  }
-
-  long getStartTime() {
-    return start;
-  }
-
-  public long getEndTime() {
-    return end;
-  }
-
-  public void setMetric(String metric) {
     this.metric = metric;
+    this.tags = tags;
+    this.aggregator = aggregator;
   }
 
+  /**
+   * Create a new query on a KuduTS table.
+   * @param metric the metric to query
+   * @param tags the set of tags to filter by. Must contain at least one tag
+   * @param aggregator a series aggregator
+   * @return the KuduTS query
+   */
+  public static Query create(String metric,
+                             Map<String, String> tags,
+                             Aggregator aggregator) {
+    return new Query(metric, tags, aggregator);
+  }
+
+  /**
+   * Sets the inclusive start time of the query in microseconds.
+   * @param start time of query in microseconds
+   * @return this
+   */
+  public Query setStart(long start) {
+    Preconditions.checkArgument(start < end, "query start time must be less than the end time");
+    this.start = start;
+    return this;
+  }
+
+  /**
+   * Sets the exclusive end time of the query in microseconds.
+   * @param end time of query in microseconds
+   * @return this
+   */
+  public Query setEnd(long end) {
+    Preconditions.checkArgument(start < end, "query end time must be greater than the start time");
+    this.end = end;
+    return this;
+  }
+
+  /**
+   * Sets the downsampler and downsample interval.
+   * @param downsampler the aggregation method to use when downsampling
+   * @param interval time length of each downsample
+   * @return this
+   */
+  public Query setDownsampler(Aggregator downsampler, long interval) {
+    Preconditions.checkArgument(interval > 0, "query downsample interval must be greater than 0");
+    this.downsampler = Preconditions.checkNotNull(downsampler);
+    this.downsampleInterval = interval;
+    return this;
+  }
+
+  /**
+   * Sets the interpolator.
+   * @param interpolator method to interpolate missing results with
+   * @return this
+   */
+  public Query setInterpolator(Interpolator interpolator) {
+    this.interpolator = Preconditions.checkNotNull(interpolator);
+    return this;
+  }
+
+  /**
+   * Returns the metric being queried.
+   * @return the metric
+   */
   public String getMetric() {
     return metric;
   }
 
-  public void setFilters(Map<String, List<String>> tags) {
-//    tagFilters = ImmutableSortedMap.copyOf(tags);
-  }
-
-  public void setTagGroups(Map<String, List<String>> tags) {
-//    tagGroups = ImmutableSortedMap.copyOf(tags);
-  }
-
-  public void setAggregator(Aggregator aggregator) {
-
-  }
-
-  public void downsample(long interval, Aggregator downsampler, FillPolicy fillPolicy) {
-    this.downsampleInterval = interval;
-    this.downsampler = downsampler;
-    this.fillPolicy = fillPolicy;
+  /**
+   * Returns the inclusive start time of the query in microseconds.
+   * @return the start time
+   */
+  public long getStart() {
+    return start;
   }
 
   /**
-   * Runs this query.
+   * Returns the exclusive end time of the query in microseconds.
+   * @return the end time
    */
-  List<Datapoints> run() {
-    throw new RuntimeException("not implemented");
+  public long getEnd() {
+    return end;
   }
 
   /**
-   * Executes the query asynchronously
+   * Returns the set of tags which the query filters by.
+   * @return the query tags
    */
-  public Deferred<List<Datapoints>> runAsync() {
-    throw new RuntimeException("not implemented");
-  };
+  public Map<String, String> getTags() {
+    return tags;
+  }
+
+  public Aggregator getDownsampler() {
+    return downsampler;
+  }
+
+  public long getDownsampleInterval() {
+    return downsampleInterval;
+  }
+
+  public Interpolators.Interpolator getInterpolator() {
+    return interpolator;
+  }
+
+  public Aggregator getAggregator() {
+    return aggregator;
+  }
+
+  @Override
+  public String toString() {
+    return Objects.toStringHelper(this)
+                  .add("metric", metric)
+                  .add("tags", tags)
+                  .add("start", start)
+                  .add("end", end)
+                  .add("downsampler", downsampler)
+                  .add("downsampleInterval", downsampleInterval)
+                  .add("interpolator", interpolator)
+                  .add("aggregator", aggregator)
+                  .toString();
+  }
 }

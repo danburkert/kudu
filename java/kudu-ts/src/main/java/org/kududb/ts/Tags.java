@@ -2,16 +2,16 @@ package org.kududb.ts;
 
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
+import javax.annotation.concurrent.ThreadSafe;
+
+import org.kududb.annotations.InterfaceAudience;
 import org.kududb.client.AsyncKuduClient;
 import org.kududb.client.AsyncKuduScanner;
 import org.kududb.client.AsyncKuduSession;
@@ -30,10 +30,13 @@ import org.slf4j.LoggerFactory;
  * {@code Tagsets} manages inserting and retrieving tags and their associated
  * tagset IDs from the {@code tags} table.
  */
+@InterfaceAudience.Private
+@ThreadSafe
 public class Tags {
   private static final Logger LOG = LoggerFactory.getLogger(Tags.class);
 
-  private static final List<Integer> TAGSET_ID_PROJECTION = ImmutableList.of(KuduTSSchema.TAGS_TAGSET_ID_INDEX);
+  private static final List<Integer> TAGSET_ID_PROJECTION =
+      ImmutableList.of(Tables.TAGS_TAGSET_ID_INDEX);
 
   private final AsyncKuduClient client;
   private final KuduTable table;
@@ -80,9 +83,9 @@ public class Tags {
       Insert insert = table.newInsert();
       // TODO: check with JD that if the inserts below fail, the error will
       // also be returned in the flush call.
-      insert.getRow().addString(KuduTSSchema.TAGS_KEY_INDEX, tag.getKey());
-      insert.getRow().addString(KuduTSSchema.TAGS_VALUE_INDEX, tag.getValue());
-      insert.getRow().addInt(KuduTSSchema.TAGS_TAGSET_ID_INDEX, id);
+      insert.getRow().addString(Tables.TAGS_KEY_INDEX, tag.getKey());
+      insert.getRow().addString(Tables.TAGS_VALUE_INDEX, tag.getValue());
+      insert.getRow().addInt(Tables.TAGS_TAGSET_ID_INDEX, id);
       session.apply(insert);
     }
 
@@ -100,25 +103,28 @@ public class Tags {
    * @param value the tag value
    * @return the sorted tagset IDs
    */
-  public Deferred<List<Integer>> getTagsetIDsForTag(final String key, final String value) {
+  public Deferred<IntVec> getTagsetIDsForTag(final String key, final String value) {
     AsyncKuduScanner.AsyncKuduScannerBuilder scan = client.newScannerBuilder(table);
-    scan.addPredicate(KuduPredicate.newComparisonPredicate(KuduTSSchema.TAGS_KEY_COLUMN,
+    scan.addPredicate(KuduPredicate.newComparisonPredicate(Tables.TAGS_KEY_COLUMN,
                                                            ComparisonOp.EQUAL, key));
-    scan.addPredicate(KuduPredicate.newComparisonPredicate(KuduTSSchema.TAGS_VALUE_COLUMN,
+    scan.addPredicate(KuduPredicate.newComparisonPredicate(Tables.TAGS_VALUE_COLUMN,
                                                            ComparisonOp.EQUAL, value));
     scan.setProjectedColumnIndexes(TAGSET_ID_PROJECTION);
     final AsyncKuduScanner scanner = scan.build();
 
-    class GetTagCB implements Callback<Deferred<List<Integer>>, RowResultIterator> {
-      private final List<Integer> tagsetIDs = new ArrayList<>();
+    class GetTagCB implements Callback<Deferred<IntVec>, RowResultIterator> {
+      private final IntVec tagsetIDs = IntVec.create();
       @Override
-      public Deferred<List<Integer>> call(RowResultIterator results) throws Exception {
+      public Deferred<IntVec> call(RowResultIterator results) throws Exception {
         for (RowResult result : results) {
-          tagsetIDs.add(result.getInt(0));
+          tagsetIDs.push(result.getInt(0));
         }
         if (scanner.hasMoreRows()) {
           return scanner.nextRows().addCallbackDeferring(this);
         }
+        // The Kudu java client doesn't yet allow us to specify a sorted
+        // (fault-tolerant) scan, so have to sort manually.
+        tagsetIDs.sort();
         return Deferred.fromResult(tagsetIDs);
       }
       @Override
@@ -130,28 +136,23 @@ public class Tags {
     return scanner.nextRows().addCallbackDeferring(new GetTagCB());
   }
 
-  private static final Comparator<Integer> INT_COMPARATOR = new Comparator<Integer>() {
-    @Override
-    public int compare(Integer a, Integer b) {
-      return a.compareTo(b);
-    }
-  };
-
-  public static Deferred<List<Integer>> unionTagsetIDs(List<Deferred<List<Integer>>> tagsetIDs) {
-    class UnionTagsetIDsCB implements Callback<List<Integer>, ArrayList<List<Integer>>> {
+  /**
+   * Retrieves the tagset IDs of all tagsets which contain all of the specified tags.
+   * The tagset IDs are returned in sorted order.
+   *
+   * @param tags the tags to filter by
+   * @return the sorted tagset IDs
+   */
+  public Deferred<IntVec> getTagsetIDsForTags(Map<String, String> tags) {
+    class IntersectTagsetsCB implements Callback<IntVec, ArrayList<IntVec>> {
       @Override
-      public List<Integer> call(ArrayList<List<Integer>> tagsetIDs) throws Exception {
-        if (tagsetIDs.isEmpty()) { return ImmutableList.of(); }
-        if (tagsetIDs.size() == 1) { return tagsetIDs.get(0); }
-        List<Integer> ids = new ArrayList<>();
-        Integer previous = null;
-        for (Integer id : Iterables.mergeSorted(tagsetIDs, INT_COMPARATOR) ){
-          if (!id.equals(previous)) {
-            previous = id;
-            ids.add(id);
-          }
+      public IntVec call(ArrayList<IntVec> idSets) throws Exception {
+        IntVec intersection = idSets.remove(idSets.size() - 1);
+        for (IntVec ids : idSets) {
+          intersection.intersect(ids);
         }
-        return ids;
+        intersection.dedup();
+        return intersection;
       }
       @Override
       public String toString() {
@@ -159,51 +160,10 @@ public class Tags {
       }
     }
 
-    return Deferred.group(tagsetIDs).addCallback(new UnionTagsetIDsCB());
-  }
-
-  public static Deferred<List<Integer>> intersectTagsetIDs(List<Deferred<List<Integer>>> tagsetIDs) {
-    class IntersectTagsetIDsCB implements Callback<List<Integer>, ArrayList<List<Integer>>> {
-      public List<Integer> call(ArrayList<List<Integer>> tagsetIDs) throws Exception {
-        if (tagsetIDs.isEmpty()) { return ImmutableList.of(); }
-        if (tagsetIDs.size() == 1) { return tagsetIDs.get(0); }
-
-        Collections.sort(tagsetIDs, new Comparator<List<Integer>>() {
-          @Override
-          public int compare(List<Integer> a, List<Integer> b) {
-            return Integer.compare(b.size(), a.size());
-          }
-        });
-
-        List<Integer> smallestSet = Lists.reverse(tagsetIDs.remove(tagsetIDs.size() - 1));
-        List<Integer> result = Lists.newArrayList();
-
-        for (Integer id : smallestSet) {
-          boolean addToResult = true;
-          for (List<Integer> set : tagsetIDs) {
-            int index = Collections.binarySearch(set, id);
-            if (index >= 0) {
-              set.subList(index, set.size()).clear();
-            } else {
-              addToResult = false;
-              set.subList(-index, set.size()).clear();
-              break;
-            }
-          }
-
-          if (addToResult) {
-            result.add(id);
-          }
-        }
-        Collections.reverse(result);
-        return result;
-      }
-      @Override
-      public String toString() {
-        return Objects.toStringHelper(this).toString();
-      }
+    List<Deferred<IntVec>> deferreds = new ArrayList<>(tags.size());
+    for (Map.Entry<String, String> tag : tags.entrySet()) {
+      deferreds.add(getTagsetIDsForTag(tag.getKey(), tag.getValue()));
     }
-
-    return Deferred.group(tagsetIDs).addCallback(new IntersectTagsetIDsCB());
+    return Deferred.group(deferreds).addCallback(new IntersectTagsetsCB());
   }
 }

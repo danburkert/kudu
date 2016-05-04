@@ -30,7 +30,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.common.hash.Hashing;
 import com.google.common.primitives.Ints;
-import com.google.common.primitives.Primitives;
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
 
@@ -87,20 +86,20 @@ import org.slf4j.LoggerFactory;
  *  5) the tagsets returned in the scan are checked in ID order. If the tagset
  *     is found, the corresponding ID is returned. If there is an ID missing
  *     in the results, then the tagset is inserted with that ID (go to step 6).
- *     If every ID is present, but the tagset isn't found, then a new scan is
- *     started (step 4), but using the next available ID as the start.
+ *     If {@link #TAGSETS_PER_SCAN} IDs are present, but the tagset isn't found,
+ *     then a new scan is started (step 4), but using the next unscanned ID as
+ *     the start ID.
  *  6) the ID from step 5 is used to insert the rowset into the {@code rowsets}
  *     table. If the insert results in a duplicate primary key error, then
  *     another client has concurrently inserted a rowset using the ID. The
  *     concurrently inserted rowset may or may not match the rowset we tried to
- *     insert, so we return to step 4, but using the duplicate ID instead of the
- *     hash of the tagset.
+ *     insert, so we return to step 4 using the duplicate ID as the start ID.
  *  7) After inserting the tagset successfully in step 6, every tag in the
- *     tagset is inserted into the {@code tags} table. No errors are expected
- *     in this step.
+ *     tagset is inserted into the {@code tags} table. No duplicate errors are
+ *     expected in this step.
  *
- * Tagset IDs are 32bits, which allows for hundreds of millions of tagset IDs without
- * risking excessive hash collisions.
+ * Tagset IDs are 32bits, which allows for hundreds of millions of unique tagsets
+ * without risking excessive hash collisions.
  */
 @InterfaceAudience.Private
 @ThreadSafe
@@ -125,8 +124,8 @@ class Tagsets {
     this.client = client;
     this.tagsetsTable = tagsetsTable;
     this.tags = tags;
-    this.columnIndexes = ImmutableList.of(KuduTSSchema.TAGSETS_ID_INDEX,
-                                          KuduTSSchema.TAGSETS_TAGSET_INDEX);
+    this.columnIndexes = ImmutableList.of(Tables.TAGSETS_ID_INDEX,
+                                          Tables.TAGSETS_TAGSET_INDEX);
     this.tagsets = CacheBuilder.newBuilder()
                                .maximumSize(1024 * 1024)
                                .build(new CacheLoader<ByteBuffer, Deferred<Integer>>() {
@@ -257,11 +256,11 @@ class Tagsets {
    */
   private AsyncKuduScanner tagsetScanner(int id) {
     AsyncKuduScanner.AsyncKuduScannerBuilder scanBuilder = client.newScannerBuilder(tagsetsTable);
-    scanBuilder.addPredicate(KuduPredicate.newComparisonPredicate(KuduTSSchema.TAGSETS_ID_COLUMN,
+    scanBuilder.addPredicate(KuduPredicate.newComparisonPredicate(Tables.TAGSETS_ID_COLUMN,
                                                                   ComparisonOp.GREATER_EQUAL,
                                                                   id));
     if (id < Integer.MAX_VALUE - TAGSETS_PER_SCAN) {
-      scanBuilder.addPredicate(KuduPredicate.newComparisonPredicate(KuduTSSchema.TAGSETS_ID_COLUMN,
+      scanBuilder.addPredicate(KuduPredicate.newComparisonPredicate(Tables.TAGSETS_ID_COLUMN,
                                                                     ComparisonOp.LESS,
                                                                     id + TAGSETS_PER_SCAN));
     }
@@ -281,8 +280,8 @@ class Tagsets {
     LOG.debug("Inserting tagset; id: {}, tags: {}", id, tagsetToString(tagset));
     final AsyncKuduSession session = client.newSession();
     final Insert insert = tagsetsTable.newInsert();
-    insert.getRow().addInt(KuduTSSchema.TAGSETS_ID_INDEX, id);
-    insert.getRow().addBinary(KuduTSSchema.TAGSETS_TAGSET_INDEX, tagset);
+    insert.getRow().addInt(Tables.TAGSETS_ID_INDEX, id);
+    insert.getRow().addBinary(Tables.TAGSETS_TAGSET_INDEX, tagset);
     return Deferred.fromResult(new Object())
         .addCallbackDeferring(new Callback<Deferred<OperationResponse>, Object>() {
           @Override
@@ -361,14 +360,14 @@ class Tagsets {
     public Deferred<TagsetLookupResult> call(RowResultIterator rows) throws Exception {
       LOG.debug("Received tagset lookup results: id: {}, tags: {}", id, tagsetToString(tagset));
       for (RowResult row : rows) {
-        int id = row.getInt(KuduTSSchema.TAGSETS_ID_INDEX);
+        int id = row.getInt(Tables.TAGSETS_ID_INDEX);
         Preconditions.checkState(id >= probe);
         if (id != probe) {
           // We found a hole in the table where we expected the tagset.
           return Deferred.fromResult(new TagsetLookupResult(false, probe));
         }
 
-        if (row.getBinary(KuduTSSchema.TAGSETS_TAGSET_INDEX).equals(tagset)) {
+        if (row.getBinary(Tables.TAGSETS_TAGSET_INDEX).equals(tagset)) {
           return Deferred.fromResult(new TagsetLookupResult(true, id));
         }
 

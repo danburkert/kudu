@@ -26,31 +26,31 @@ import org.junit.Test;
  * src/templates/build script.
  */
 
-public class TestIntVec {
+public class TestDoubleVec {
   private static final Random RAND = new Random();
 
-  private void assertPrimitiveEquals(int a, int b) {
+  private void assertPrimitiveEquals(double a, double b) {
     if (a != b) throw new AssertionError(String.format("%s != %s", a, b));
   }
 
-  private List<Integer> random() {
+  private List<Double> random() {
     return random(RAND.nextInt(1024));
   }
 
-  private List<Integer> random(int len) {
-    List<Integer> list = new ArrayList<>();
+  private List<Double> random(int len) {
+    List<Double> list = new ArrayList<>();
     for (int i = 0; i < len; i++) {
-      list.add((int) RAND.nextInt(i + 1));
+      list.add((double) RAND.nextInt(i + 1));
     }
     return Collections.unmodifiableList(list);
   }
 
-  public void checkIntVec(List<Integer> vals) {
-    IntVec vec = IntVec.create();
+  public void checkDoubleVec(List<Double> vals) {
+    DoubleVec vec = DoubleVec.create();
     assertEquals(0, vec.len());
 
     // push
-    for (int i : vals) {
+    for (double i : vals) {
       vec.push(i);
     }
     assertEquals(vals, vec.asList());
@@ -59,7 +59,7 @@ public class TestIntVec {
     assertEquals(vals.toString(), vec.toString());
 
     // clone, equals
-    IntVec copy = vec.clone();
+    DoubleVec copy = vec.clone();
     assertEquals(copy, vec);
 
     // truncate
@@ -89,30 +89,30 @@ public class TestIntVec {
     assertEquals(vec.len(), vec.capacity());
 
     // sort
-    IntVec sorted = vec.clone();
+    DoubleVec sorted = vec.clone();
     sorted.sort();
-    List<Integer> sortedInts = new ArrayList<>(vals);
+    List<Double> sortedInts = new ArrayList<>(vals);
     Collections.sort(sortedInts);
     assertEquals(sortedInts, sorted.asList());
 
     // intersect
     for (int i = 0; i < 100; i++) {
-      List<Integer> rand = random(i);
+      List<Double> rand = random(i);
 
-      IntVec a = IntVec.create();
-      IntVec b = IntVec.create();
-      for (int j : vals) a.push(j);
-      for (int j : rand) b.push(j);
+      DoubleVec a = DoubleVec.create();
+      DoubleVec b = DoubleVec.create();
+      for (double j : vals) a.push(j);
+      for (double j : rand) b.push(j);
       a.sort();
       b.sort();
 
-      IntVec left = a.clone();
-      IntVec right = b.clone();
+      DoubleVec left = a.clone();
+      DoubleVec right = b.clone();
 
       left.intersect(b);
       right.intersect(a);
 
-      SortedSet<Integer> expected =
+      SortedSet<Double> expected =
           ImmutableSortedSet.copyOf(Sets.intersection(ImmutableSet.copyOf(vals),
                                                       ImmutableSet.copyOf(rand)));
 
@@ -131,24 +131,24 @@ public class TestIntVec {
 
     // merge
     for (int i = 0; i < 100; i++) {
-      List<Integer> rand = random(i);
+      List<Double> rand = random(i);
 
-      IntVec a = IntVec.create();
-      IntVec b = IntVec.create();
-      for (int j : vals) a.push(j);
-      for (int j : rand) b.push(j);
+      DoubleVec a = DoubleVec.create();
+      DoubleVec b = DoubleVec.create();
+      for (double j : vals) a.push(j);
+      for (double j : rand) b.push(j);
       a.sort();
       b.sort();
 
-      IntVec left = a.clone();
-      IntVec right = b.clone();
+      DoubleVec left = a.clone();
+      DoubleVec right = b.clone();
 
       left.merge(b);
       right.merge(a);
 
-      List<Integer> sortedRand = new ArrayList<>(rand);
+      List<Double> sortedRand = new ArrayList<>(rand);
       Collections.sort(sortedRand);
-      Iterable<Integer> expected = Iterables.mergeSorted(ImmutableList.of(sortedInts, sortedRand),
+      Iterable<Double> expected = Iterables.mergeSorted(ImmutableList.of(sortedInts, sortedRand),
                                                         Ordering.natural());
 
       assertEquals(left, right);
@@ -157,7 +157,7 @@ public class TestIntVec {
 
     // get
     for (int i = 0; i < vals.size(); i++) {
-      assertPrimitiveEquals((int) vals.get(i), vec.get(i));
+      assertPrimitiveEquals((double) vals.get(i), vec.get(i));
     }
 
     // set
@@ -165,43 +165,43 @@ public class TestIntVec {
       copy = vec.clone();
       int index = RAND.nextInt(vec.len());
       copy.set(index, index);
-      List<Integer> intsCopy = new ArrayList<>(vals);
-      intsCopy.set(index, (int) index);
+      List<Double> intsCopy = new ArrayList<>(vals);
+      intsCopy.set(index, (double) index);
       assertEquals(intsCopy, copy.asList());
     }
   }
 
   @Test
-  public void testIntVec() throws Exception {
-    checkIntVec(random(0));
-    checkIntVec(random(1));
-    checkIntVec(random(2));
-    checkIntVec(random(3));
-    checkIntVec(random(IntVec.DEFAULT_CAPACITY - 2));
-    checkIntVec(random(IntVec.DEFAULT_CAPACITY - 1));
-    checkIntVec(random(IntVec.DEFAULT_CAPACITY));
-    checkIntVec(random(IntVec.DEFAULT_CAPACITY + 1));
-    checkIntVec(random(IntVec.DEFAULT_CAPACITY + 2));
+  public void testDoubleVec() throws Exception {
+    checkDoubleVec(random(0));
+    checkDoubleVec(random(1));
+    checkDoubleVec(random(2));
+    checkDoubleVec(random(3));
+    checkDoubleVec(random(DoubleVec.DEFAULT_CAPACITY - 2));
+    checkDoubleVec(random(DoubleVec.DEFAULT_CAPACITY - 1));
+    checkDoubleVec(random(DoubleVec.DEFAULT_CAPACITY));
+    checkDoubleVec(random(DoubleVec.DEFAULT_CAPACITY + 1));
+    checkDoubleVec(random(DoubleVec.DEFAULT_CAPACITY + 2));
 
     for (int i = 0; i < 100; i++) {
-      checkIntVec(random());
+      checkDoubleVec(random());
     }
   }
 
   @Test
   public void testIntersectionWithDuplicates() throws Exception {
-    IntVec a = IntVec.wrap(new int[] { 0, 1, 1, });
-    IntVec b = IntVec.wrap(new int[] { 1, 1, 3, });
+    DoubleVec a = DoubleVec.wrap(new double[] { 0, 1, 1, });
+    DoubleVec b = DoubleVec.wrap(new double[] { 1, 1, 3, });
 
-    IntVec left = a.clone();
+    DoubleVec left = a.clone();
     left.intersect(b);
 
     assertEquals(2, left.len());
 
-    IntVec right = b.clone();
+    DoubleVec right = b.clone();
     right.intersect(a);
 
     assertEquals(left, right);
-    assertEquals(ImmutableList.of((int) 1, (int) 1), left.asList());
+    assertEquals(ImmutableList.of((double) 1, (double) 1), left.asList());
   }
 }

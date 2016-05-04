@@ -10,27 +10,33 @@ public class TestDatapoints {
   @Test
   public void testDatapointAccessors() throws Exception {
     int[] tagsetIDs = { 0 };
-    long[] timestamps = { 0, 1, 10, 100, 101, 102, 104, 105, 200, 10000 };
+    long[] times = { 0, 1, 10, 100, 101, 102, 104, 105, 200, 10000 };
     double[] values = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
 
-    Datapoints datapoints = new Datapoints("test", tagsetIDs, timestamps, values);
+    Datapoints datapoints = new Datapoints("test",
+                                           IntVec.wrap(tagsetIDs),
+                                           LongVec.wrap(times),
+                                           DoubleVec.wrap(values));
 
     assertEquals(10, datapoints.size());
 
     for (int i = 0; i < 10; i++) {
-      assertEquals(timestamps[i], datapoints.timestamp(i));
-      assertEquals(values[i], datapoints.value(i), 0);
+      assertEquals(times[i], datapoints.getTime(i));
+      assertEquals(values[i], datapoints.getValue(i), 0);
     }
   }
 
   @Test
   public void testDatapointIteratorSeek() throws Exception {
     int[] tagsetIDs = { 0 };
-    long[] timestamps = { 10, 100, 101, 102, 104, 105, 200, 10000 };
+    long[] times = { 10, 100, 101, 102, 104, 105, 200, 10000 };
     double[] values = { 0, 1, 2, 3, 4, 5, 6, 7 };
 
-    Datapoints datapoints = new Datapoints("test", tagsetIDs, timestamps, values);
-    Datapoints.DatapointIterator iter = datapoints.iterator();
+    Datapoints datapoints = new Datapoints("test",
+                                           IntVec.wrap(tagsetIDs),
+                                           LongVec.wrap(times),
+                                           DoubleVec.wrap(values));
+    Datapoints.Iterator iter = datapoints.iterator();
 
     iter.seek(0);
     assertEquals(10, iter.next().getTime());

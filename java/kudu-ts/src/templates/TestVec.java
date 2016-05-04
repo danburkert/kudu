@@ -26,31 +26,31 @@ import org.junit.Test;
  * src/templates/build script.
  */
 
-public class TestIntVec {
+public class Test{ShortType}Vec {
   private static final Random RAND = new Random();
 
-  private void assertPrimitiveEquals(int a, int b) {
+  private void assertPrimitiveEquals({Primitive} a, {Primitive} b) {
     if (a != b) throw new AssertionError(String.format("%s != %s", a, b));
   }
 
-  private List<Integer> random() {
+  private List<{Type}> random() {
     return random(RAND.nextInt(1024));
   }
 
-  private List<Integer> random(int len) {
-    List<Integer> list = new ArrayList<>();
+  private List<{Type}> random(int len) {
+    List<{Type}> list = new ArrayList<>();
     for (int i = 0; i < len; i++) {
-      list.add((int) RAND.nextInt(i + 1));
+      list.add(({Primitive}) RAND.nextInt(i + 1));
     }
     return Collections.unmodifiableList(list);
   }
 
-  public void checkIntVec(List<Integer> vals) {
-    IntVec vec = IntVec.create();
+  public void check{ShortType}Vec(List<{Type}> vals) {
+    {ShortType}Vec vec = {ShortType}Vec.create();
     assertEquals(0, vec.len());
 
     // push
-    for (int i : vals) {
+    for ({Primitive} i : vals) {
       vec.push(i);
     }
     assertEquals(vals, vec.asList());
@@ -59,7 +59,7 @@ public class TestIntVec {
     assertEquals(vals.toString(), vec.toString());
 
     // clone, equals
-    IntVec copy = vec.clone();
+    {ShortType}Vec copy = vec.clone();
     assertEquals(copy, vec);
 
     // truncate
@@ -89,30 +89,30 @@ public class TestIntVec {
     assertEquals(vec.len(), vec.capacity());
 
     // sort
-    IntVec sorted = vec.clone();
+    {ShortType}Vec sorted = vec.clone();
     sorted.sort();
-    List<Integer> sortedInts = new ArrayList<>(vals);
+    List<{Type}> sortedInts = new ArrayList<>(vals);
     Collections.sort(sortedInts);
     assertEquals(sortedInts, sorted.asList());
 
     // intersect
     for (int i = 0; i < 100; i++) {
-      List<Integer> rand = random(i);
+      List<{Type}> rand = random(i);
 
-      IntVec a = IntVec.create();
-      IntVec b = IntVec.create();
-      for (int j : vals) a.push(j);
-      for (int j : rand) b.push(j);
+      {ShortType}Vec a = {ShortType}Vec.create();
+      {ShortType}Vec b = {ShortType}Vec.create();
+      for ({Primitive} j : vals) a.push(j);
+      for ({Primitive} j : rand) b.push(j);
       a.sort();
       b.sort();
 
-      IntVec left = a.clone();
-      IntVec right = b.clone();
+      {ShortType}Vec left = a.clone();
+      {ShortType}Vec right = b.clone();
 
       left.intersect(b);
       right.intersect(a);
 
-      SortedSet<Integer> expected =
+      SortedSet<{Type}> expected =
           ImmutableSortedSet.copyOf(Sets.intersection(ImmutableSet.copyOf(vals),
                                                       ImmutableSet.copyOf(rand)));
 
@@ -131,24 +131,24 @@ public class TestIntVec {
 
     // merge
     for (int i = 0; i < 100; i++) {
-      List<Integer> rand = random(i);
+      List<{Type}> rand = random(i);
 
-      IntVec a = IntVec.create();
-      IntVec b = IntVec.create();
-      for (int j : vals) a.push(j);
-      for (int j : rand) b.push(j);
+      {ShortType}Vec a = {ShortType}Vec.create();
+      {ShortType}Vec b = {ShortType}Vec.create();
+      for ({Primitive} j : vals) a.push(j);
+      for ({Primitive} j : rand) b.push(j);
       a.sort();
       b.sort();
 
-      IntVec left = a.clone();
-      IntVec right = b.clone();
+      {ShortType}Vec left = a.clone();
+      {ShortType}Vec right = b.clone();
 
       left.merge(b);
       right.merge(a);
 
-      List<Integer> sortedRand = new ArrayList<>(rand);
+      List<{Type}> sortedRand = new ArrayList<>(rand);
       Collections.sort(sortedRand);
-      Iterable<Integer> expected = Iterables.mergeSorted(ImmutableList.of(sortedInts, sortedRand),
+      Iterable<{Type}> expected = Iterables.mergeSorted(ImmutableList.of(sortedInts, sortedRand),
                                                         Ordering.natural());
 
       assertEquals(left, right);
@@ -157,7 +157,7 @@ public class TestIntVec {
 
     // get
     for (int i = 0; i < vals.size(); i++) {
-      assertPrimitiveEquals((int) vals.get(i), vec.get(i));
+      assertPrimitiveEquals(({Primitive}) vals.get(i), vec.get(i));
     }
 
     // set
@@ -165,43 +165,43 @@ public class TestIntVec {
       copy = vec.clone();
       int index = RAND.nextInt(vec.len());
       copy.set(index, index);
-      List<Integer> intsCopy = new ArrayList<>(vals);
-      intsCopy.set(index, (int) index);
+      List<{Type}> intsCopy = new ArrayList<>(vals);
+      intsCopy.set(index, ({Primitive}) index);
       assertEquals(intsCopy, copy.asList());
     }
   }
 
   @Test
-  public void testIntVec() throws Exception {
-    checkIntVec(random(0));
-    checkIntVec(random(1));
-    checkIntVec(random(2));
-    checkIntVec(random(3));
-    checkIntVec(random(IntVec.DEFAULT_CAPACITY - 2));
-    checkIntVec(random(IntVec.DEFAULT_CAPACITY - 1));
-    checkIntVec(random(IntVec.DEFAULT_CAPACITY));
-    checkIntVec(random(IntVec.DEFAULT_CAPACITY + 1));
-    checkIntVec(random(IntVec.DEFAULT_CAPACITY + 2));
+  public void test{ShortType}Vec() throws Exception {
+    check{ShortType}Vec(random(0));
+    check{ShortType}Vec(random(1));
+    check{ShortType}Vec(random(2));
+    check{ShortType}Vec(random(3));
+    check{ShortType}Vec(random({ShortType}Vec.DEFAULT_CAPACITY - 2));
+    check{ShortType}Vec(random({ShortType}Vec.DEFAULT_CAPACITY - 1));
+    check{ShortType}Vec(random({ShortType}Vec.DEFAULT_CAPACITY));
+    check{ShortType}Vec(random({ShortType}Vec.DEFAULT_CAPACITY + 1));
+    check{ShortType}Vec(random({ShortType}Vec.DEFAULT_CAPACITY + 2));
 
     for (int i = 0; i < 100; i++) {
-      checkIntVec(random());
+      check{ShortType}Vec(random());
     }
   }
 
   @Test
   public void testIntersectionWithDuplicates() throws Exception {
-    IntVec a = IntVec.wrap(new int[] { 0, 1, 1, });
-    IntVec b = IntVec.wrap(new int[] { 1, 1, 3, });
+    {ShortType}Vec a = {ShortType}Vec.wrap(new {Primitive}[] { 0, 1, 1, });
+    {ShortType}Vec b = {ShortType}Vec.wrap(new {Primitive}[] { 1, 1, 3, });
 
-    IntVec left = a.clone();
+    {ShortType}Vec left = a.clone();
     left.intersect(b);
 
     assertEquals(2, left.len());
 
-    IntVec right = b.clone();
+    {ShortType}Vec right = b.clone();
     right.intersect(a);
 
     assertEquals(left, right);
-    assertEquals(ImmutableList.of((int) 1, (int) 1), left.asList());
+    assertEquals(ImmutableList.of(({Primitive}) 1, ({Primitive}) 1), left.asList());
   }
 }

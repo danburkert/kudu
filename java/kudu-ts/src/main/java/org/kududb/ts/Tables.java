@@ -29,10 +29,14 @@ import org.kududb.Type;
 import org.kududb.annotations.InterfaceAudience;
 import org.kududb.annotations.InterfaceStability;
 
-@InterfaceAudience.Public
-@InterfaceStability.Unstable
-@ThreadSafe
-class KuduTSSchema {
+/**
+ * {@code Tables} holds meta information about the table schemas used by {@code KuduTS}.
+ */
+@InterfaceAudience.Private
+class Tables {
+
+  private Tables() {}
+
   static final int METRICS_METRIC_INDEX = 0;
   static final int METRICS_TAGSET_ID_INDEX = 1;
   static final int METRICS_TIME_INDEX = 2;
@@ -76,15 +80,15 @@ class KuduTSSchema {
                                                                 TAGS_VALUE_COLUMN,
                                                                 TAGS_TAGSET_ID_COLUMN));
 
-  static String metricsTableName(String databaseName) {
-    return String.format("kuduts.%s.metrics", databaseName);
+  static String metricsTableName(String tsName) {
+    return String.format("kuduts.%s.metrics", tsName);
   }
 
-  static String tagsetsTableName(String databaseName) {
-    return String.format("kuduts.%s.tagsets", databaseName);
+  static String tagsetsTableName(String tsName) {
+    return String.format("kuduts.%s.tagsets", tsName);
   }
 
-  static String tagsTableName(String databaseName) {
-    return String.format("kuduts.%s.tags", databaseName);
+  static String tagsTableName(String tsName) {
+    return String.format("kuduts.%s.tags", tsName);
   }
 }

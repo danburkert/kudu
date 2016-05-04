@@ -42,6 +42,11 @@ final class {ShortType}Vec {
     len = 0;
   }
 
+  private {ShortType}Vec({Primitive}[] data) {
+    this.data = data;
+    this.len = data.length;
+  }
+
   /**
    * Creates a new vector.
    * @return the new vector.
@@ -59,6 +64,16 @@ final class {ShortType}Vec {
     return new {ShortType}Vec(capacity);
   }
 
+  /**
+   * Wrap an existing array with a vector.
+   * The array should not be modified after this call.
+   * @param data the initial data for the vector
+   * @return a vector wrapping the data
+   */
+  public static {ShortType}Vec wrap({Primitive}[] data) {
+    return new {ShortType}Vec(data);
+  }
+
   /** Returns the number of elements the vector can hold without reallocating. */
   public int capacity() {
     return data.length;
@@ -67,6 +82,11 @@ final class {ShortType}Vec {
   /** Returns the number of elements in the vector. */
   public int len() {
     return len;
+  }
+
+  /** Returns {@code true} if the vector is empty. */
+  public boolean isEmpty() {
+    return len == 0;
   }
 
   /**
@@ -113,6 +133,14 @@ final class {ShortType}Vec {
   public void truncate(int len) {
     if (len < 0) throw new IllegalArgumentException("negative len");
     this.len = Math.min(this.len, len);
+  }
+
+  /**
+   * Removes all elements from the vector.
+   * No reallocation will be performed.
+   */
+  public void clear() {
+    truncate(0);
   }
 
   /**
@@ -176,8 +204,8 @@ final class {ShortType}Vec {
     int m = len;
     int n = other.len;
 
-    while(m > 0 && n > 0){
-      if(data[m-1] > other.data[n-1]){
+    while (m > 0 && n > 0) {
+      if (data[m-1] > other.data[n-1]) {
         data[m+n-1] = data[m-1];
         m--;
       } else {
@@ -308,6 +336,14 @@ final class {ShortType}Vec {
      */
     public {Primitive} next() {
       return data[index++];
+    }
+
+    /**
+     * Returns the next element in the iterator without changing the iterator's position.
+     * @return the next element
+     */
+    public {Primitive} peek() {
+      return data[index];
     }
 
     /**
