@@ -1,11 +1,12 @@
-
 package org.kududb.ts;
 
 import com.google.common.base.Objects;
+import com.google.common.collect.ImmutableList;
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -13,6 +14,7 @@ import org.kududb.Schema;
 import org.kududb.annotations.InterfaceAudience;
 import org.kududb.annotations.InterfaceStability;
 import org.kududb.client.AsyncKuduClient;
+import org.kududb.client.CreateTableOptions;
 import org.kududb.client.KuduTable;
 import org.kududb.client.MasterErrorException;
 import org.slf4j.Logger;
@@ -44,6 +46,31 @@ public class KuduTS implements AutoCloseable {
   }
 
   /**
+   * Opens a Kudu TS instance on a Kudu cluster.
+   *
+   * @param kuduMasterAddressess list of "host:port" pair master addresses
+   * @param name the name of the Kudu timeseries store. Multiple instances of
+   *             Kudu TS can occupy the same Kudu cluster by using a different name.
+   * @return the opened {@code KuduTS}.
+   * @throws Exception on error
+   */
+  public static KuduTS open(List<String> kuduMasterAddressess, String name) throws Exception {
+    AsyncKuduClient client = new AsyncKuduClient.AsyncKuduClientBuilder(kuduMasterAddressess).build();
+
+    Deferred<KuduTable> metricsDeferred = client.openTable(Tables.metricsTableName(name));
+    Deferred<KuduTable> tagsetsDeferred = client.openTable(Tables.tagsetsTableName(name));
+    Deferred<KuduTable> tagsDeferred = client.openTable(Tables.tagsTableName(name));
+    KuduTable metricsTable = metricsDeferred.join(client.getDefaultAdminOperationTimeoutMs());
+    KuduTable tagsetsTable = tagsetsDeferred.join(client.getDefaultAdminOperationTimeoutMs());
+    KuduTable tagsTable = tagsDeferred.join(client.getDefaultAdminOperationTimeoutMs());
+
+    Tags tags = new Tags(client, tagsTable);
+    Tagsets tagsets = new Tagsets(client, tags, tagsetsTable);
+    Metrics metrics = new Metrics(client, metricsTable, tagsets);
+    return new KuduTS(client, name, metrics, tagsets, tags);
+  }
+
+  /**
    * Creates (if necessary) and opens a Kudu TS instance on a Kudu cluster.
    *
    * @param kuduMasterAddressess list of "host:port" pair master addresses
@@ -52,13 +79,28 @@ public class KuduTS implements AutoCloseable {
    * @return the opened {@code KuduTS}.
    * @throws Exception on error
    */
-  public static KuduTS open(List<String> kuduMasterAddressess,
-                            String name) throws Exception {
+  public static KuduTS openOrCreate(List<String> kuduMasterAddressess,
+                                    String name,
+                                    CreateOptions options) throws Exception {
+
     AsyncKuduClient client = new AsyncKuduClient.AsyncKuduClientBuilder(kuduMasterAddressess).build();
 
-    Deferred<KuduTable> metricsDeferred = openOrCreateTable(client, Tables.metricsTableName(name), Tables.METRICS_SCHEMA);
-    Deferred<KuduTable> tagsetsDeferred = openOrCreateTable(client, Tables.tagsetsTableName(name), Tables.TAGSETS_SCHEMA);
-    Deferred<KuduTable> tagsDeferred = openOrCreateTable(client, Tables.tagsTableName(name), Tables.TAGS_SCHEMA);
+    int numTabletServers = client.listTabletServers()
+                                 .joinUninterruptibly(client.getDefaultAdminOperationTimeoutMs())
+                                 .getTabletServersCount();
+
+    Deferred<KuduTable> metricsDeferred = openOrCreateTable(client,
+                                                            Tables.metricsTableName(name),
+                                                            Tables.METRICS_SCHEMA,
+                                                            Tables.metricsCreateTableOptions(options, numTabletServers));
+    Deferred<KuduTable> tagsetsDeferred = openOrCreateTable(client,
+                                                            Tables.tagsetsTableName(name),
+                                                            Tables.TAGSETS_SCHEMA,
+                                                            Tables.tagsetsCreateTableOptions(options, numTabletServers));
+    Deferred<KuduTable> tagsDeferred = openOrCreateTable(client,
+                                                         Tables.tagsTableName(name),
+                                                         Tables.TAGS_SCHEMA,
+                                                         Tables.tagsCreateTableOptions(options, numTabletServers));
     KuduTable metricsTable = metricsDeferred.join(client.getDefaultAdminOperationTimeoutMs());
     KuduTable tagsetsTable = tagsetsDeferred.join(client.getDefaultAdminOperationTimeoutMs());
     KuduTable tagsTable = tagsDeferred.join(client.getDefaultAdminOperationTimeoutMs());
@@ -71,13 +113,14 @@ public class KuduTS implements AutoCloseable {
 
   private static Deferred<KuduTable> openOrCreateTable(final AsyncKuduClient client,
                                                        final String table,
-                                                       final Schema schema) throws Exception {
+                                                       final Schema schema,
+                                                       final CreateTableOptions options) throws Exception {
     class CreateTableErrback implements Callback<Deferred<KuduTable>, Exception> {
       @Override
       public Deferred<KuduTable> call(Exception e) throws Exception {
         if (e instanceof MasterErrorException) {
           LOG.debug("Creating table {}", table);
-          return client.createTable(table, schema);
+          return client.createTable(table, schema, options);
         } else {
           throw e;
         }
@@ -101,11 +144,13 @@ public class KuduTS implements AutoCloseable {
 
   /**
    * Query the timeseries table.
+   * If there are no results for the query, the returned list will be empty.
+   *
    * @param query parameters
    * @return the queried datapoints
    * @throws Exception on error
    */
-  public Datapoints query(final Query query) throws Exception {
+  public List<Datapoints> query(final Query query) throws Exception {
     class ScanSeriesCB implements Callback<Deferred<ArrayList<Datapoints>>, IntVec> {
       @Override
       public Deferred<ArrayList<Datapoints>> call(IntVec tagsetIDs) throws Exception {
@@ -134,10 +179,19 @@ public class KuduTS implements AutoCloseable {
                                   .addCallbackDeferring(new ScanSeriesCB())
                                   .joinUninterruptibly(client.getDefaultOperationTimeoutMs());
 
+    // Filter empty series
+    Iterator<Datapoints> seriesIter = series.iterator();
+    while (seriesIter.hasNext()) {
+      if (seriesIter.next().size() == 0) seriesIter.remove();
+    }
+
+    if (series.isEmpty()) { return ImmutableList.of(); }
+
     if (query.getInterpolator() == null) {
-      return Datapoints.aggregate(series, query.getAggregator());
+      return ImmutableList.of(Datapoints.aggregate(series, query.getAggregator()));
     } else {
-      return Datapoints.aggregate(series, query.getAggregator(), query.getInterpolator());
+      return ImmutableList.of(Datapoints.aggregate(series, query.getAggregator(),
+                                                   query.getInterpolator()));
     }
   }
 

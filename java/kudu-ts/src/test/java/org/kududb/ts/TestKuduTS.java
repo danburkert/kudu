@@ -22,12 +22,13 @@ public class TestKuduTS extends BaseKuduTest {
 
   private final Random rand = new Random();
 
+  /** Compares datapoints with loose equality on the values. */
   private static void datapointsEqual(Datapoints a, Datapoints b) {
     assertEquals(a.getMetric(), b.getMetric());
 
     IntVec aTagsetIDs = a.getTagsetIDs().clone();
     aTagsetIDs.sort();
-    IntVec bTagsetIDs = a.getTagsetIDs().clone();
+    IntVec bTagsetIDs = b.getTagsetIDs().clone();
     bTagsetIDs.sort();
     assertEquals(aTagsetIDs, bTagsetIDs);
 
@@ -40,10 +41,11 @@ public class TestKuduTS extends BaseKuduTest {
     }
   }
 
+  /** Builds a tagset from the provided tags. */
   private static SortedMap<String, String> tagset(String... tags) {
     if (tags.length % 2 == 1) throw new IllegalArgumentException("tags must have key and value");
     SortedMap<String, String> tagset = new TreeMap();
-    for (int i = 0; i < tags.length / 2; i++) {
+    for (int i = 0; i < tags.length; i += 2) {
       tagset.put(tags[i], tags[i + 1]);
     }
     return ImmutableSortedMap.copyOf(tagset);
@@ -79,14 +81,43 @@ public class TestKuduTS extends BaseKuduTest {
 
   @Test
   public void testCreateAndOpen() throws Exception {
-    try (KuduTS tsdb = KuduTS.open(ImmutableList.of(getMasterAddresses()), "testCreateAndOpen")) {}
-    try (KuduTS tsdb = KuduTS.open(ImmutableList.of(getMasterAddresses()), "testCreateAndOpen")) {}
+    try (KuduTS tsdb = KuduTS.openOrCreate(ImmutableList.of(getMasterAddresses()),
+                                           "testCreateAndOpen",
+                                           CreateOptions.defaults())) {
+
+
+
+    }
+    try (KuduTS tsdb = KuduTS.open(ImmutableList.of(getMasterAddresses()),
+                                   "testCreateAndOpen")) {}
   }
+
+
+  /** Tests querying an empty series. */
+  @Test
+  public void testEmptySeries() throws Exception {
+    try (KuduTS ts = KuduTS.openOrCreate(ImmutableList.of(getMasterAddresses()),
+                                         "testEmptySeries",
+                                         CreateOptions.defaults())) {
+      String metric = "m";
+      SortedMap<String, String> tagset = tagset("k1", "v1");
+
+      Query query = Query.create(metric, tagset, Aggregators.max());
+      assertEquals(0, ts.query(query).size());
+
+      // Create the tagset, and try again:
+      ts.getTagsets().getTagsetID(tagset);
+      assertEquals(0, ts.query(query).size());
+    }
+  }
+
 
   /** Tests writing and querying a single series with no downsampling. */
   @Test
   public void testSingleSeries() throws Exception {
-    try (KuduTS ts = KuduTS.open(ImmutableList.of(getMasterAddresses()), "testSingleSeries")) {
+    try (KuduTS ts = KuduTS.openOrCreate(ImmutableList.of(getMasterAddresses()),
+                                         "testSingleSeries",
+                                         CreateOptions.defaults())) {
       WriteBatch batch = ts.writeBatch();
       batch.setFlushMode(SessionConfiguration.FlushMode.AUTO_FLUSH_BACKGROUND);
       try {
@@ -100,7 +131,7 @@ public class TestKuduTS extends BaseKuduTest {
         batch.flush();
 
         Query query = Query.create(metric, tagset, Aggregators.max());
-        assertEquals(series, ts.query(query));
+        assertEquals(series, ts.query(query).get(0));
       } finally {
         batch.close();
       }
@@ -113,7 +144,9 @@ public class TestKuduTS extends BaseKuduTest {
    */
   @Test
   public void testMultipleSeries() throws Exception {
-    try (KuduTS ts = KuduTS.open(ImmutableList.of(getMasterAddresses()), "testMultipleSeries")) {
+    try (KuduTS ts = KuduTS.openOrCreate(ImmutableList.of(getMasterAddresses()),
+                                         "testMultipleSeries",
+                                         CreateOptions.defaults())) {
       WriteBatch batch = ts.writeBatch();
       batch.setFlushMode(SessionConfiguration.FlushMode.AUTO_FLUSH_BACKGROUND);
       try {
@@ -135,15 +168,20 @@ public class TestKuduTS extends BaseKuduTest {
         { // all series
           Query query = Query.create(metric, tagset("k1", "v1"), Aggregators.mean());
           datapointsEqual(Datapoints.aggregate(datapoints, Aggregators.mean()),
-                          ts.query(query));
+                          ts.query(query).get(0));
         }
         { // single series
           Query query = Query.create(metric, tagset("k2", "5"), Aggregators.mean());
-          datapointsEqual(datapoints.get(6),
-                          ts.query(query));
+          datapointsEqual(datapoints.get(5),
+                          ts.query(query).get(0));
         }
-
-
+        { // subset of series
+          Query query = Query.create(metric, tagset("k3", "0"), Aggregators.mean());
+          datapointsEqual(Datapoints.aggregate(ImmutableList.of(datapoints.get(0),
+                                                                datapoints.get(5)),
+                                               Aggregators.mean()),
+                          ts.query(query).get(0));
+        }
 
 
       } finally {
@@ -152,13 +190,12 @@ public class TestKuduTS extends BaseKuduTest {
     }
   }
 
-  /**
-   * Tests writing and querying multiple series with no downsampling.
-   * The series are overlapping in time, and share a common tag.
-   */
+  /** Tests writing and querying a single series with downsampling. */
   @Test
   public void testSingleSeriesDownsample() throws Exception {
-    try (KuduTS ts = KuduTS.open(ImmutableList.of(getMasterAddresses()), "testSingleSeries")) {
+    try (KuduTS ts = KuduTS.openOrCreate(ImmutableList.of(getMasterAddresses()),
+                                         "testSingleSeriesDownsample",
+                                         CreateOptions.defaults())) {
       WriteBatch batch = ts.writeBatch();
       batch.setFlushMode(SessionConfiguration.FlushMode.AUTO_FLUSH_BACKGROUND);
       try {
@@ -171,15 +208,78 @@ public class TestKuduTS extends BaseKuduTest {
         }
         batch.flush();
 
-        Query query = Query.create(metric, tagset, Aggregators.max())
-                           .setDownsampler(Aggregators.mean(), 20000);
+        Query query = Query.create(metric, tagset, Aggregators.sum())
+                           .setDownsampler(Aggregators.sum(), 20000);
+        Datapoints results = ts.query(query).get(0);
 
+        assertEquals(series.getMetric(), results.getMetric());
 
+        IntVec seriesTagsetIDs = series.getTagsetIDs().clone();
+        seriesTagsetIDs.sort();
+        IntVec resultsTagsetIDs = results.getTagsetIDs().clone();
+        resultsTagsetIDs.sort();
+        assertEquals(seriesTagsetIDs, results.getTagsetIDs());
 
+        assertEquals(50, results.size());
+
+        for (int i = 0; i < 50; i++) {
+          assertEquals(series.getTime(i * 2), results.getTime(i));
+          assertEquals(series.getValue(2 * i) + series.getValue(2 * i + 1),
+                       results.getValue(i),
+                       1e-9);
+        }
       } finally {
         batch.close();
       }
     }
+  }
 
+  /** Tests writing and querying two series with interpolation. */
+  @Test
+  public void testMultipleSeriesWithInterpolation() throws Exception {
+    try (KuduTS ts = KuduTS.openOrCreate(ImmutableList.of(getMasterAddresses()),
+                                         "testMultipleSeriesWithInterpolation",
+                                         CreateOptions.defaults())) {
+      WriteBatch batch = ts.writeBatch();
+      batch.setFlushMode(SessionConfiguration.FlushMode.AUTO_FLUSH_BACKGROUND);
+      try {
+        String metric = "m";
+
+        // Time   | Series
+        // -------+-------
+        // 420000 | A
+        // 430000 | A
+        // 435000 | B
+        // 440000 | A
+        // 445000 | B
+        // 450000 | A
+        // 455000 | B
+        // 465000 | B
+
+        SortedMap<String, String> tagsetA = tagset("k", "v", "series", "a");
+        SortedMap<String, String> tagsetB = tagset("k", "v", "series", "b");
+        Datapoints seriesA = generateSeries(ts, metric, 420000, 10000, 4, tagsetA);
+        Datapoints seriesB = generateSeries(ts, metric, 435000, 10000, 4, tagsetB);
+
+        for (Datapoint datapoint : seriesA) {
+          batch.writeDatapoint(metric, tagsetA, datapoint.getTime(), datapoint.getValue());
+        }
+        for (Datapoint datapoint : seriesB) {
+          batch.writeDatapoint(metric, tagsetB, datapoint.getTime(), datapoint.getValue());
+        }
+        batch.flush();
+
+        Query query = Query.create(metric, tagset("k", "v"), Aggregators.sum())
+                           .setInterpolator(Interpolators.linear());
+        Datapoints results = ts.query(query).get(0);
+
+        assertEquals(seriesA.size() + seriesB.size(), results.size());
+        datapointsEqual(Datapoints.aggregate(ImmutableList.of(seriesA, seriesB),
+                                             Aggregators.sum(), Interpolators.linear()),
+                        results);
+      } finally {
+        batch.close();
+      }
+    }
   }
 }

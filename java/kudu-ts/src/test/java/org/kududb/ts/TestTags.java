@@ -5,6 +5,10 @@ import static org.junit.Assert.assertEquals;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSortedMap;
+
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 import org.junit.Test;
 import org.kududb.client.BaseKuduTest;
@@ -15,18 +19,20 @@ public class TestTags extends BaseKuduTest {
   private static final Logger LOG = LoggerFactory.getLogger(TestTags.class);
 
   /** Builds a tagset from the provided tags. */
-  private static Messages.Tagset tagset(String... tags) {
-    Preconditions.checkArgument(tags.length % 2 == 0, "missing tag value");
-    Messages.Tagset.Builder tagset = Messages.Tagset.newBuilder();
+  private static SortedMap<String, String> tagset(String... tags) {
+    if (tags.length % 2 == 1) throw new IllegalArgumentException("tags must have key and value");
+    SortedMap<String, String> tagset = new TreeMap<>();
     for (int i = 0; i < tags.length; i += 2) {
-      tagset.addTagsBuilder().setKey(tags[i]).setValue(tags[i+1]);
+      tagset.put(tags[i], tags[i + 1]);
     }
-    return tagset.build();
+    return ImmutableSortedMap.copyOf(tagset);
   }
 
   @Test
   public void testGetTagsetIDsForTag() throws Exception {
-    try (KuduTS ts = KuduTS.open(ImmutableList.of(getMasterAddresses()), "testGetTagsetIDsForTag")) {
+    try (KuduTS ts = KuduTS.openOrCreate(ImmutableList.of(getMasterAddresses()),
+                                         "testGetTagsetIDsForTag",
+                                         CreateOptions.defaults())) {
       Tags tags = ts.getTags();
 
       assertEquals(Integer.valueOf(0), tags.insertTagset(0, tagset("k1", "v1")).join());
@@ -46,7 +52,9 @@ public class TestTags extends BaseKuduTest {
 
   @Test
   public void testGetTagsetIDsForTags() throws Exception {
-    try (KuduTS ts = KuduTS.open(ImmutableList.of(getMasterAddresses()), "testGetTagsetIDsForTags")) {
+    try (KuduTS ts = KuduTS.openOrCreate(ImmutableList.of(getMasterAddresses()),
+                                         "testGetTagsetIDsForTags",
+                                         CreateOptions.defaults())) {
       Tags tags = ts.getTags();
 
       assertEquals(Integer.valueOf(0), tags.insertTagset(0, tagset("k1", "v1")).join());

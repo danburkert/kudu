@@ -147,6 +147,8 @@ public class Datapoints implements Iterable<Datapoint> {
       }
     }
 
+    if (series.isEmpty()) throw new IllegalArgumentException("no series to aggregate");
+
     PriorityQueue<Iterator> iterators =
         new PriorityQueue<>(series.size(), new IteratorComparator());
 
@@ -154,6 +156,7 @@ public class Datapoints implements Iterable<Datapoint> {
     IntVec tagsetIDs = IntVec.withCapacity(series.size());
 
     for (Datapoints s : series) {
+      if (s.size() == 0) throw new IllegalArgumentException("empty series");
       iterators.add(s.iterator());
       tagsetIDs.concat(s.tagsetIDs);
       if (!metric.equals(s.getMetric())) {
@@ -188,21 +191,21 @@ public class Datapoints implements Iterable<Datapoint> {
   public static Datapoints aggregate(List<Datapoints> series,
                                      Aggregator aggregator,
                                      Interpolators.Interpolator interpolator)  {
+    if (series.isEmpty()) throw new IllegalArgumentException("no series to aggregate");
     String metric = series.get(0).getMetric();
     IntVec tagsetIDs = IntVec.withCapacity(series.size());
-
 
     List<Interpolation> active = new ArrayList<>(series.size());
     List<Interpolation> inactive = new ArrayList<>(series.size());
 
-    LongVec times = null;
+    LongVec times = LongVec.withCapacity(0);
     for (Datapoints s : series) {
+      if (s.size() == 0) throw new IllegalArgumentException("empty series");
       tagsetIDs.concat(s.tagsetIDs);
       if (!metric.equals(s.getMetric())) {
         throw new IllegalArgumentException("unable to aggregate datapoints from different metrics");
       }
-      if (times == null) times = s.getTimes();
-      else times.merge(s.getTimes());
+      times.merge(s.getTimes());
       inactive.add(interpolator.interpolate(s));
     }
 
@@ -221,8 +224,11 @@ public class Datapoints implements Iterable<Datapoint> {
           java.util.Iterator<Interpolation> iter = active.iterator();
           while (iter.hasNext()) {
             Interpolation next = iter.next();
-            if (next.maxTime() > time) {
+            long maxTime = next.maxTime();
+            if (maxTime < time) {
               iter.remove();
+            } else {
+              nextMinMaxTime = Math.min(nextMinMaxTime, maxTime);
             }
           }
         }
@@ -232,10 +238,13 @@ public class Datapoints implements Iterable<Datapoint> {
             Interpolation next = iter.next();
             if (next.maxTime() < time)
               throw new IllegalStateException("inactive interpolation is expired");
+            long minTime = next.minTime();
             if (next.minTime() <= time) {
               iter.remove();
               active.add(next);
               nextMinMaxTime = Math.min(nextMinMaxTime, next.maxTime());
+            } else {
+              nextMinMaxTime = Math.min(nextMinMaxTime, minTime);
             }
           }
         }

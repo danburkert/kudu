@@ -1,33 +1,13 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- */
-
 package org.kududb.ts;
 
 import com.google.common.collect.ImmutableList;
-
-import javax.annotation.concurrent.ThreadSafe;
 
 import org.kududb.ColumnSchema;
 import org.kududb.Schema;
 import org.kududb.Type;
 import org.kududb.annotations.InterfaceAudience;
-import org.kududb.annotations.InterfaceStability;
+import org.kududb.client.CreateTableOptions;
+import org.kududb.client.PartialRow;
 
 /**
  * {@code Tables} holds meta information about the table schemas used by {@code KuduTS}.
@@ -90,5 +70,77 @@ class Tables {
 
   static String tagsTableName(String tsName) {
     return String.format("kuduts.%s.tags", tsName);
+  }
+
+  /**
+   * The {@code metrics} table is hash partitioned on the {@code metric} and
+   * {@code tagset_id} columns, and range partitioned on the {@code time}
+   * column. The hash partitioning allows writes and scans at the current time
+   * to be evenly distributed over the cluster. Range partitioning on time
+   * allows whole tablets to be pruned based on the time constraint, and allows
+   * old data to be dropped if desired.
+   * @param options the create options
+   * @param numTabletServers the number of tablet servers
+   * @return the tags table create options
+   */
+  static CreateTableOptions metricsCreateTableOptions(CreateOptions options,
+                                                      int numTabletServers) {
+    CreateTableOptions create = new CreateTableOptions();
+    create.setNumReplicas(options.getNumReplicas());
+    create.addHashPartitions(ImmutableList.of("metric", "tagset_id"),
+                             options.getNumMetricsHashBuckets(numTabletServers));
+    create.setRangePartitionColumns(ImmutableList.of("time"));
+    for (Long time : options.getMetricsSplits()) {
+      PartialRow split = METRICS_SCHEMA.newPartialRow();
+      split.addLong(METRICS_TIME_INDEX, time);
+      create.addSplitRow(split);
+    }
+    return create;
+  }
+
+  /**
+   * The {@code tagsets} table is range partitioned on the {@code id} column.
+   * Because the table is essentially a linear probe hash table, it must be able
+   * to be scanned in PK order, so hash partitioning is not possible. Since the
+   * tagset IDs are effectively random, setting split points at even intervals
+   * over the ID range gives good protection against hotspotting.
+   * @param options the create options
+   * @param numTabletServers the number of tablet servers
+   * @return the tagset table create options
+   */
+  static CreateTableOptions tagsetsCreateTableOptions(CreateOptions options,
+                                                      int numTabletServers) {
+    CreateTableOptions create = new CreateTableOptions();
+    create.setNumReplicas(options.getNumReplicas());
+
+    create.setRangePartitionColumns(ImmutableList.of("id"));
+
+    int numTablets = options.getNumTagsetsTablets(numTabletServers);
+    long interval = (1L << 32) / numTablets;
+    for (int i = 1; i < numTablets; i++) {
+      PartialRow split = TAGSETS_SCHEMA.newPartialRow();
+      split.addInt(TAGSETS_ID_INDEX, (int) (Integer.MIN_VALUE + i * interval));
+      create.addSplitRow(split);
+    }
+    return create;
+  }
+
+  /**
+   * The {@code tags} table is hash partitioned on the {@code key} and
+   * {@code value} columns, which allows a scan of a ({@code key}, {@code value})
+   * pair to be fully satisfied by a single tablet, and gives good protection
+   * against hotspotting.
+   * @param options the create options
+   * @param numTabletServers the number of tablet servers
+   * @return the tags table create options
+   */
+  static CreateTableOptions tagsCreateTableOptions(CreateOptions options,
+                                                   int numTabletServers) {
+    CreateTableOptions create = new CreateTableOptions();
+    create.setNumReplicas(options.getNumReplicas());
+    create.addHashPartitions(ImmutableList.of("key", "value"),
+                             options.getNumTagsetsTablets(numTabletServers));
+    create.setRangePartitionColumns(ImmutableList.<String>of());
+    return create;
   }
 }

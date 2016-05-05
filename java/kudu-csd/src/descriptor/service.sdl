@@ -107,7 +107,7 @@
         {
           "name" : "default_num_replicas",
           "label" : "Default Number of Replicas",
-          "description" : "Default number of replicas for each tablet.",
+          "description" : "Default number of numReplicas for each tablet.",
           "required" : "true",
           "type" : "long",
           "min" : "1",
@@ -254,7 +254,7 @@
         {
           "name" : "log_force_fsync_all",
           "label" : "Kudu Tablet Server WAL Fsyncs All Entries",
-          "description" : "If true, the Tablet Server will use the fsync system call to ensure that all writes are durably written to to the write-ahead log (WAL) before responding. If false, edits will be written to the Linux buffer cache on a majority of replicas before responding.",
+          "description" : "If true, the Tablet Server will use the fsync system call to ensure that all writes are durably written to to the write-ahead log (WAL) before responding. If false, edits will be written to the Linux buffer cache on a majority of numReplicas before responding.",
           "required" : "true",
           "type" : "boolean",
           "default" : "false"

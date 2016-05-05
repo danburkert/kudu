@@ -8,7 +8,7 @@ import com.stumbleupon.async.Deferred;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
+import java.util.SortedMap;
 import javax.annotation.concurrent.ThreadSafe;
 
 import org.kududb.annotations.InterfaceAudience;
@@ -52,7 +52,7 @@ public class Tags {
    * @param tagset the tagset.
    * @return The tagset ID.
    */
-  public Deferred<Integer> insertTagset(final int id, final Messages.Tagset tagset) {
+  public Deferred<Integer> insertTagset(final int id, final SortedMap<String, String> tagset) {
     class InsertTagsetCB implements Callback<Deferred<Integer>, List<OperationResponse>> {
       @Override
       public Deferred<Integer> call(List<OperationResponse> responses) throws Exception {
@@ -68,18 +68,18 @@ public class Tags {
       public String toString() {
         return Objects.toStringHelper(this)
                       .add("id", id)
-                      .add("tags", Tagsets.tagsetToString(tagset))
+                      .add("tags", tagset)
                       .toString();
       }
     }
 
-    if (tagset.getTagsList().isEmpty()) { return Deferred.fromResult(id); }
+    if (tagset.isEmpty()) { return Deferred.fromResult(id); }
 
-    LOG.debug("Inserting tags; tagsetID: {}, tags: {}", id, Tagsets.tagsetToString(tagset));
+    LOG.debug("Inserting tags; tagsetID: {}, tags: {}", id, tagset);
 
     AsyncKuduSession session = client.newSession();
     session.setFlushMode(SessionConfiguration.FlushMode.AUTO_FLUSH_BACKGROUND);
-    for (Messages.Tagset.Tag tag : tagset.getTagsList()) {
+    for (Map.Entry<String, String> tag : tagset.entrySet()) {
       Insert insert = table.newInsert();
       // TODO: check with JD that if the inserts below fail, the error will
       // also be returned in the flush call.

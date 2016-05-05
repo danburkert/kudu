@@ -1,9 +1,7 @@
 package org.kududb.ts;
 
 import com.google.common.base.Objects;
-import com.google.common.primitives.Longs;
 
-import java.util.Comparator;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import org.kududb.annotations.InterfaceAudience;
@@ -42,7 +40,7 @@ abstract class Interpolation {
   public abstract long minTime();
 
   /**
-   * The inclusive maximum time for this interpolator in microseconds.
+   * The exclusive maximum time for this interpolator in microseconds.
    * @return the maximum time in microseconds.
    */
   public abstract long maxTime();
@@ -105,7 +103,7 @@ abstract class Interpolation {
 
     @Override
     public long maxTime() {
-      return datapoints.getTime(datapoints.size() - 1);
+      return datapoints.getTime(datapoints.size() - 1) + 1;
     }
 
     @Override
