@@ -18,17 +18,16 @@
 package org.kududb.spark.kudu
 
 import java.util
+
 import org.apache.hadoop.util.ShutdownHookManager
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.types.{DataType, DataTypes, StructType}
 import org.apache.spark.sql.{DataFrame, Row}
-import org.apache.spark.sql.types.{StructField, StructType, DataType, DataTypes}
-import org.kududb.{ColumnSchema, Schema, Type}
 import org.kududb.annotations.InterfaceStability
 import org.kududb.client.SessionConfiguration.FlushMode
 import org.kududb.client._
-import scala.collection.JavaConverters._
-import java.sql.Timestamp
+import org.kududb.{ColumnSchema, Schema, Type}
 
 
 /**
@@ -138,57 +137,62 @@ class KuduContext(kuduMaster: String) extends Serializable {
   }
 
   /**
-    * Inserts or updates rows in kudu from a dataframe
+    * Inserts or updates rows in kudu from a [[DataFrame]].
     * @param data Dataframe to insert/update
     * @param tableName Table to perform insertion on
     * @param overwrite true=update, false=insert
     */
-  def writeRows(data:DataFrame, tableName:String, overwrite:Boolean): Unit = {
-    data.foreachPartition(iterator => new KuduContext(kuduMaster).writeRows(iterator, tableName, overwrite))
+  def writeRows(data: DataFrame, tableName: String, overwrite: Boolean) {
+    val schema = data.schema
+    data.foreachPartition(iterator => {
+      val pendingErrors = writeRows(iterator, schema, tableName, overwrite)
+      val errorCount = pendingErrors.getRowErrors.length
+      if (errorCount > 0) {
+        val errors = pendingErrors.getRowErrors.take(5).map(_.getErrorStatus).mkString
+        throw new RuntimeException(
+          s"failed to write $errorCount rows from DataFrame to Kudu; sample errors: $errors")
+      }
+    })
   }
 
   /**
-    * Saves partitions of a dataframe into kudu
+    * Saves partitions of a dataframe into Kudu.
+    *
     * @param rows rows to insert or update
     * @param tableName table to insert or update on
     */
   def writeRows(rows: Iterator[Row],
+                schema: StructType,
                 tableName: String,
                 performAsUpdate : Boolean = false): RowErrorsAndOverflowStatus = {
     val table: KuduTable = syncClient.openTable(tableName)
+    val kuduSchema = table.getSchema
+
+    val indices: Array[(Int, Int)] = schema.fields.zipWithIndex.map({ case (field, sparkIdx) =>
+      sparkIdx -> table.getSchema.getColumnIndex(field.name)
+    })
+
     val session: KuduSession = syncClient.newSession
     session.setFlushMode(FlushMode.AUTO_FLUSH_BACKGROUND)
+    session.setIgnoreAllDuplicateRows(true)
     try {
-      while (rows.hasNext) {
-        val dfRow = rows.next()
-        var operation: Operation = table.newInsert()
-        if (performAsUpdate) {
-          operation = table.newUpdate()
-        }
-        val kuduRow: PartialRow = operation.getRow
-        for (sparkColumn <- dfRow.schema.zipWithIndex) {
-          // It seems to be most efficient to to the idx lookup on kudu side and not spark
-          // this is because 1. dfRow.schema.fieldIndex will return exception for missing column
-          // 2. Any of the kudu rows can throw an exception also, but this is because the underlying
-          // table does not contain that column
-          val sparkIdx = sparkColumn._2
-          val sparkField = sparkColumn._1
-          val dt: DataType = sparkField.dataType
-          val fieldName: String = sparkField.name
-          if (dfRow.isNullAt(sparkIdx)) {
-
-          } else dt match {
-            case DataTypes.StringType => kuduRow.addString(fieldName, dfRow.getAs[String](sparkIdx))
-            case DataTypes.BinaryType => kuduRow.addBinary(fieldName, dfRow.getAs[Array[Byte]](sparkIdx))
-            case DataTypes.BooleanType => kuduRow.addBoolean(fieldName, dfRow.getAs[Boolean](sparkIdx))
-            case DataTypes.ByteType => kuduRow.addInt(fieldName, dfRow.getAs[Byte](sparkIdx))
-            case DataTypes.ShortType => kuduRow.addShort(fieldName, dfRow.getAs[Short](sparkIdx))
-            case DataTypes.IntegerType => kuduRow.addInt(fieldName, dfRow.getAs[Int](sparkIdx))
-            case DataTypes.LongType => kuduRow.addLong(fieldName, dfRow.getAs[Long](sparkIdx))
-            case DataTypes.FloatType => kuduRow.addFloat(fieldName, dfRow.getAs[Float](sparkIdx))
-            case DataTypes.DoubleType => kuduRow.addDouble(fieldName, dfRow.getAs[Double](sparkIdx))
-            case DataTypes.TimestampType => kuduRow.addLong(fieldName, dfRow.getAs[Timestamp](sparkIdx).getTime * 1000)
-            case _ => throw new IllegalArgumentException(s"No support for Spark SQL type $dt")
+      for (row <- rows) {
+        val operation = if (performAsUpdate) { table.newUpdate() } else { table.newInsert() }
+        for ((sparkIdx, kuduIdx) <- indices) {
+          if (row.isNullAt(sparkIdx)) {
+            operation.getRow.setNull(kuduIdx)
+          } else schema.fields(sparkIdx).dataType match {
+            case DataTypes.StringType => operation.getRow.addString(kuduIdx, row.getString(sparkIdx))
+            case DataTypes.BinaryType => operation.getRow.addBinary(kuduIdx, row.getAs[Array[Byte]](sparkIdx))
+            case DataTypes.BooleanType => operation.getRow.addBoolean(kuduIdx, row.getBoolean(sparkIdx))
+            case DataTypes.ByteType => operation.getRow.addByte(kuduIdx, row.getByte(sparkIdx))
+            case DataTypes.ShortType => operation.getRow.addShort(kuduIdx, row.getShort(sparkIdx))
+            case DataTypes.IntegerType => operation.getRow.addInt(kuduIdx, row.getInt(sparkIdx))
+            case DataTypes.LongType => operation.getRow.addLong(kuduIdx, row.getLong(sparkIdx))
+            case DataTypes.FloatType => operation.getRow.addFloat(kuduIdx, row.getFloat(sparkIdx))
+            case DataTypes.DoubleType => operation.getRow.addDouble(kuduIdx, row.getDouble(sparkIdx))
+            case DataTypes.TimestampType => operation.getRow.addLong(kuduIdx, KuduRelation.timestampToMicros(row.getTimestamp(sparkIdx)))
+            case _ => throw new IllegalArgumentException(s"No support for Spark SQL type $row")
           }
         }
         session.apply(operation)
@@ -198,7 +202,4 @@ class KuduContext(kuduMaster: String) extends Serializable {
     }
     session.getPendingErrors
   }
-
-
-
 }

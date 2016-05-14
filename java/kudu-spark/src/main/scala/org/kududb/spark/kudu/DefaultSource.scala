@@ -20,15 +20,14 @@ package org.kududb.spark.kudu
 import java.sql.Timestamp
 
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.SaveMode._
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext, SaveMode}
 import org.kududb.Type
 import org.kududb.annotations.InterfaceStability
-import org.kududb.client._
 import org.kududb.client.KuduPredicate.ComparisonOp
-import org.kududb.client.SessionConfiguration.FlushMode
-import org.apache.spark.sql.SaveMode._
+import org.kududb.client._
 
 import scala.collection.JavaConverters._
 
@@ -38,9 +37,7 @@ import scala.collection.JavaConverters._
   */
 @InterfaceStability.Unstable
 class DefaultSource extends RelationProvider with CreatableRelationProvider {
-
-  val TABLE_KEY = "kudu.table"
-  val KUDU_MASTER = "kudu.master"
+  import DefaultSource._
 
   /**
     * Construct a BaseRelation using the provided context and parameters.
@@ -63,12 +60,16 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider {
     * Creates a relation and inserts data to specified table.
     *
     * @param sqlContext
-    * @param mode Append will not overwrite existing data, Overwrite will perform update, but will not insert data, use upsert on KuduContext if you require both
+    * @param mode Append will not overwrite existing data, Overwrite will perform update, but will
+    *             not insert data, use upsert on KuduContext if you require both
     * @param parameters Nessisary parameters for kudu.table and kudu.master
     * @param data Dataframe to save into kudu
     * @return returns populated base relation
     */
-  override def createRelation(sqlContext: SQLContext, mode: SaveMode, parameters: Map[String, String], data: DataFrame): BaseRelation = {
+  override def createRelation(sqlContext: SQLContext,
+                              mode: SaveMode,
+                              parameters: Map[String, String],
+                              data: DataFrame): BaseRelation = {
     val tableName = parameters.getOrElse(TABLE_KEY,
       throw new IllegalArgumentException(s"Kudu table name must be specified in create options using key '$TABLE_KEY'"))
 
@@ -76,16 +77,21 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider {
 
     val kuduRelation = new KuduRelation(tableName, kuduMaster)(sqlContext)
     mode match {
-      case Append => kuduRelation.insert(data, overwrite = false)
+      case Append =>
+      case Ignore => kuduRelation.insert(data, overwrite = false)
       case Overwrite => kuduRelation.insert(data, overwrite = true)
       case ErrorIfExists =>
-          throw new UnsupportedOperationException(
-            "ErrorIfExists is currently not supported")
-      case Ignore => kuduRelation.insert(data, overwrite = false)
+          throw new UnsupportedOperationException("ErrorIfExists is currently not supported")
     }
 
     kuduRelation
   }
+}
+
+@InterfaceStability.Unstable
+object DefaultSource {
+  val TABLE_KEY = "kudu.table"
+  val KUDU_MASTER = "kudu.master"
 }
 
 /**
@@ -191,8 +197,8 @@ with InsertableRelation {
 
   /**
     * Inserts data into an existing kudu table.
-    * @param data Dataframe to be inserted into kudu
-    * @param overwrite If True it will update existing records, but will not perform inserts.
+    * @param data the [[DataFrame]] to be inserted into kudu
+    * @param overwrite if `true` it will update existing records, but will not perform inserts.
     */
   override def insert(data: DataFrame, overwrite: Boolean): Unit = {
     context.writeRows(data, tableName, overwrite)

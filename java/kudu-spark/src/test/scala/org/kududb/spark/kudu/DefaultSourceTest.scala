@@ -20,13 +20,13 @@ import java.sql.Timestamp
 import java.text.SimpleDateFormat
 import java.util.TimeZone
 
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.{SQLContext, SaveMode}
 import org.junit.Assert._
 import org.junit.runner.RunWith
 import org.kududb.client.CreateTableOptions
-import org.scalatest.{BeforeAndAfter, FunSuite}
 import org.scalatest.junit.JUnitRunner
-import org.apache.spark.sql.functions._
+import org.scalatest.{BeforeAndAfter, FunSuite}
 
 import scala.collection.immutable.IndexedSeq
 
@@ -55,15 +55,16 @@ class DefaultSourceTest extends FunSuite with TestContext with BeforeAndAfter {
   val rowCount = 10
   var sqlContext : SQLContext = _
   var rows : IndexedSeq[(Int, Int, String)] = _
+  var options: Map[String, String] = _
   before {
     val rowCount = 10
     rows = insertRows(rowCount)
+    options = Map(DefaultSource.TABLE_KEY -> tableName,
+                  DefaultSource.KUDU_MASTER -> miniCluster.getMasterAddresses)
 
     sqlContext = new SQLContext(sc)
 
-    sqlContext.read.options(
-      Map("kudu.table" -> tableName, "kudu.master" -> miniCluster.getMasterAddresses)).kudu
-      .registerTempTable(tableName)
+    sqlContext.read.options(options).kudu.registerTempTable(tableName)
   }
 
   test("table creation") {
@@ -71,16 +72,13 @@ class DefaultSourceTest extends FunSuite with TestContext with BeforeAndAfter {
       kuduContext.deleteTable("testcreatetable")
     }
 
-    val df = sqlContext.read.options(
-      Map("kudu.table" -> tableName, "kudu.master" -> miniCluster.getMasterAddresses)).kudu
+    val df = sqlContext.read.options(options).kudu
 
     kuduContext.createTable("testcreatetable", df.schema, Seq("key"), new CreateTableOptions().setNumReplicas(1))
 
-    df.write.options(
-      Map("kudu.table" -> "testcreatetable", "kudu.master" -> miniCluster.getMasterAddresses)).mode("append").kudu
-
-    val checkDf = sqlContext.read.options(
-      Map("kudu.table" -> "testcreatetable", "kudu.master" -> miniCluster.getMasterAddresses)).kudu
+    val testCreateTableOptions = options + (DefaultSource.TABLE_KEY -> "testcreatetable")
+    df.write.options(testCreateTableOptions).mode("append").kudu
+    val checkDf = sqlContext.read.options(testCreateTableOptions).kudu
 
     assert(checkDf.schema === df.schema)
 
@@ -92,16 +90,13 @@ class DefaultSourceTest extends FunSuite with TestContext with BeforeAndAfter {
   }
 
   test("insertion") {
-    val df = sqlContext.read.options(
-      Map("kudu.table" -> tableName, "kudu.master" -> miniCluster.getMasterAddresses)).kudu
+    val df = sqlContext.read.options(options).kudu
     val changedDF = df.limit(1).withColumn("key", df("key").plus(100)).withColumn("c2_s", lit("abc"))
     changedDF.show
-    changedDF.write.options(
-        Map("kudu.table" -> tableName, "kudu.master" -> miniCluster.getMasterAddresses)).mode("append").kudu
+    changedDF.write.options(options).mode("append").kudu
 
 
-    val newDF = sqlContext.read.options(
-      Map("kudu.table" -> tableName, "kudu.master" -> miniCluster.getMasterAddresses)).kudu
+    val newDF = sqlContext.read.options(options).kudu
     newDF.show
     val collected = newDF.filter("key = 100").collect()
     assertEquals("abc", collected(0).getAs[String]("c2_s"))
@@ -110,16 +105,12 @@ class DefaultSourceTest extends FunSuite with TestContext with BeforeAndAfter {
   }
 
   test("insertion multiple") {
-    val df = sqlContext.read.options(
-      Map("kudu.table" -> tableName, "kudu.master" -> miniCluster.getMasterAddresses)).kudu
+    val df = sqlContext.read.options(options).kudu
     val changedDF = df.limit(2).withColumn("key", df("key").plus(100)).withColumn("c2_s", lit("abc"))
     changedDF.show
-    changedDF.write.options(
-        Map("kudu.table" -> tableName, "kudu.master" -> miniCluster.getMasterAddresses)).mode("append").kudu
+    changedDF.write.options(options).mode(SaveMode.Append).kudu
 
-
-    val newDF = sqlContext.read.options(
-      Map("kudu.table" -> tableName, "kudu.master" -> miniCluster.getMasterAddresses)).kudu
+    val newDF = sqlContext.read.options(options).kudu
     newDF.show
     val collected = newDF.filter("key = 100").collect()
     assertEquals("abc", collected(0).getAs[String]("c2_s"))
@@ -132,34 +123,28 @@ class DefaultSourceTest extends FunSuite with TestContext with BeforeAndAfter {
   }
 
   test("update row") {
-    val df = sqlContext.read.options(
-      Map("kudu.table" -> tableName, "kudu.master" -> miniCluster.getMasterAddresses)).kudu
+    val df = sqlContext.read.options(options).kudu
     val baseDF = df.limit(1) // filter down to just the first row
     baseDF.show
     // change the c2 string to abc and update
     val changedDF = baseDF.withColumn("c2_s", lit("abc"))
     changedDF.show
-    changedDF.write.options(
-        Map("kudu.table" -> tableName, "kudu.master" -> miniCluster.getMasterAddresses)).mode("overwrite").kudu
+    changedDF.write.options(options).mode(SaveMode.Overwrite).kudu
 
     //read the data back
-    val newDF = sqlContext.read.options(
-      Map("kudu.table" -> tableName, "kudu.master" -> miniCluster.getMasterAddresses)).kudu
+    val newDF = sqlContext.read.options(options).kudu
     newDF.show
     val collected = newDF.filter("key = 0").collect()
     assertEquals("abc", collected(0).getAs[String]("c2_s"))
 
     //rewrite the original value
-    baseDF.withColumn("c2_s", lit("0")).write.options(
-      Map("kudu.table" -> tableName, "kudu.master" -> miniCluster.getMasterAddresses)).mode("overwrite").kudu
+    baseDF.withColumn("c2_s", lit("0")).write.options(options).mode(SaveMode.Overwrite).kudu
   }
 
   test("out of order selection") {
-    val df = sqlContext.read.options(
-      Map("kudu.table" -> tableName, "kudu.master" -> miniCluster.getMasterAddresses)).kudu.select( "c2_s", "c1_i", "key")
+    val df = sqlContext.read.options(options).kudu.select("c2_s", "c1_i", "key")
     val collected = df.collect()
-    assert(collected(0).getString(0).equals("0"))
-
+    assertEquals("0", collected(0).getString(0))
   }
 
   test("table scan") {
