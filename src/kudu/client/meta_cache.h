@@ -223,6 +223,14 @@ class MetaCache : public RefCountedThreadSafe<MetaCache> {
                          scoped_refptr<RemoteTablet>* remote_tablet,
                          const StatusCallback& callback);
 
+  // Look up which tablet hosts the given partition key, or the next tablet if
+  // the key falls in a non-covered range partition.
+  void LookupTabletByKeyOrNext(const KuduTable* table,
+                               const std::string& partition_key,
+                               const MonoTime& deadline,
+                               scoped_refptr<RemoteTablet>* remote_tablet,
+                               const StatusCallback& callback);
+
   // Mark any replicas of any tablets hosted by 'ts' as failed. They will
   // not be returned in future cache lookups.
   void MarkTSFailed(RemoteTabletServer* ts, const Status& status);
@@ -241,7 +249,7 @@ class MetaCache : public RefCountedThreadSafe<MetaCache> {
 
   // Called on the slow LookupTablet path when the master responds. Populates
   // the tablet caches and returns a reference to the first one.
-  const scoped_refptr<RemoteTablet>& ProcessLookupResponse(const LookupRpc& rpc);
+  Status ProcessLookupResponse(const LookupRpc& rpc, scoped_refptr<RemoteTablet>* remote_tablet);
 
   // Lookup the given tablet by key, only consulting local information.
   // Returns true and sets *remote_tablet if successful.
