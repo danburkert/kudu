@@ -54,7 +54,8 @@ public class KuduScanner {
    */
   public RowResultIterator nextRows() throws Exception {
     Deferred<RowResultIterator> d = asyncScanner.nextRows();
-    return d.join(asyncScanner.scanRequestTimeout);
+    RowResultIterator i = d.join(asyncScanner.scanRequestTimeout);
+    return i;
   }
 
   /**

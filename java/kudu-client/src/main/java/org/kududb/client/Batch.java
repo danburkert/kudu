@@ -39,7 +39,7 @@ import java.util.List;
  * Used internally to batch Operations together before sending to the cluster
  */
 @InterfaceAudience.Private
-class Batch extends KuduRpc<BatchResponse> implements KuduRpc.HasKey {
+class Batch extends KuduRpc<BatchResponse> {
 
   private static final OperationsComparatorBySequenceNumber SEQUENCE_NUMBER_COMPARATOR =
       new OperationsComparatorBySequenceNumber();

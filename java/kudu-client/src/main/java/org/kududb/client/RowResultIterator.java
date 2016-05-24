@@ -72,6 +72,14 @@ public class RowResultIterator extends KuduRpcResponse implements Iterator<RowRe
     this.rowResult = new RowResult(this.schema, this.bs, this.indirectBs);
   }
 
+
+  /**
+   * @return an empty row result iterator
+   */
+  static RowResultIterator empty() {
+    return new RowResultIterator(0, null, null, null, null);
+  }
+
   @Override
   public boolean hasNext() {
     return this.currentRow < numRows;

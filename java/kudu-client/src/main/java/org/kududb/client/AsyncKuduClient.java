@@ -32,6 +32,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.Lists;
 import com.google.common.net.HostAndPort;
+import com.google.common.primitives.UnsignedBytes;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.Message;
 import com.stumbleupon.async.Callback;
@@ -73,6 +74,7 @@ import java.net.UnknownHostException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -133,7 +135,7 @@ public class AsyncKuduClient implements AutoCloseable {
   private final ClientSocketChannelFactory channelFactory;
 
   /**
-   * This map and the next 2 maps contain the same data, but indexed
+   * This map and the next 3 maps contain the same data, but indexed
    * differently. There is no consistency guarantee across the maps.
    * They are not updated all at the same time atomically.  This map
    * is always the first to be updated, because that's the map from
@@ -147,6 +149,12 @@ public class AsyncKuduClient implements AutoCloseable {
    */
   private final ConcurrentHashMap<String, ConcurrentSkipListMap<byte[],
       RemoteTablet>> tabletsCache = new ConcurrentHashMap<>();
+
+  /**
+   * Map of table ID to non-covered range cache.
+   */
+  private final ConcurrentMap<String, NonCoveredRangeCache> nonCoveredRangeCaches =
+      new ConcurrentHashMap<>();
 
   /**
    * Maps a tablet ID to the RemoteTablet that knows where all the replicas are served.
@@ -563,19 +571,7 @@ public class AsyncKuduClient implements AutoCloseable {
    * @return A deferred {@link AsyncKuduScanner.Response}
    */
   Deferred<AsyncKuduScanner.Response> openScanner(final AsyncKuduScanner scanner) {
-    return sendRpcToTablet(scanner.getOpenRequest()).addErrback(
-        new Callback<Exception, Exception>() {
-          public Exception call(final Exception e) {
-            String message = "Cannot openScanner because: ";
-            LOG.warn(message, e);
-            // Don't let the scanner think it's opened on this tablet.
-            scanner.invalidate();
-            return e;  // Let the error propagate.
-          }
-          public String toString() {
-            return "openScanner errback";
-          }
-        });
+    return sendRpcToTablet(scanner.getOpenRequest());
   }
 
   /**
@@ -646,8 +642,7 @@ public class AsyncKuduClient implements AutoCloseable {
       // Oops, we couldn't find a tablet server that hosts this tablet. Our
       // cache was probably invalidated while the client was scanning. So
       // we can't close this scanner properly.
-      LOG.warn("Cannot close " + scanner + " properly, no connection open for "
-          + (tablet == null ? null : tablet));
+      LOG.warn("Cannot close {} properly, no connection open for {}", scanner, tablet);
       return Deferred.fromResult(null);
     }
     final KuduRpc<AsyncKuduScanner.Response>  close_request = scanner.getCloseRequest();
@@ -674,11 +669,25 @@ public class AsyncKuduClient implements AutoCloseable {
     }
     request.attempt++;
     final String tableId = request.getTable().getTableId();
-    byte[] partitionKey = null;
-    if (request instanceof KuduRpc.HasKey) {
-       partitionKey = ((KuduRpc.HasKey)request).partitionKey();
+    byte[] partitionKey = request.partitionKey();
+    RemoteTablet tablet = getTablet(tableId, partitionKey);
+
+    if (tablet == null && partitionKey != null) {
+      // Check if the RPC is in a non-covered range.
+      Pair<byte[], byte[]> nonCoveredRange = getNonCoveredRange(tableId, partitionKey);
+      if (nonCoveredRange != null) {
+        if (request.partitionKeyOrNext()) {
+          return Deferred.fromError(new NonCoveredRangeException(
+              nonCoveredRange.getFirst(), nonCoveredRange.getSecond()));
+        } else {
+          // TODO: include a IsNotFound status
+          // TODO: should this throw instead?
+          return Deferred.fromError(
+              new NonRecoverableException("Request falls in a non-covered range partition"));
+        }
+      }
+      // Otherwise fall through to below where a GetTableLocations lookup will occur
     }
-    final RemoteTablet tablet = getTablet(tableId, partitionKey);
 
     // Set the propagated timestamp so that the next time we send a message to
     // the server the message includes the last propagated timestamp.
@@ -1056,7 +1065,7 @@ public class AsyncKuduClient implements AutoCloseable {
     } else {
       d = sendRpcToTablet(rpc);
     }
-    d.addCallback(new MasterLookupCB(table));
+    d.addCallback(new MasterLookupCB(table, partitionKey));
     if (has_permit) {
       d.addBoth(new ReleaseMasterLookupPermit<Master.GetTableLocationsResponsePB>());
     }
@@ -1069,8 +1078,7 @@ public class AsyncKuduClient implements AutoCloseable {
    * @return An initialized Deferred object to hold the response.
    */
   Deferred<Master.GetTableLocationsResponsePB> getMasterTableLocationsPB() {
-    final Deferred<Master.GetTableLocationsResponsePB> responseD =
-        new Deferred<Master.GetTableLocationsResponsePB>();
+    final Deferred<Master.GetTableLocationsResponsePB> responseD = new Deferred<>();
     final GetMasterRegistrationReceived received =
         new GetMasterRegistrationReceived(masterAddresses, responseD);
     for (HostAndPort hostAndPort : masterAddresses) {
@@ -1245,8 +1253,10 @@ public class AsyncKuduClient implements AutoCloseable {
   private final class MasterLookupCB implements Callback<Object,
       Master.GetTableLocationsResponsePB> {
     final KuduTable table;
-    MasterLookupCB(KuduTable table) {
+    private final byte[] partitionKey;
+    MasterLookupCB(KuduTable table, byte[] partitionKey) {
       this.table = table;
+      this.partitionKey = partitionKey;
     }
     public Object call(final GetTableLocationsResponsePB response) {
       if (response.hasError()) {
@@ -1259,6 +1269,10 @@ public class AsyncKuduClient implements AutoCloseable {
         }
       } else {
         discoverTablets(table, response.getTabletLocationsList());
+        if (partitionKey != null) {
+          discoverNonCoveredRangePartitions(table.getTableId(), partitionKey,
+                                            response.getTabletLocationsList());
+        }
       }
       return null;
     }
@@ -1297,8 +1311,8 @@ public class AsyncKuduClient implements AutoCloseable {
     ConcurrentSkipListMap<byte[], RemoteTablet> tablets = tabletsCache.get(tableId);
     if (tablets == null) {
       tablets = new ConcurrentSkipListMap<>(Bytes.MEMCMP);
-      ConcurrentSkipListMap<byte[], RemoteTablet> oldTablets = tabletsCache.putIfAbsent
-          (tableId, tablets);
+      ConcurrentSkipListMap<byte[], RemoteTablet> oldTablets =
+          tabletsCache.putIfAbsent(tableId, tablets);
       if (oldTablets != null) {
         tablets = oldTablets;
       }
@@ -1323,13 +1337,58 @@ public class AsyncKuduClient implements AutoCloseable {
         // someone beat us to it
         continue;
       }
-      LOG.info("Discovered tablet {} for table {} with partition {}",
+      LOG.info("Discovered tablet {} for table '{}' with partition {}",
                tabletId.toString(Charset.defaultCharset()), tableName, rt.getPartition());
       rt.refreshTabletClients(tabletPb);
       // This is making this tablet available
       // Even if two clients were racing in this method they are putting the same RemoteTablet
       // with the same start key in the CSLM in the end
       tablets.put(rt.getPartition().getPartitionKeyStart(), rt);
+    }
+  }
+
+  private void discoverNonCoveredRangePartitions(String tableId,
+                                                 byte[] partitionKey,
+                                                 List<Master.TabletLocationsPB> locations) {
+    Comparator<byte[]> comparator = UnsignedBytes.lexicographicalComparator();
+
+    NonCoveredRangeCache nonCoveredRanges = nonCoveredRangeCaches.get(tableId);
+    if (nonCoveredRanges == null) {
+      nonCoveredRanges = new NonCoveredRangeCache();
+      NonCoveredRangeCache oldCache = nonCoveredRangeCaches.putIfAbsent(tableId, nonCoveredRanges);
+      if (oldCache != null) {
+        nonCoveredRanges = oldCache;
+      }
+    }
+
+    // If there are no locations, then the table has no tablets.
+    if (locations.isEmpty()) {
+      nonCoveredRanges.addNonCoveredRange(EMPTY_ARRAY, EMPTY_ARRAY);
+      return;
+    }
+
+    // If the first tablet occurs after then requested partition key,
+    // then there is an initial non-covered range.
+    byte[] firstStartKey = locations.get(0).getPartition().getPartitionKeyStart().toByteArray();
+    if (comparator.compare(partitionKey, firstStartKey) < 0) {
+      nonCoveredRanges.addNonCoveredRange(EMPTY_ARRAY, firstStartKey);
+    }
+
+    byte[] previousEndKey = null;
+    for (Master.TabletLocationsPB location : locations) {
+      byte[] startKey = location.getPartition().getPartitionKeyStart().toByteArray();
+
+      // Check if there is a non-covered range between this tablet and the previous.
+      if (previousEndKey != null && comparator.compare(previousEndKey, startKey) < 0) {
+        nonCoveredRanges.addNonCoveredRange(previousEndKey, startKey);
+      }
+      previousEndKey = location.getPartition().getPartitionKeyEnd().toByteArray();
+    }
+
+    if (previousEndKey.length > 0 && comparator.compare(previousEndKey, partitionKey) <= 0) {
+      // This happens if the partition key falls in a non-covered range that
+      // is unbounded (to the right).
+      nonCoveredRanges.addNonCoveredRange(previousEndKey, EMPTY_ARRAY);
     }
   }
 
@@ -1377,6 +1436,23 @@ public class AsyncKuduClient implements AutoCloseable {
 
     return tabletPair.getValue();
   }
+
+  /**
+   * Returns the non-covered range partition containing the {@code partitionKey} in
+   * the table, or null if there is no known non-covering range for the partition key.
+   * @param tableId of the table
+   * @param partitionKey to lookup
+   * @return the non-covering partition range, or {@code null}
+   */
+   Pair<byte[], byte[]> getNonCoveredRange(String tableId, byte[] partitionKey) {
+     if (isMasterTable(tableId)) {
+       throw new IllegalArgumentException("No non-covering range partitions for the master");
+     }
+     NonCoveredRangeCache nonCoveredRangeCache = nonCoveredRangeCaches.get(tableId);
+     if (nonCoveredRangeCache == null) return null;
+
+     return nonCoveredRangeCache.getNonCoveredRange(partitionKey);
+   }
 
   /**
    * Retrieve the master registration (see {@link GetMasterRegistrationResponse}

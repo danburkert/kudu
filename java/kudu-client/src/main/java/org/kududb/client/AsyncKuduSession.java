@@ -118,6 +118,14 @@ public class AsyncKuduSession implements SessionConfiguration {
   private final Map<Slice, Deferred<BatchResponse>> operationsInFlight = new HashMap<>();
 
   /**
+   * If a tablet lookup fails in AUTO_FLUSH_BACKGROUND or MANUAL_FLUSH, the operation response is
+   * added to this list, and returned with the flush results. Tablet lookup can fail because the
+   * operation's partition key falls in a non-covered range partition.
+   */
+  @GuardedBy("this")
+  private final List<OperationResponse> failedLookups = new ArrayList<>();
+
+  /**
    * This Set is used when not in AUTO_FLUSH_SYNC mode in order to keep track of the operations
    * that are looking up their tablet, meaning that they aren't in any of the maps above. This is
    * not expected to grow a lot except when a client starts and only for a short amount of time.
@@ -293,36 +301,31 @@ public class AsyncKuduSession implements SessionConfiguration {
   class ConvertBatchToListOfResponsesCB implements
       Callback<Deferred<List<OperationResponse>>, ArrayList<BatchResponse>> {
     @Override
-    public Deferred<List<OperationResponse>> call(ArrayList<BatchResponse> batchResponsesList)
-        throws Exception {
-      Deferred<List<OperationResponse>> deferred = new Deferred<>();
-      if (batchResponsesList == null) {
-        deferred.callback(null);
-        return deferred;
-      }
+    public Deferred<List<OperationResponse>> call(ArrayList<BatchResponse> batchResponses) {
+      batchResponses = batchResponses == null ? new ArrayList<BatchResponse>() : batchResponses;
 
       // flushTablet() can return null when a tablet we wanted to flush was already flushed. Those
       // nulls along with BatchResponses are then put in a list by Deferred.group(). We first need
       // to filter the nulls out.
-      batchResponsesList.removeAll(Collections.singleton(null));
-      if (batchResponsesList.isEmpty()) {
-        deferred.callback(null);
-        return deferred;
-      }
+      batchResponses.removeAll(Collections.singleton(null));
 
       // First compute the size of the union of all the lists so that we don't trigger expensive
       // list growths while adding responses to it.
       int size = 0;
-      for (BatchResponse batchResponse : batchResponsesList) {
+      for (BatchResponse batchResponse : batchResponses) {
         size += batchResponse.getIndividualResponses().size();
       }
 
-      ArrayList<OperationResponse> responsesList = new ArrayList<>(size);
-      for (BatchResponse batchResponse : batchResponsesList) {
+      List<OperationResponse> responsesList = new ArrayList<>(size);
+      synchronized (this) {
+        responsesList.addAll(failedLookups);
+        failedLookups.clear();
+      }
+      for (BatchResponse batchResponse : batchResponses) {
         responsesList.addAll(batchResponse.getIndividualResponses());
       }
-      deferred.callback(responsesList);
-      return deferred;
+
+      return Deferred.fromResult(responsesList);
     }
   }
 
@@ -390,6 +393,42 @@ public class AsyncKuduSession implements SessionConfiguration {
     String tableId = operation.getTable().getTableId();
     byte[] partitionKey = operation.partitionKey();
     AsyncKuduClient.RemoteTablet tablet = client.getTablet(tableId, partitionKey);
+    if (tablet == null) {
+      if (client.getNonCoveredRange(tableId, partitionKey) != null) {
+        RowError rowError = new RowError(Status.NotFound("Write to a non-covered range partition"),
+                                         operation, null);
+        OperationResponse response = new OperationResponse(0, null, 0, operation, rowError);
+
+        if (flushMode == FlushMode.AUTO_FLUSH_BACKGROUND) {
+          errorCollector.addError(rowError);
+        } else {
+          // If we aren't in AUTO_FLUSH_BACKGROUND, then we are in MANUAL_FLUSH,
+          // and the failed response needs to be saved until the next flush.
+          synchronized (this) {
+            failedLookups.add(response);
+          }
+        }
+
+        Deferred<Void> lookupsDoneCopy = null;
+        synchronized (this) {
+          operationsInLookup.remove(operation);
+          if (lookupsDone != null && operationsInLookup.isEmpty()) {
+            lookupsDoneCopy = lookupsDone;
+            lookupsDone = null;
+          }
+        }
+
+        operation.callback(response);
+
+        // We do this outside of the synchronized block because we might end up calling flushTablet.
+        if (lookupsDoneCopy != null) {
+          lookupsDoneCopy.callback(null);
+        }
+
+        return Deferred.fromResult(response);
+      }
+    }
+
     // We go straight to the buffer if we know the tabletSlice
     if (tablet != null) {
       operation.setTablet(tablet);

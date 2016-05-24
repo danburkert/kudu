@@ -101,7 +101,9 @@ public class TestFlexiblePartitioning extends BaseKuduTest {
     insertRows(table, rows);
 
     // Full table scan
-    assertEquals(rows, collectRows(syncClient.newScannerBuilder(table).build()));
+    KuduScanner s = syncClient.newScannerBuilder(table).scanRequestTimeout(9999999).build();
+    Set<Row> collectedRows = collectRows(s);
+    assertEquals(rows, collectedRows);
 
     { // Lower bound
       Row minRow = new Row("1", "3", "5");
@@ -240,6 +242,19 @@ public class TestFlexiblePartitioning extends BaseKuduTest {
     split.addString("c", "3");
     split.addString("b", "3");
     tableBuilder.addSplitRow(split);
+
+    testPartitionSchema(tableBuilder);
+  }
+
+  @Test
+  public void testRangePartitionedTableUpperBound() throws Exception {
+    Schema schema = createSchema();
+    CreateTableOptions tableBuilder = new CreateTableOptions();
+    tableBuilder.setRangePartitionColumns(ImmutableList.of("a", "b", "c"));
+
+    PartialRow bound = schema.newPartialRow();
+    bound.addString("a", "7");
+    tableBuilder.addRangeBound(schema.newPartialRow(), bound);
 
     testPartitionSchema(tableBuilder);
   }

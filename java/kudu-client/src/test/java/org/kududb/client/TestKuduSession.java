@@ -16,11 +16,14 @@
 // under the License.
 package org.kududb.client;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.Test;
 
 import static org.junit.Assert.*;
+
+import com.google.common.collect.ImmutableList;
 
 public class TestKuduSession extends BaseKuduTest {
   // Generate a unique table name
@@ -211,6 +214,78 @@ public class TestKuduSession extends BaseKuduTest {
         "INT32 key=1, INT32 column1_i=2, INT32 column2_i=3, " +
             "STRING column3_s=a string, BOOL column4_b=true",
         rowStrings.get(0));
+  }
+
+  @Test(timeout = 10000)
+  public void testInsertManualFlushNonCoveredRange() throws Exception {
+    String tableName = TABLE_NAME_PREFIX + "-manual-flush-non-covered-range";
+    CreateTableOptions createOptions = getBasicTableOptionsWithNonCoveredRange();
+    createOptions.setNumReplicas(1);
+    syncClient.createTable(tableName, basicSchema, createOptions);
+    KuduTable table = syncClient.openTable(tableName);
+
+    KuduSession session = syncClient.newSession();
+    session.setFlushMode(SessionConfiguration.FlushMode.MANUAL_FLUSH);
+
+    // Insert in reverse sorted order so that more table location lookups occur
+    // (the extra results in table location lookups always occur past the inserted key).
+    List<Integer> nonCoveredKeys = ImmutableList.of(350, 300, 199, 150, 100, -1, -50);
+    for (int key : nonCoveredKeys) {
+      assertNull(session.apply(createBasicSchemaInsert(table, key)));
+    }
+    List<OperationResponse> results = session.flush();
+    assertEquals(nonCoveredKeys.size(), results.size());
+    for (OperationResponse result : results) {
+      assertTrue(result.hasRowError());
+      assertTrue(result.getRowError().getErrorStatus().isNotFound());
+    }
+  }
+
+  @Test(timeout = 10000)
+  public void testInsertAutoFlushSyncNonCoveredRange() throws Exception {
+    String tableName = TABLE_NAME_PREFIX + "-auto-flush-sync-non-covered-range";
+    CreateTableOptions createOptions = getBasicTableOptionsWithNonCoveredRange();
+    createOptions.setNumReplicas(1);
+    syncClient.createTable(tableName, basicSchema, createOptions);
+    KuduTable table = syncClient.openTable(tableName);
+
+    KuduSession session = syncClient.newSession();
+    session.setFlushMode(SessionConfiguration.FlushMode.AUTO_FLUSH_SYNC);
+
+    List<Integer> nonCoveredKeys = ImmutableList.of(350, 300, 199, 150, 100, -1, -50);
+    for (int key : nonCoveredKeys) {
+      try {
+        session.apply(createBasicSchemaInsert(table, key));
+        throw new AssertionError("apply should have thrown");
+      } catch (NonRecoverableException e) {
+        assertTrue(e.getMessage().contains("non-covered range"));
+      }
+    }
+  }
+
+  @Test(timeout = 10000)
+  public void testInsertAutoFlushBackgrounNonCoveredRange() throws Exception {
+    String tableName = TABLE_NAME_PREFIX + "-auto-flush-background-non-covered-range";
+    CreateTableOptions createOptions = getBasicTableOptionsWithNonCoveredRange();
+    createOptions.setNumReplicas(1);
+    syncClient.createTable(tableName, basicSchema, createOptions);
+    KuduTable table = syncClient.openTable(tableName);
+
+    AsyncKuduSession session = client.newSession();
+    session.setFlushMode(SessionConfiguration.FlushMode.AUTO_FLUSH_BACKGROUND);
+
+    List<Integer> nonCoveredKeys = ImmutableList.of(350, 300, 199, 150, 100, -1, -50);
+    for (int key : nonCoveredKeys) {
+      OperationResponse result = session.apply(createBasicSchemaInsert(table, key)).join(5000);
+      assertTrue(result.hasRowError());
+      assertTrue(result.getRowError().getErrorStatus().isNotFound());
+    }
+
+    RowErrorsAndOverflowStatus errors = session.getPendingErrors();
+    assertEquals(nonCoveredKeys.size(), errors.getRowErrors().length);
+    for (RowError error : errors.getRowErrors()) {
+      assertTrue(error.getErrorStatus().isNotFound());
+    }
   }
 
   private Insert createInsert(int key) {

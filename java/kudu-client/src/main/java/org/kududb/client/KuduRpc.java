@@ -67,13 +67,24 @@ public abstract class KuduRpc<R> {
 
   private static final Logger LOG = LoggerFactory.getLogger(KuduRpc.class);
 
-  public interface HasKey {
-    /**
-     * Returns the partition key this RPC is for.
-     * <p>
-     * <strong>DO NOT MODIFY THE CONTENTS OF THE ARRAY RETURNED.</strong>
-     */
-    byte[] partitionKey();
+  /**
+   * Returns the partition key this RPC is for, or {@code null} if the RPC is
+   * not tablet specific.
+   * <p>
+   * <strong>DO NOT MODIFY THE CONTENTS OF THE ARRAY RETURNED.</strong>
+   */
+  byte[] partitionKey() {
+    return null;
+  }
+
+  /**
+   * Returns {@code} true if the RPC should use the next tablet if the partition
+   * key falls in a non-covered partition range. Otherwise the RPC will fail with
+   * a no such tablet error.
+   * @return {@code} true if the RPC should use the next covered range.
+   */
+  boolean partitionKeyOrNext() {
+    return false;
   }
 
   /**

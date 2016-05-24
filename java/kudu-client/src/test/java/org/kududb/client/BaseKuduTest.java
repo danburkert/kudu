@@ -236,6 +236,29 @@ public class BaseKuduTest {
     return new CreateTableOptions().setRangePartitionColumns(ImmutableList.of("key"));
   }
 
+  public static CreateTableOptions getBasicTableOptionsWithNonCoveredRange() {
+    Schema schema = basicSchema;
+    CreateTableOptions option = new CreateTableOptions();
+    option.setRangePartitionColumns(ImmutableList.of("key"));
+
+    PartialRow aLowerBound = schema.newPartialRow();
+    aLowerBound.addInt("key", 0);
+    PartialRow aUpperBound = schema.newPartialRow();
+    aUpperBound.addInt("key", 100);
+    option.addRangeBound(aLowerBound, aUpperBound);
+
+    PartialRow bLowerBound = schema.newPartialRow();
+    bLowerBound.addInt("key", 200);
+    PartialRow bUpperBound = schema.newPartialRow();
+    bUpperBound.addInt("key", 300);
+    option.addRangeBound(bLowerBound, bUpperBound);
+
+    PartialRow split = schema.newPartialRow();
+    split.addInt("key", 50);
+    option.addSplitRow(split);
+    return option;
+  }
+
   protected Insert createBasicSchemaInsert(KuduTable table, int key) {
     Insert insert = table.newInsert();
     PartialRow row = insert.getRow();
