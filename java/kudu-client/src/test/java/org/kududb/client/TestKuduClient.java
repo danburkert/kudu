@@ -405,6 +405,204 @@ public class TestKuduClient extends BaseKuduTest {
     assertEquals(100, count.get());
   }
 
+  @Test
+  public void testNonCoveringRangePartitions() throws Exception {
+    Schema schema = basicSchema;
+    CreateTableOptions createOptions = new CreateTableOptions();
+    createOptions.setNumReplicas(1);
+    createOptions.setRangePartitionColumns(ImmutableList.of("key"));
+
+    PartialRow aLowerBound= schema.newPartialRow();
+    aLowerBound.addInt("key", 0);
+    PartialRow aUpperBound = schema.newPartialRow();
+    aUpperBound.addInt("key", 100);
+    createOptions.addRangeBound(aLowerBound, aUpperBound);
+
+    PartialRow bLowerBound= schema.newPartialRow();
+    bLowerBound.addInt("key", 200);
+    PartialRow bUpperBound = schema.newPartialRow();
+    bUpperBound.addInt("key", 300);
+    createOptions.addRangeBound(bLowerBound, bUpperBound);
+
+    PartialRow split = schema.newPartialRow();
+    split.addInt("key", 50);
+    createOptions.addSplitRow(split);
+
+    syncClient.createTable(tableName, basicSchema, createOptions);
+    KuduTable table = syncClient.openTable(tableName);
+
+    KuduSession session = syncClient.newSession();
+    session.setFlushMode(SessionConfiguration.FlushMode.MANUAL_FLUSH);
+
+    for (int i = 0; i < 100; i++) {
+      Insert insert = table.newInsert();
+      PartialRow row = insert.getRow();
+      row.addInt("key", i);
+      row.addInt("column1_i", i);
+      row.addInt("column2_i", i);
+      row.addString("column3_s", "c3_" + i);
+      row.addBoolean("column4_b", i % 2 == 0);
+      session.apply(insert);
+    }
+    for (int i = 200; i < 300; i++) {
+      Insert insert = table.newInsert();
+      PartialRow row = insert.getRow();
+      row.addInt("key", i);
+      row.addInt("column1_i", i);
+      row.addInt("column2_i", i);
+      row.addString("column3_s", "c3_" + i);
+      row.addBoolean("column4_b", i % 2 == 0);
+      session.apply(insert);
+    }
+    session.flush();
+    assertEquals(0, session.getPendingErrors().getRowErrors().length);
+
+    // Insert out-of-range rows.
+
+    for (int i : ImmutableList.of(-50, -1, 100, 150, 199, 300, 350)) {
+      Insert insert = table.newInsert();
+      PartialRow row = insert.getRow();
+      row.addInt("key", i);
+      row.addInt("column1_i", i);
+      row.addInt("column2_i", i);
+      row.addString("column3_s", "c3_" + i);
+      row.addBoolean("column4_b", i % 2 == 0);
+      session.apply(insert);
+    }
+    session.flush();
+
+    assertEquals(7, session.getPendingErrors().getRowErrors().length);
+
+    /*
+
+      +  // Insert an out-of-range rows
+      +  shared_ptr<KuduSession> session = client_->NewSession();
+      +  ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
+      +  session->SetTimeoutMillis(60000);
+      +  vector<gscoped_ptr<KuduInsert>> out_of_range_inserts;
+      +  out_of_range_inserts.emplace_back(BuildTestRow(table.get(), -50));
+      +  out_of_range_inserts.emplace_back(BuildTestRow(table.get(), -1));
+      +  out_of_range_inserts.emplace_back(BuildTestRow(table.get(), 100));
+      +  out_of_range_inserts.emplace_back(BuildTestRow(table.get(), 150));
+      +  out_of_range_inserts.emplace_back(BuildTestRow(table.get(), 199));
+      +  out_of_range_inserts.emplace_back(BuildTestRow(table.get(), 300));
+      +  out_of_range_inserts.emplace_back(BuildTestRow(table.get(), 350));
+      +
+      +  for (auto& insert : out_of_range_inserts) {
+      +    ASSERT_OK(session->Apply(insert.release()));
+      +  }
+      +
+      +  Status result = session->Flush();
+      +  EXPECT_TRUE(result.IsIOError());
+      +
+      +  vector<KuduError*> errors;
+      +  bool overflowed;
+      +  session->GetPendingErrors(&errors, &overflowed);
+      +  EXPECT_FALSE(overflowed);
+      +  EXPECT_EQ(out_of_range_inserts.size(), errors.size());
+      +  for (KuduError* error : errors) {
+      +    EXPECT_TRUE(error->status().IsNotFound());
+      +  }
+      +
+      +
+      +  // Scans
+      +
+      +
+      +  { // full table scan
+      +    vector<string> rows;
+      +    KuduScanner scanner(table.get());
+      +    ASSERT_OK(scanner.SetFaultTolerant());
+      +    ScanToStrings(&scanner, &rows);
+      +
+      +    ASSERT_EQ(200, rows.size());
+      +    ASSERT_EQ("(int32 key=0, int32 int_val=0, string string_val=hello 0,"
+      +
+      +  // Scans
+      +
+      +
+      +  { // full table scan
+      +    vector<string> rows;
+      +    KuduScanner scanner(table.get());
+      +    ASSERT_OK(scanner.SetFaultTolerant());
+      +    ScanToStrings(&scanner, &rows);
+      +
+      +    ASSERT_EQ(200, rows.size());
+      +    ASSERT_EQ("(int32 key=0, int32 int_val=0, string string_val=hello 0,"
+      +              " int32 non_null_with_default=0)", rows.front());
+      +    ASSERT_EQ("(int32 key=299, int32 int_val=598, string string_val=hello 299,"
+      +              " int32 non_null_with_default=897)", rows.back());
+      +  }
+      +
+      +  { // Lower bound PK
+      +    vector<string> rows;
+      +    KuduScanner scanner(table.get());
+      +    ASSERT_OK(scanner.SetFaultTolerant());
+      +    ASSERT_OK(scanner.AddConjunctPredicate(table->NewComparisonPredicate(
+      +              "key", KuduPredicate::GREATER_EQUAL, KuduValue::FromInt(100))));
+      +    ScanToStrings(&scanner, &rows);
+      +
+      +    ASSERT_EQ(100, rows.size());
+      +    ASSERT_EQ("(int32 key=200, int32 int_val=400, string string_val=hello 200,"
+      +              " int32 non_null_with_default=600)", rows.front());
+      +    ASSERT_EQ("(int32 key=299, int32 int_val=598, string string_val=hello 299,"
+      +              " int32 non_null_with_default=897)", rows.back());
+      +  }
+      +
+      +  { // Upper bound PK
+      +    vector<string> rows;
+      +    KuduScanner scanner(table.get());
+      +    ASSERT_OK(scanner.SetFaultTolerant());
+      +    ASSERT_OK(scanner.AddConjunctPredicate(table->NewComparisonPredicate(
+      +              "key", KuduPredicate::LESS_EQUAL, KuduValue::FromInt(199))));
+      +    ScanToStrings(&scanner, &rows);
+      +
+      +    ASSERT_EQ(100, rows.size());
+      +    ASSERT_EQ("(int32 key=0, int32 int_val=0, string string_val=hello 0,"
+      +              " int32 non_null_with_default=0)", rows.front());
+      +    ASSERT_EQ("(int32 key=99, int32 int_val=198, string string_val=hello 99,"
+      +              " int32 non_null_with_default=297)", rows.back());
+      +  }
+      +
+      +  {
+      +    vector<string> rows;
+      +    KuduScanner scanner(table.get());
+      +    ASSERT_OK(scanner.SetFaultTolerant());
+      +    ASSERT_OK(scanner.AddConjunctPredicate(table->NewComparisonPredicate(
+      +              "key", KuduPredicate::LESS_EQUAL, KuduValue::FromInt(-1))));
+      +    ScanToStrings(&scanner, &rows);
+      +
+      +    ASSERT_EQ(0, rows.size());
+      +  }
+      +
+      +  {
+      +    vector<string> rows;
+      +    KuduScanner scanner(table.get());
+      +    ASSERT_OK(scanner.SetFaultTolerant());
+      +    ASSERT_OK(scanner.AddConjunctPredicate(table->NewComparisonPredicate(
+      +              "key", KuduPredicate::GREATER_EQUAL, KuduValue::FromInt(120))));
+      +    ASSERT_OK(scanner.AddConjunctPredicate(table->NewComparisonPredicate(
+      +              "key", KuduPredicate::LESS_EQUAL, KuduValue::FromInt(180))));
+      +    ScanToStrings(&scanner, &rows);
+      +
+      +    ASSERT_EQ(0, rows.size());
+      +  }
+      +
+      +  {
+      +    vector<string> rows;
+      +    KuduScanner scanner(table.get());
+      +    ASSERT_OK(scanner.SetFaultTolerant());
+      +    ASSERT_OK(scanner.AddConjunctPredicate(table->NewComparisonPredicate(
+      +              "key", KuduPredicate::GREATER_EQUAL, KuduValue::FromInt(300))));
+      +    ScanToStrings(&scanner, &rows);
+      +
+      +    ASSERT_EQ(0, rows.size());
+      +  }
+      +}
+
+      */
+
+    }
+
   /**
    * Creates a local client that we auto-close while buffering one row, then makes sure that after
    * closing that we can read the row.

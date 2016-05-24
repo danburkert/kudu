@@ -1066,8 +1066,7 @@ public class AsyncKuduClient implements AutoCloseable {
    * @return An initialized Deferred object to hold the response.
    */
   Deferred<Master.GetTableLocationsResponsePB> getMasterTableLocationsPB() {
-    final Deferred<Master.GetTableLocationsResponsePB> responseD =
-        new Deferred<Master.GetTableLocationsResponsePB>();
+    final Deferred<Master.GetTableLocationsResponsePB> responseD = new Deferred<>();
     final GetMasterRegistrationReceived received =
         new GetMasterRegistrationReceived(masterAddresses, responseD);
     for (HostAndPort hostAndPort : masterAddresses) {
