@@ -3086,8 +3086,12 @@ Status CatalogManager::GetTableLocations(const GetTableLocationsRequestPB* req,
   vector<TabletReplica> locs;
   for (const scoped_refptr<TabletInfo>& tablet : tablets_in_range) {
     if (!BuildLocationsForTablet(tablet, resp->add_tablet_locations()).ok()) {
-      // Not running.
-      resp->mutable_tablet_locations()->RemoveLast();
+      // If any of the tablets are not yet running return a failure result to
+      // the client.
+      resp->Clear();
+      resp->mutable_error()->set_code(MasterErrorPB_Code::MasterErrorPB_Code_TABLET_NOT_RUNNING);
+      StatusToPB(Status::ServiceUnavailable("Tablet not running"),
+                 resp->mutable_error()->mutable_status());
     }
   }
   return Status::OK();
