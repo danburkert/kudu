@@ -144,8 +144,7 @@ public class AsyncKuduClient implements AutoCloseable {
    *
    * This map is keyed by table ID.
    */
-  private final ConcurrentHashMap<String, ConcurrentSkipListMap<byte[],
-      RemoteTablet>> tabletsCache = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, ConcurrentSkipListMap<byte[], RemoteTablet>> tabletsCache = new ConcurrentHashMap<>();
 
   /**
    * Maps a tablet ID to the RemoteTablet that knows where all the replicas are served.
@@ -1027,7 +1026,7 @@ public class AsyncKuduClient implements AutoCloseable {
       }
     }
     GetTableLocationsRequest rpc =
-        new GetTableLocationsRequest(masterTable, partitionKey, partitionKey, tableId);
+        new GetTableLocationsRequest(masterTable, partitionKey, partitionKey);
     rpc.setTimeoutMillis(defaultAdminOperationTimeoutMs);
     final Deferred<Master.GetTableLocationsResponsePB> d;
 
@@ -1374,8 +1373,10 @@ public class AsyncKuduClient implements AutoCloseable {
    * @return A live and initialized client for the specified master server.
    */
   TabletClient newMasterClient(HostAndPort masterHostPort) {
-    String ip = getIP(masterHostPort.getHostText());
-    if (ip == null) {
+    final String ip;
+    try {
+      ip = getIP(masterHostPort.getHostText());
+    } catch (UnknownHostException e) {
       return null;
     }
     // We should pass a UUID here but we have a chicken and egg problem, we first need to
@@ -1593,11 +1594,13 @@ public class AsyncKuduClient implements AutoCloseable {
     }
     final int colon = hostport.indexOf(':', 1);
     if (colon < 1) {
-      LOG.error("WTF?  Should never happen!  No `:' found in " + hostport);
+      LOG.error("WTF?  Should never happen!  No ':' found in " + hostport);
       return null;
     }
-    final String host = getIP(hostport.substring(0, colon));
-    if (host == null) {
+    final String host;
+    try {
+      host = getIP(hostport.substring(0, colon));
+    } catch (UnknownHostException e) {
       // getIP will print the reason why, there's nothing else we can do.
       return null;
     }
@@ -1773,26 +1776,23 @@ public class AsyncKuduClient implements AutoCloseable {
    * <strong>This method can block</strong> as there is no API for
    * asynchronous DNS resolution in the JDK.
    * @param host The hostname to resolve.
-   * @return The IP address associated with the given hostname,
-   * or {@code null} if the address couldn't be resolved.
+   * @return The IP address associated with the given hostname.
+   * @throws UnknownHostException if the hostname can not be resolved.
    */
-  private static String getIP(final String host) {
+  private static String getIP(final String host) throws UnknownHostException {
     final long start = System.nanoTime();
     try {
       final String ip = InetAddress.getByName(host).getHostAddress();
       final long latency = System.nanoTime() - start;
       if (latency > 500000/*ns*/ && LOG.isDebugEnabled()) {
-        LOG.debug("Resolved IP of `" + host + "' to "
-            + ip + " in " + latency + "ns");
+        LOG.debug("Resolved IP of '{}' to {} in {}ns", host, ip, latency);
       } else if (latency >= 3000000/*ns*/) {
-        LOG.warn("Slow DNS lookup!  Resolved IP of `" + host + "' to "
-            + ip + " in " + latency + "ns");
+        LOG.warn("Slow DNS lookup! Resolved IP of '{}' to {} in {}ns", host, ip, latency);
       }
       return ip;
     } catch (UnknownHostException e) {
-      LOG.error("Failed to resolve the IP of `" + host + "' in "
-          + (System.nanoTime() - start) + "ns");
-      return null;
+      LOG.error("Failed to resolve the IP of '{}' in {}ns", host, System.nanoTime() - start);
+      throw e;
     }
   }
 
@@ -1911,12 +1911,8 @@ public class AsyncKuduClient implements AutoCloseable {
     }
 
     // Must be called with tabletServers synchronized
-    void addTabletClient(String uuid, String host, int port, boolean isLeader)
-        throws UnknownHostException {
+    void addTabletClient(String uuid, String host, int port, boolean isLeader) throws UnknownHostException {
       String ip = getIP(host);
-      if (ip == null) {
-        throw new UnknownHostException("Failed to resolve the IP of `" + host + "'");
-      }
       TabletClient client = newClient(uuid, ip, port);
 
       final ArrayList<RemoteTablet> tablets = client2tablets.get(client);

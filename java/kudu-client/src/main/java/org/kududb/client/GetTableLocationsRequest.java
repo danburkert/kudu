@@ -32,10 +32,8 @@ class GetTableLocationsRequest extends KuduRpc<Master.GetTableLocationsResponseP
 
   private final byte[] startPartitionKey;
   private final byte[] endKey;
-  private final String tableId;
 
-  GetTableLocationsRequest(KuduTable table, byte[] startPartitionKey,
-                           byte[] endPartitionKey, String tableId) {
+  GetTableLocationsRequest(KuduTable table, byte[] startPartitionKey, byte[] endPartitionKey) {
     super(table);
     if (startPartitionKey != null && endPartitionKey != null
         && Bytes.memcmp(startPartitionKey, endPartitionKey) > 0) {
@@ -44,7 +42,6 @@ class GetTableLocationsRequest extends KuduRpc<Master.GetTableLocationsResponseP
     }
     this.startPartitionKey = startPartitionKey;
     this.endKey = endPartitionKey;
-    this.tableId = tableId;
   }
 
   @Override
@@ -72,7 +69,7 @@ class GetTableLocationsRequest extends KuduRpc<Master.GetTableLocationsResponseP
     final Master.GetTableLocationsRequestPB.Builder builder = Master
         .GetTableLocationsRequestPB.newBuilder();
     builder.setTable(Master.TableIdentifierPB.newBuilder().
-        setTableId(ByteString.copyFromUtf8(tableId)));
+        setTableId(ByteString.copyFromUtf8(table.getTableId())));
     if (startPartitionKey != null) {
       builder.setPartitionKeyStart(ZeroCopyLiteralByteString.wrap(startPartitionKey));
     }
