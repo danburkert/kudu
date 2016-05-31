@@ -153,7 +153,7 @@ public class TabletClient extends ReplayingDecoder<VoidEnum> {
 
   <R> void sendRpc(KuduRpc<R> rpc) {
     if (!rpc.deadlineTracker.hasDeadline()) {
-      LOG.warn(getPeerUuidLoggingString() + " sending an rpc without a timeout " + rpc);
+      LOG.warn("{} sending an rpc without a timeout {}", getPeerUuidLoggingString(), rpc);
     }
     if (chan != null) {
       if (!rpc.getRequiredFeatures().isEmpty() &&
@@ -175,9 +175,8 @@ public class TabletClient extends ReplayingDecoder<VoidEnum> {
         // The RPC was already added to rpcs_inflight so we don't need to fall down in the next big
         // block of code, cleanup() will take care of it.
         if (LOG.isDebugEnabled()) {
-          LOG.debug(getPeerUuidLoggingString() +
-              " connection was closed before sending rpcid {}, rpc=",
-              rpcid, rpc);
+          LOG.debug("{} connection was closed before sending rpcid {}, rpc={}",
+                    getPeerUuidLoggingString(), rpcid, rpc);
         }
       }
       return;
@@ -191,7 +190,7 @@ public class TabletClient extends ReplayingDecoder<VoidEnum> {
         tryagain = true;
       } else if (!copyOfDead) {
         if (pending_rpcs == null) {
-          pending_rpcs = new ArrayList<KuduRpc<?>>();
+          pending_rpcs = new ArrayList<>();
         }
         pending_rpcs.add(rpc);
       }
@@ -246,18 +245,17 @@ public class TabletClient extends ReplayingDecoder<VoidEnum> {
     }
     final KuduRpc<?> oldrpc = rpcs_inflight.put(rpcid, rpc);
     if (oldrpc != null) {
-      final String wtf = getPeerUuidLoggingString() +
-          "WTF?  There was already an RPC in flight with"
-          + " rpcid=" + rpcid + ": " + oldrpc
-          + ".  This happened when sending out: " + rpc;
-      LOG.error(wtf);
+      final String error = String.format(
+          "%s duplicate RPC ID in flight; rpcid: %s, inflight: %s, new: %s",
+          getPeerUuidLoggingString(), rpcid, oldrpc, rpc);
+      LOG.error(error);
       // Make it fail. This isn't an expected failure mode.
-      oldrpc.errback(new NonRecoverableException(wtf));
+      oldrpc.errback(new NonRecoverableException(error));
     }
 
     if (LOG.isDebugEnabled()) {
-      LOG.debug(getPeerUuidLoggingString() + chan + " Sending RPC #" + rpcid
-          + ", payload=" + payload + ' ' + Bytes.pretty(payload));
+      LOG.debug("{} {} Sending RPC #{}, payload={} {}",
+                getPeerUuidLoggingString(), chan, rpcid, payload, Bytes.pretty(payload));
     }
 
     payload = secureRpcHelper.wrap(payload);
@@ -333,8 +331,8 @@ public class TabletClient extends ReplayingDecoder<VoidEnum> {
           } else {
             // Wrap the Throwable because Deferred doesn't handle Throwables,
             // it only uses Exception.
-            d.callback(new NonRecoverableException("Failed to shutdown: "
-                + TabletClient.this, t));
+            d.callback(new NonRecoverableException(String.format("Failed to shutdown: %s", this),
+                                                   t));
           }
         }
       });
@@ -350,8 +348,8 @@ public class TabletClient extends ReplayingDecoder<VoidEnum> {
    */
   @Override
   @SuppressWarnings("unchecked")
-  protected Object decode(ChannelHandlerContext ctx, Channel chan, ChannelBuffer buf,
-                              VoidEnum voidEnum) {
+  protected Object decode(ChannelHandlerContext ctx, Channel chan,
+                          ChannelBuffer buf, VoidEnum voidEnum) {
     final long start = System.nanoTime();
     final int rdx = buf.readerIndex();
     LOG.debug("------------------>> ENTERING DECODE >>------------------");

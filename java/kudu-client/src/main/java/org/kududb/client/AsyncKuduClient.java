@@ -1050,8 +1050,7 @@ public class AsyncKuduClient implements AutoCloseable {
    * @return An initialized Deferred object to hold the response.
    */
   Deferred<Master.GetTableLocationsResponsePB> getMasterTableLocationsPB() {
-    final Deferred<Master.GetTableLocationsResponsePB> responseD =
-        new Deferred<Master.GetTableLocationsResponsePB>();
+    final Deferred<Master.GetTableLocationsResponsePB> responseD = new Deferred<>();
     final GetMasterRegistrationReceived received =
         new GetMasterRegistrationReceived(masterAddresses, responseD);
     for (HostAndPort hostAndPort : masterAddresses) {
@@ -1072,7 +1071,6 @@ public class AsyncKuduClient implements AutoCloseable {
     }
     return responseD;
   }
-
 
   /**
    * Get all or some tablets for a given table. This may query the master multiple times if there

@@ -27,25 +27,23 @@ import org.slf4j.LoggerFactory;
 public final class MetaCache {
   private static final Logger LOG = LoggerFactory.getLogger(AsyncKuduClient.class);
 
-  private static final int MASTER_LEASES = 100;
-
   private final Object monitor = new Object();
 
   /**
    * Index of Tablet ID -> Tablet.
    */
   @GuardedBy("monitor")
-  private final Map<Slice, RemoteTablet> tabletsById = new HashMap<>();
+  private final Map<Slice, RemoteTablet> tabletCache = new HashMap<>();
 
   /**
    * Index of Table ID -> Start Partition Key -> Tablet.
    */
   @GuardedBy("monitor")
-  private final Map<String, NavigableMap<byte[], RemoteTablet>> tabletsByTableAndPartition = new HashMap<>();
+  private final Map<String, NavigableMap<byte[], RemoteTablet>> tableCache = new HashMap<>();
 
   /**
    * Look up which tablet hosts the given partition key for a table.
-   * Only tablets with non-failed LEADERs are considered.
+   * Only tablets with non-failed leaders are considered.
    *
    * @param table the table to which the tablet belongs
    * @param partitionKey a partition key whose tablet is being looked up
@@ -56,27 +54,12 @@ public final class MetaCache {
   public Deferred<RemoteTablet> lookupTablet(KuduTable table,
                                              byte[] partitionKey,
                                              long timeout) throws PleaseThrottleException {
+
     RemoteTablet tablet = lookupFastpath(table, partitionKey);
     if (tablet != null) return Deferred.fromResult(tablet);
 
     GetTableLocationsRequest rpc = new GetTableLocationsRequest(table, partitionKey, null);
     rpc.setTimeoutMillis(timeout);
-
-
-
-    synchronized (monitor) {
-
-      if (outstandingRequests.size() > MASTER_LEASES) {
-        outstandingRequests.
-
-
-
-      }
-
-    }
-
-
-
   }
 
 
@@ -113,9 +96,10 @@ public final class MetaCache {
           tabletsByTableAndPartition.get(table.getTableId());
       if (tabletsByPartition == null) return null;
 
-      tablet = tabletsByPartition.floorEntry(partitionKey).getValue();
+      Map.Entry<byte[], RemoteTablet> floorEntry = tabletsByPartition.floorEntry(partitionKey);
+      if (floorEntry == null) return null;
+      tablet = floorEntry.getValue();
     }
-    if (tablet == null) return null;
 
     // If the partition is not the end partition, but it doesn't include the key
     // we are looking for, then we have not yet found the correct tablet.
@@ -127,8 +111,6 @@ public final class MetaCache {
     return tablet;
   }
 
-
-
   @ThreadSafe
   public static final class RemoteTablet {
     private static final int NO_LEADER_INDEX = -1;
@@ -137,7 +119,7 @@ public final class MetaCache {
     private final Partition partition;
 
     @GuardedBy("tabletServers")
-    private final ArrayList<TabletClient> tabletServers = new ArrayList<TabletClient>();
+    private final ArrayList<TabletClient> tabletServers = new ArrayList<>();
     @GuardedBy("tabletServers")
     private int leaderIndex = NO_LEADER_INDEX;
 
