@@ -180,6 +180,11 @@ public abstract class Operation extends KuduRpc<OperationResponse> implements Ku
     return this.getTable().getPartitionSchema().encodePartitionKey(row);
   }
 
+  @Override
+  public boolean partitionKeyOrNext() {
+    return false;
+  }
+
   /**
    * Get the underlying row to modify.
    * @return a partial row that will be sent with this Operation

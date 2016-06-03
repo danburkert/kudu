@@ -826,6 +826,11 @@ public final class AsyncKuduScanner {
       // This key is used to lookup where the request needs to go
       return nextPartitionKey;
     }
+
+    @Override
+    public boolean partitionKeyOrNext() {
+      return true;
+    }
   }
 
   /**

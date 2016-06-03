@@ -150,6 +150,11 @@ class Batch extends KuduRpc<BatchResponse> implements KuduRpc.HasKey {
   }
 
   @Override
+  public boolean partitionKeyOrNext() {
+    return false;
+  }
+
+  @Override
   void updateStatistics(Statistics statistics, BatchResponse response) {
     Slice tabletId = this.getTablet().getTabletId();
     String tableName = this.getTable().getName();

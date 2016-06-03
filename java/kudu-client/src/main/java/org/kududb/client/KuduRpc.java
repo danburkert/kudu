@@ -74,6 +74,8 @@ public abstract class KuduRpc<R> {
      * <strong>DO NOT MODIFY THE CONTENTS OF THE ARRAY RETURNED.</strong>
      */
     byte[] partitionKey();
+
+    boolean partitionKeyOrNext();
   }
 
   /**
@@ -102,6 +104,12 @@ public abstract class KuduRpc<R> {
    * the rest of the code, due to other existing synchronization.
    */
   byte attempt;  // package-private for TabletClient and AsyncKuduClient only.
+
+  boolean tabletLookupComplete = false;
+
+  void setTabletLookupComplete() {
+    tabletLookupComplete = true;
+  }
 
   KuduRpc(KuduTable table) {
     this.table = table;
