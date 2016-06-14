@@ -166,8 +166,8 @@ public class KuduTable {
    * are a lot of tablets.
    * This method blocks until it gets all the tablets.
    * @param startKey where to start in the table, pass null to start at the beginning
-   * @param endKey where to stop in the table, pass null to get all the tablets until the end of
-   *               the table
+   * @param endKey where to stop in the table (exclusive), pass null to get all the tablets until
+   *               the end of the table
    * @param deadline deadline in milliseconds for this method to finish
    * @return a list containing the metadata and locations for each of the tablets in the
    *         table
@@ -175,14 +175,14 @@ public class KuduTable {
    */
   public List<LocatedTablet> getTabletsLocations(
       byte[] startKey, byte[] endKey, long deadline) throws Exception {
-    return client.syncLocateTable(tableId, startKey, endKey, deadline);
+    return client.syncLocateTable(this, startKey, endKey, deadline);
   }
 
   /**
    * Asynchronously get all or some tablets for this table.
    * @param startKey where to start in the table, pass null to start at the beginning
-   * @param endKey where to stop in the table, pass null to get all the tablets until the end of
-   *               the table
+   * @param endKey where to stop in the table (exclusive), pass null to get all the tablets until
+   *               the end of the table
    * @param deadline max time spent in milliseconds for the deferred result of this method to
    *         get called back, if deadline is reached, the deferred result will get erred back
    * @return a {@link Deferred} object that yields a list containing the metadata and locations
@@ -190,7 +190,6 @@ public class KuduTable {
    */
   public Deferred<List<LocatedTablet>> asyncGetTabletsLocations(
       byte[] startKey, byte[] endKey, long deadline) throws Exception {
-    return client.locateTable(tableId, startKey, endKey, deadline);
+    return client.locateTable(this, startKey, endKey, deadline);
   }
-
 }

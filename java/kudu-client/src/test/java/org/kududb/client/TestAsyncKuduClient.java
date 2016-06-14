@@ -182,9 +182,8 @@ public class TestAsyncKuduClient extends BaseKuduTest {
     byte[] key2 = new byte[] {(byte) 0x80, 0x00, 0x00, (byte) 0xC8};
     byte[] key3 = new byte[] {(byte) 0x80, 0x00, 0x01, (byte) 0x2C};
 
-
     { // all tablets
-      List<LocatedTablet> tablets = client.syncLocateTable(table.getTableId(), emptyKey,
+      List<LocatedTablet> tablets = client.syncLocateTable(table, null,
                                                            null, 100000);
       assertEquals(4, tablets.size());
       assertArrayEquals(emptyKey, tablets.get(0).getPartition().getPartitionKeyStart());
@@ -198,7 +197,7 @@ public class TestAsyncKuduClient extends BaseKuduTest {
     }
 
     { // key < 50
-      List<LocatedTablet> tablets = client.syncLocateTable(table.getTableId(),
+      List<LocatedTablet> tablets = client.syncLocateTable(table,
                                                            null,
                                                            new byte[] { (byte) 0x80, 0x00, 0x00, 0x32 },
                                                            100000);
@@ -208,14 +207,14 @@ public class TestAsyncKuduClient extends BaseKuduTest {
     }
 
     { // key >= 300
-      List<LocatedTablet> tablets = client.syncLocateTable(table.getTableId(), key3, null, 100000);
+      List<LocatedTablet> tablets = client.syncLocateTable(table, key3, null, 100000);
       assertEquals(1, tablets.size());
       assertArrayEquals(key3, tablets.get(0).getPartition().getPartitionKeyStart());
       assertArrayEquals(emptyKey, tablets.get(0).getPartition().getPartitionKeyEnd());
     }
 
     { // key >= 299
-      List<LocatedTablet> tablets = client.syncLocateTable(table.getTableId(),
+      List<LocatedTablet> tablets = client.syncLocateTable(table,
                                                            new byte[] {(byte) 0x80, 0x00, 0x01, 0x2B },
                                                            null, 100000);
       assertEquals(2, tablets.size());
@@ -226,9 +225,9 @@ public class TestAsyncKuduClient extends BaseKuduTest {
     }
 
     { // key >= 150 && key < 250
-      List<LocatedTablet> tablets = client.syncLocateTable(table.getTableId(),
-                                                           new byte[] {(byte) 0x80, 0x00, 0x00, (byte) 0x96 },
-                                                           new byte[] {(byte) 0x80, 0x00, 0x00, (byte) 0xFA },
+      List<LocatedTablet> tablets = client.syncLocateTable(table,
+                                                           new byte[] { (byte) 0x80, 0x00, 0x00, (byte) 0x96 },
+                                                           new byte[] { (byte) 0x80, 0x00, 0x00, (byte) 0xFA },
                                                            100000);
       assertEquals(2, tablets.size());
       assertArrayEquals(key1, tablets.get(0).getPartition().getPartitionKeyStart());
@@ -239,13 +238,66 @@ public class TestAsyncKuduClient extends BaseKuduTest {
   }
 
   @Test(timeout = 100000)
-  public void testLocateNonExistentTable() throws Exception {
-    try {
-      client.syncLocateTable("bogus-table-id", null, null, 100000);
-    } catch (MasterErrorException e) {
-      assertTrue(e.getMessage().contains("table does not exist"));
-      return;
+  public void testLocateTableNonCoveringRange() throws Exception {
+    String tableName = TestAsyncKuduClient.class.getName() + "-testLocateTable";
+    client.createTable(tableName, basicSchema, getBasicTableOptionsWithNonCoveredRange()).join();
+    KuduTable table = client.openTable(tableName).join();
+
+    byte[] key1 = new byte[] { (byte) 0x80, 0x00, 0x00, 0x00 };
+    byte[] key2 = new byte[] { (byte) 0x80, 0x00, 0x00, 0x32 };
+    byte[] key3 = new byte[] { (byte) 0x80, 0x00, 0x00, 0x64 };
+    byte[] key4 = new byte[] { (byte) 0x80, 0x00, 0x00, (byte) 0xC8 };
+    byte[] key5 = new byte[] { (byte) 0x80, 0x00, 0x01, (byte) 0x2C };
+
+    { // all tablets
+      List<LocatedTablet> tablets = client.syncLocateTable(table, null, null, 100000);
+      assertEquals(3, tablets.size());
+      assertArrayEquals(key1, tablets.get(0).getPartition().getPartitionKeyStart());
+      assertArrayEquals(key2, tablets.get(0).getPartition().getPartitionKeyEnd());
+      assertArrayEquals(key2, tablets.get(1).getPartition().getPartitionKeyStart());
+      assertArrayEquals(key3, tablets.get(1).getPartition().getPartitionKeyEnd());
+      assertArrayEquals(key4, tablets.get(2).getPartition().getPartitionKeyStart());
+      assertArrayEquals(key5, tablets.get(2).getPartition().getPartitionKeyEnd());
     }
-    assertTrue("unreachable", false);
+
+//    { // key < 50
+//      List<LocatedTablet> tablets = client.syncLocateTable(table.getTableId(),
+//                                                           null,
+//                                                           new byte[] { (byte) 0x80, 0x00, 0x00, 0x32 },
+//                                                           100000);
+//      assertEquals(1, tablets.size());
+//      assertArrayEquals(emptyKey, tablets.get(0).getPartition().getPartitionKeyStart());
+//      assertArrayEquals(key1, tablets.get(0).getPartition().getPartitionKeyEnd());
+//    }
+//
+//    { // key >= 300
+//      List<LocatedTablet> tablets = client.syncLocateTable(table.getTableId(), key3, null, 100000);
+//      assertEquals(1, tablets.size());
+//      assertArrayEquals(key3, tablets.get(0).getPartition().getPartitionKeyStart());
+//      assertArrayEquals(emptyKey, tablets.get(0).getPartition().getPartitionKeyEnd());
+//    }
+//
+//    { // key >= 299
+//      List<LocatedTablet> tablets = client.syncLocateTable(table.getTableId(),
+//                                                           new byte[] {(byte) 0x80, 0x00, 0x01, 0x2B },
+//                                                           null, 100000);
+//      assertEquals(2, tablets.size());
+//      assertArrayEquals(key2, tablets.get(0).getPartition().getPartitionKeyStart());
+//      assertArrayEquals(key3, tablets.get(0).getPartition().getPartitionKeyEnd());
+//      assertArrayEquals(key3, tablets.get(1).getPartition().getPartitionKeyStart());
+//      assertArrayEquals(emptyKey, tablets.get(1).getPartition().getPartitionKeyEnd());
+//    }
+//
+//    { // key >= 150 && key < 250
+//      List<LocatedTablet> tablets = client.syncLocateTable(table.getTableId(),
+//                                                           new byte[] {(byte) 0x80, 0x00, 0x00, (byte) 0x96 },
+//                                                           new byte[] {(byte) 0x80, 0x00, 0x00, (byte) 0xFA },
+//                                                           100000);
+//      assertEquals(2, tablets.size());
+//      assertArrayEquals(key1, tablets.get(0).getPartition().getPartitionKeyStart());
+//      assertArrayEquals(key2, tablets.get(0).getPartition().getPartitionKeyEnd());
+//      assertArrayEquals(key2, tablets.get(1).getPartition().getPartitionKeyStart());
+//      assertArrayEquals(key3, tablets.get(1).getPartition().getPartitionKeyEnd());
+//    }
   }
 }
