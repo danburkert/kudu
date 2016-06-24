@@ -523,6 +523,34 @@ class KUDU_EXPORT KuduTableAlterer {
   // Drops an existing column from the table.
   KuduTableAlterer* DropColumn(const std::string& name);
 
+  // Add a range partition to the table with an inclusive lower bound and
+  // exclusive upper bound.
+  //
+  // The table alterer takes ownership of the rows. If either row is empty, then
+  // that end of the range will be unbounded. If a range column is missing a
+  // value, the logical minimum value for that column type will be used as the
+  // default.
+  //
+  // Multiple range partitions may be added, but they must not overlap with each
+  // other or any existing range partitions (unless the existing range
+  // partitions are dropped first). The lower bound must be less than the upper
+  // bound.
+  KuduTableAlterer* AddRangePartition(KuduPartialRow* lower_bound,
+                                      KuduPartialRow* upper_bound);
+
+  // Drop the range partition from the table with the specified inclusive lower
+  // bound and exclusive upper bound.
+  //
+  // The table alterer takes ownership of the rows. If either row is empty, then
+  // that end of the range will be unbounded. If a range column is missing a
+  // value, the logical minimum value for that column type will be used as the
+  // default.
+  //
+  // Multiple range partitions may be dropped, but they must all exatly match
+  // one of the tables range partitions.
+  KuduTableAlterer* DropRangePartition(KuduPartialRow* lower_bound,
+                                       KuduPartialRow* upper_bound);
+
   // Set the timeout for the operation. This includes any waiting
   // after the alter has been submitted (i.e if the alter is slow
   // to be performed on a large table, it may time out and then

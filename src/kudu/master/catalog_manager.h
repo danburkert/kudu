@@ -198,6 +198,7 @@ class TableInfo : public RefCountedThreadSafe<TableInfo> {
   void GetTabletsInRange(const GetTableLocationsRequestPB* req,
                          std::vector<scoped_refptr<TabletInfo> > *ret) const;
 
+  // Adds all tablets to the return vector in partition key sorted order.
   void GetAllTablets(std::vector<scoped_refptr<TabletInfo> > *ret) const;
 
   // Access the persistent metadata. Typically you should use
@@ -220,6 +221,7 @@ class TableInfo : public RefCountedThreadSafe<TableInfo> {
   void GetTaskList(std::vector<scoped_refptr<MonitoredTask> > *tasks);
 
  private:
+  friend class CatalogManager;
   friend class RefCountedThreadSafe<TableInfo>;
   ~TableInfo();
 
@@ -468,6 +470,16 @@ class CatalogManager : public tserver::TabletPeerLookupIf {
 
   // Extract the set of tablets that must be processed because not running yet.
   void ExtractTabletsToProcess(std::vector<scoped_refptr<TabletInfo>>* tablets_to_process);
+
+  Status ApplyAlterSchemaSteps(const SysTablesEntryPB& current_pb,
+                               std::vector<AlterTableRequestPB::Step> steps,
+                               Schema* new_schema,
+                               ColumnId* next_col_id);
+
+  Status ApplyAlterPartitioningSteps(TableInfo* table,
+                                     std::vector<AlterTableRequestPB::Step> steps,
+                                     std::vector<scoped_refptr<TabletInfo>>* tablets_to_add,
+                                     std::vector<scoped_refptr<TabletInfo>>* tablets_to_drop);
 
   // Task that takes care of the tablet assignments/creations.
   // Loops through the "not created" tablets and sends a CreateTablet() request.

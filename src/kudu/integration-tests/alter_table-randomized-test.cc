@@ -15,9 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-
 #include <algorithm>
 #include <map>
+#include <memory>
+#include <string>
 #include <vector>
 
 #include "kudu/client/client-test-util.h"
@@ -26,6 +27,7 @@
 #include "kudu/gutil/strings/substitute.h"
 #include "kudu/integration-tests/cluster_verifier.h"
 #include "kudu/integration-tests/external_mini_cluster.h"
+#include "kudu/util/net/sockaddr.h"
 #include "kudu/util/random.h"
 #include "kudu/util/random_util.h"
 #include "kudu/util/test_util.h"
@@ -37,6 +39,7 @@ using client::KuduClientBuilder;
 using client::KuduColumnSchema;
 using client::KuduError;
 using client::KuduInsert;
+using client::KuduScanner;
 using client::KuduSchema;
 using client::KuduSchemaBuilder;
 using client::KuduSession;
@@ -49,15 +52,18 @@ using client::sp::shared_ptr;
 using std::make_pair;
 using std::map;
 using std::pair;
+using std::string;
+using std::unique_ptr;
 using std::vector;
 using strings::SubstituteAndAppend;
 
 const char* kTableName = "test-table";
 const int kMaxColumns = 30;
+const uint32_t kMaxRangePartitions = 32;
 
 class AlterTableRandomized : public KuduTest {
  public:
-  virtual void SetUp() OVERRIDE {
+  void SetUp() override {
     KuduTest::SetUp();
 
     ExternalMiniClusterOptions opts;
@@ -71,12 +77,9 @@ class AlterTableRandomized : public KuduTest {
     opts.extra_tserver_flags.push_back("--log_container_preallocate_bytes=0");
     cluster_.reset(new ExternalMiniCluster(opts));
     ASSERT_OK(cluster_->Start());
-
-    KuduClientBuilder builder;
-    ASSERT_OK(cluster_->CreateClient(builder, &client_));
   }
 
-  virtual void TearDown() OVERRIDE {
+  void TearDown() override {
     cluster_->Shutdown();
     KuduTest::TearDown();
   }
@@ -86,12 +89,11 @@ class AlterTableRandomized : public KuduTest {
     cluster_->tablet_server(idx)->Shutdown();
     CHECK_OK(cluster_->tablet_server(idx)->Restart());
     CHECK_OK(cluster_->WaitForTabletsRunning(cluster_->tablet_server(idx),
-        -1, MonoDelta::FromSeconds(60)));
+                                             -1, MonoDelta::FromSeconds(60)));
   }
 
  protected:
-  gscoped_ptr<ExternalMiniCluster> cluster_;
-  shared_ptr<KuduClient> client_;
+  unique_ptr<ExternalMiniCluster> cluster_;
 };
 
 struct RowState {
@@ -99,7 +101,7 @@ struct RowState {
   // We ensure that we never insert or update to this value except in the case of
   // NULLable columns.
   static const int32_t kNullValue = 0xdeadbeef;
-  vector<pair<string, int32_t> > cols;
+  vector<pair<string, int32_t>> cols;
 
   string ToString() const {
     string ret = "(";
@@ -122,20 +124,49 @@ struct RowState {
 };
 
 struct TableState {
-  TableState() {
+  TableState()
+      : rand_(SeedRandom()) {
     col_names_.push_back("key");
     col_nullable_.push_back(false);
+    AddRangePartition();
   }
 
   ~TableState() {
     STLDeleteValues(&rows_);
   }
 
-  void GenRandomRow(int32_t key, int32_t seed,
-                    vector<pair<string, int32_t> >* row) {
+  int32_t GetRandomNewRowKey() {
+    CHECK(!range_partitions_.empty());
+
+    while (true) {
+      LOG(INFO) << "Spinning!";
+      auto partition = range_partitions_.begin();
+      std::advance(partition, rand_.Uniform(range_partitions_.size()));
+
+      int32_t rowkey = partition->first + rand_.Uniform(partition->second - partition->first);
+      if (!ContainsKey(rows_, rowkey)) {
+        return rowkey;
+      }
+    }
+  }
+
+  int32_t GetRandomExistingRowKey() {
+    CHECK(!rows_.empty());
+
+    auto row = rows_.begin();
+    std::advance(row, rand_.Uniform(rows_.size()));
+    return row->first;
+  }
+
+  // Generates a random row.
+  void GenRandomRow(vector<pair<string, int32_t>>* row) {
+    int32_t key = GetRandomNewRowKey();
+
+    int32_t seed = rand_.Next();
     if (seed == RowState::kNullValue) {
       seed++;
     }
+
     row->clear();
     row->push_back(make_pair("key", key));
     for (int i = 1; i < col_names_.size(); i++) {
@@ -149,7 +180,7 @@ struct TableState {
     }
   }
 
-  bool Insert(const vector<pair<string, int32_t> >& data) {
+  bool Insert(const vector<pair<string, int32_t>>& data) {
     DCHECK_EQ("key", data[0].first);
     int32_t key = data[0].second;
     if (ContainsKey(rows_, key)) return false;
@@ -160,7 +191,7 @@ struct TableState {
     return true;
   }
 
-  bool Update(const vector<pair<string, int32_t> >& data) {
+  bool Update(const vector<pair<string, int32_t>>& data) {
     DCHECK_EQ("key", data[0].first);
     int32_t key = data[0].second;
     if (!ContainsKey(rows_, key)) return false;
@@ -194,14 +225,34 @@ struct TableState {
     }
   }
 
-  int32_t GetRandomRowKey(int32_t rand) {
-    CHECK(!rows_.empty());
-    int idx = rand % rows_.size();
-    map<int32_t, RowState*>::const_iterator it = rows_.begin();
-    for (int i = 0; i < idx; i++) {
-      ++it;
+  pair<int32_t, int32_t> AddRangePartition() {
+    CHECK(range_partitions_.size() < kMaxRangePartitions);
+    while (true) {
+      LOG(INFO) << "Spinning!";
+      uint32_t width = INT32_MAX / kMaxRangePartitions;
+      int32_t lower_bound = width * rand_.Uniform(kMaxRangePartitions);
+      int32_t upper_bound = lower_bound + width;
+      CHECK(upper_bound > lower_bound);
+
+      if (InsertIfNotPresent(&range_partitions_, make_pair(lower_bound, upper_bound))) {
+        return make_pair(lower_bound, upper_bound);
+      }
     }
-    return it->first;
+  }
+
+  pair<int32_t, int32_t> DropRangePartition() {
+    CHECK(!range_partitions_.empty());
+
+    auto partition = range_partitions_.begin();
+    std::advance(partition, rand_.Uniform(range_partitions_.size()));
+
+    int32_t lower_bound = partition->first;
+    int32_t upper_bound = partition->second;
+
+    range_partitions_.erase(partition);
+
+    rows_.erase(rows_.lower_bound(lower_bound), rows_.lower_bound(upper_bound));
+    return make_pair(lower_bound, upper_bound);
   }
 
   void ToStrings(vector<string>* strs) {
@@ -220,44 +271,58 @@ struct TableState {
 
   typedef pair<const int32_t, RowState*> entry;
   map<int32_t, RowState*> rows_;
+
+  // The lower and upper bounds of all range partitions in the table.
+  map<int32_t, int32_t> range_partitions_;
+
+  Random rand_;
 };
 
 struct MirrorTable {
-  explicit MirrorTable(shared_ptr<KuduClient> client)
-      : client_(std::move(client)) {}
+  explicit MirrorTable(vector<string> master_addrs)
+      : master_addrs_(master_addrs) {
+    ResetClient();
+  }
 
   Status Create() {
     KuduSchema schema;
     KuduSchemaBuilder b;
     b.AddColumn("key")->Type(KuduColumnSchema::INT32)->NotNull()->PrimaryKey();
     CHECK_OK(b.Build(&schema));
-    gscoped_ptr<KuduTableCreator> table_creator(client_->NewTableCreator());
-    RETURN_NOT_OK(table_creator->table_name(kTableName)
-             .schema(&schema)
-             .set_range_partition_columns({ "key" })
-             .num_replicas(3)
-             .Create());
-    return Status::OK();
+    unique_ptr<KuduTableCreator> table_creator(client_->NewTableCreator());
+    table_creator->table_name(kTableName)
+                  .schema(&schema)
+                  .set_range_partition_columns({ "key" })
+                  .num_replicas(3);
+
+    for (const auto& partition : ts_.range_partitions_) {
+      unique_ptr<KuduPartialRow> lower(schema.NewRow());
+      unique_ptr<KuduPartialRow> upper(schema.NewRow());
+      RETURN_NOT_OK(lower->SetInt32("key", partition.first));
+      RETURN_NOT_OK(upper->SetInt32("key", partition.second));
+      table_creator->add_range_bound(lower.release(), upper.release());
+
+    }
+
+    return table_creator->Create();
   }
 
-  bool TryInsert(int32_t row_key, int32_t rand) {
-    vector<pair<string, int32_t> > row;
-    ts_.GenRandomRow(row_key, rand, &row);
+  void InsertRandomRow() {
+    vector<pair<string, int32_t>> row;
+    ts_.GenRandomRow(&row);
     Status s = DoRealOp(row, INSERT);
     if (s.IsAlreadyPresent()) {
       CHECK(!ts_.Insert(row)) << "real table said already-present, fake table succeeded";
-      return false;
     }
     CHECK_OK(s);
 
     CHECK(ts_.Insert(row));
-    return true;
   }
 
   void DeleteRandomRow(uint32_t rand) {
     if (ts_.rows_.empty()) return;
-    int32_t row_key = ts_.GetRandomRowKey(rand);
-    vector<pair<string, int32_t> > del;
+    int32_t row_key = ts_.GetRandomExistingRowKey();
+    vector<pair<string, int32_t>> del;
     del.push_back(make_pair("key", row_key));
     CHECK_OK(DoRealOp(del, DELETE));
 
@@ -266,9 +331,9 @@ struct MirrorTable {
 
   void UpdateRandomRow(uint32_t rand) {
     if (ts_.rows_.empty()) return;
-    int32_t row_key = ts_.GetRandomRowKey(rand);
+    int32_t row_key = ts_.GetRandomExistingRowKey();
 
-    vector<pair<string, int32_t> > update;
+    vector<pair<string, int32_t>> update;
     update.push_back(make_pair("key", row_key));
     for (int i = 1; i < num_columns(); i++) {
       int32_t val = rand * i;
@@ -295,11 +360,12 @@ struct MirrorTable {
   }
 
   void AddAColumn(const string& name) {
+    LOG(INFO) << "Adding column " << name;
     int32_t default_value = rand();
     bool nullable = rand() % 2 == 1;
 
     // Add to the real table.
-    gscoped_ptr<KuduTableAlterer> table_alterer(client_->NewTableAlterer(kTableName));
+    unique_ptr<KuduTableAlterer> table_alterer(client_->NewTableAlterer(kTableName));
 
     if (nullable) {
       default_value = RowState::kNullValue;
@@ -315,7 +381,8 @@ struct MirrorTable {
   }
 
   void DropAColumn(const string& name) {
-    gscoped_ptr<KuduTableAlterer> table_alterer(client_->NewTableAlterer(kTableName));
+    LOG(INFO) << "Dropping column " << name;
+    unique_ptr<KuduTableAlterer> table_alterer(client_->NewTableAlterer(kTableName));
     CHECK_OK(table_alterer->DropColumn(name)->Alter());
     ts_.DropColumn(name);
   }
@@ -327,19 +394,63 @@ struct MirrorTable {
     DropAColumn(name);
   }
 
+  void AddRangePartition() {
+    ResetClient();
+    auto bounds = ts_.AddRangePartition();
+    LOG(INFO) << "Adding range partition: [" << bounds.first << ", " << bounds.second << ")";
+    KuduSchema schema;
+    CHECK_OK(client_->GetTableSchema(kTableName, &schema));
+
+    unique_ptr<KuduPartialRow> lower_bound(schema.NewRow());
+    CHECK_OK(lower_bound->SetInt32("key", bounds.first));
+    unique_ptr<KuduPartialRow> upper_bound(schema.NewRow());
+    CHECK_OK(upper_bound->SetInt32("key", bounds.second));
+    unique_ptr<KuduTableAlterer> table_alterer(client_->NewTableAlterer(kTableName));
+    CHECK_OK(table_alterer->AddRangePartition(lower_bound.release(), upper_bound.release())
+                          ->Alter());
+  }
+
+  void DropRangePartition() {
+    auto bounds = ts_.DropRangePartition();
+    LOG(INFO) << "Dropping range partition: [" << bounds.first << ", " << bounds.second << ")";
+    KuduSchema schema;
+    CHECK_OK(client_->GetTableSchema(kTableName, &schema));
+
+    unique_ptr<KuduPartialRow> lower_bound(schema.NewRow());
+    CHECK_OK(lower_bound->SetInt32("key", bounds.first));
+    unique_ptr<KuduPartialRow> upper_bound(schema.NewRow());
+    CHECK_OK(upper_bound->SetInt32("key", bounds.second));
+
+    unique_ptr<KuduTableAlterer> table_alterer(client_->NewTableAlterer(kTableName));
+    CHECK_OK(table_alterer->DropRangePartition(lower_bound.release(), upper_bound.release())
+                          ->Alter());
+  }
+
   int num_columns() const {
     return ts_.col_names_.size();
   }
 
+  int num_rows() const {
+    return ts_.rows_.size();
+  }
+
+  int num_range_partitions() const {
+    return ts_.range_partitions_.size();
+  }
+
   void Verify() {
+    LOG(INFO) << "Verifying randomized alterations";
     // First scan the real table
     vector<string> rows;
     {
       shared_ptr<KuduTable> table;
       CHECK_OK(client_->OpenTable(kTableName, &table));
-      client::ScanTableToStrings(table.get(), &rows);
+      KuduScanner scanner(table.get());
+      ASSERT_OK(scanner.SetSelection(KuduClient::LEADER_ONLY));
+      ASSERT_OK(scanner.SetFaultTolerant());
+      scanner.SetTimeoutMillis(60000);
+      ScanToStrings(&scanner, &rows);
     }
-    std::sort(rows.begin(), rows.end());
 
     // Then get our mock table.
     vector<string> expected;
@@ -354,14 +465,13 @@ struct MirrorTable {
     INSERT, UPDATE, DELETE
   };
 
-  Status DoRealOp(const vector<pair<string, int32_t> >& data,
-                  OpType op_type) {
+  Status DoRealOp(const vector<pair<string, int32_t>>& data, OpType op_type) {
     shared_ptr<KuduSession> session = client_->NewSession();
     shared_ptr<KuduTable> table;
     RETURN_NOT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
     session->SetTimeoutMillis(15 * 1000);
     RETURN_NOT_OK(client_->OpenTable(kTableName, &table));
-    gscoped_ptr<KuduWriteOperation> op;
+    unique_ptr<KuduWriteOperation> op;
     switch (op_type) {
       case INSERT: op.reset(table->NewInsert()); break;
       case UPDATE: op.reset(table->NewUpdate()); break;
@@ -388,6 +498,13 @@ struct MirrorTable {
     return errors[0]->status();
   }
 
+  void ResetClient() {
+    KuduClientBuilder builder;
+    builder.master_server_addrs(master_addrs_);
+    builder.Build(&client_);
+  }
+
+  vector<string> master_addrs_;
   shared_ptr<KuduClient> client_;
   TableState ts_;
 };
@@ -404,7 +521,7 @@ struct MirrorTable {
 // date. We periodically scan the actual table, and ensure that the data in Kudu
 // matches our in-memory "mirror".
 TEST_F(AlterTableRandomized, TestRandomSequence) {
-  MirrorTable t(client_);
+  MirrorTable t({ cluster_->master()->bound_rpc_addr().ToString() });
   ASSERT_OK(t.Create());
 
   Random rng(SeedRandom());
@@ -414,18 +531,23 @@ TEST_F(AlterTableRandomized, TestRandomSequence) {
     // Perform different operations with varying probability.
     // We mostly insert and update, with occasional deletes,
     // and more occasional table alterations or restarts.
+
     int r = rng.Uniform(1000);
-    if (r < 400) {
-      t.TryInsert(1000000 + rng.Uniform(1000000), rng.Next());
-    } else if (r < 600) {
+    if (t.num_range_partitions() == 0) {
+      t.AddRangePartition();
+    } else if (r < 400 || t.num_rows() == 0) {
+      t.InsertRandomRow();
+    } else if (r < 550) {
       t.UpdateRandomRow(rng.Next());
-    } else if (r < 920) {
+    } else if (r < 800) {
       t.DeleteRandomRow(rng.Next());
-    } else if (r < 970) {
-      if (t.num_columns() < kMaxColumns) {
-        t.AddAColumn(strings::Substitute("c$0", i));
-      }
-    } else if (r < 995) {
+    } else if (r < 850 && t.num_range_partitions() < kMaxRangePartitions) {
+      t.AddRangePartition();
+    } else if (r < 900) {
+      t.DropRangePartition();
+    } else if (r < 940 && t.num_columns() < kMaxColumns) {
+      t.AddAColumn(strings::Substitute("c$0", i));
+    } else if (r < 985) {
       t.DropRandomColumn(rng.Next());
     } else {
       RestartTabletServer(rng.Uniform(cluster_->num_tablet_servers()));

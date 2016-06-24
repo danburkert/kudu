@@ -21,6 +21,7 @@
 
 #include "kudu/client/schema.h"
 #include "kudu/client/schema-internal.h"
+#include "kudu/common/row_operations.h"
 #include "kudu/common/wire_protocol.h"
 #include "kudu/master/master.pb.h"
 
@@ -50,7 +51,8 @@ Status KuduTableAlterer::Data::ToRequest(AlterTableRequestPB* req) {
   }
 
   if (!rename_to_.is_initialized() &&
-      steps_.empty()) {
+      steps_.empty() &&
+      partitioning_steps_.empty()) {
     return Status::InvalidArgument("No alter steps provided");
   }
 
@@ -103,8 +105,17 @@ Status KuduTableAlterer::Data::ToRequest(AlterTableRequestPB* req) {
         pb_step->set_type(AlterTableRequestPB::RENAME_COLUMN);
         break;
       default:
-        LOG(FATAL) << "unknown step type " << s.step_type;
+        LOG(FATAL) << "unknown step type " << AlterTableRequestPB::StepType_Name(s.step_type);
     }
+  }
+
+  for (const auto& step : partitioning_steps_) {
+    AlterTableRequestPB::Step* pb_step = req->add_alter_schema_steps();
+    pb_step->set_type(step.step_type);
+    RowOperationsPBEncoder encoder(pb_step->mutable_add_drop_range_partition()
+                                          ->mutable_range_bounds());
+    encoder.Add(RowOperationsPB::RANGE_LOWER_BOUND, *step.lower_bound);
+    encoder.Add(RowOperationsPB::RANGE_UPPER_BOUND, *step.upper_bound);
   }
 
   return Status::OK();

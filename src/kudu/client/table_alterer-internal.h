@@ -18,6 +18,7 @@
 #define KUDU_CLIENT_TABLE_ALTERER_INTERNAL_H
 
 #include <boost/optional.hpp>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -52,6 +53,14 @@ class KuduTableAlterer::Data {
     KuduColumnSpec *spec;
   };
   std::vector<Step> steps_;
+
+  struct PartitioningStep {
+    master::AlterTableRequestPB::StepType step_type;
+
+    std::unique_ptr<KuduPartialRow> lower_bound;
+    std::unique_ptr<KuduPartialRow> upper_bound;
+  };
+  std::vector<PartitioningStep> partitioning_steps_;
 
   MonoDelta timeout_;
 

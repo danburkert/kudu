@@ -850,6 +850,24 @@ KuduTableAlterer* KuduTableAlterer::DropColumn(const string& name) {
   return this;
 }
 
+KuduTableAlterer* KuduTableAlterer::AddRangePartition(KuduPartialRow* lower_bound,
+                                                      KuduPartialRow* upper_bound) {
+  Data::PartitioningStep s { AlterTableRequestPB::ADD_RANGE_PARTITION,
+                             std::unique_ptr<KuduPartialRow>(lower_bound),
+                             std::unique_ptr<KuduPartialRow>(upper_bound) };
+  data_->partitioning_steps_.emplace_back(std::move(s));
+  return this;
+}
+
+KuduTableAlterer* KuduTableAlterer::DropRangePartition(KuduPartialRow* lower_bound,
+                                                       KuduPartialRow* upper_bound) {
+  Data::PartitioningStep s { AlterTableRequestPB::DROP_RANGE_PARTITION,
+                             std::unique_ptr<KuduPartialRow>(lower_bound),
+                             std::unique_ptr<KuduPartialRow>(upper_bound) };
+  data_->partitioning_steps_.emplace_back(std::move(s));
+  return this;
+}
+
 KuduTableAlterer* KuduTableAlterer::timeout(const MonoDelta& timeout) {
   data_->timeout_ = timeout;
   return this;
@@ -869,7 +887,8 @@ Status KuduTableAlterer::Alter() {
     data_->client_->default_admin_operation_timeout();
   MonoTime deadline = MonoTime::Now(MonoTime::FINE);
   deadline.AddDelta(timeout);
-  RETURN_NOT_OK(data_->client_->data_->AlterTable(data_->client_, req, deadline));
+  RETURN_NOT_OK(data_->client_->data_->AlterTable(data_->client_, req, deadline,
+                                                  !data_->partitioning_steps_.empty()));
   if (data_->wait_) {
     string alter_name = data_->rename_to_.get_value_or(data_->table_name_);
     RETURN_NOT_OK(data_->client_->data_->WaitForAlterTableToFinish(

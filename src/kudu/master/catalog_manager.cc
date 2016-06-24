@@ -1120,10 +1120,10 @@ Status CatalogManager::DeleteTable(const DeleteTableRequestPB* req,
   return Status::OK();
 }
 
-static Status ApplyAlterSteps(const SysTablesEntryPB& current_pb,
-                              const AlterTableRequestPB* req,
-                              Schema* new_schema,
-                              ColumnId* next_col_id) {
+Status CatalogManager::ApplyAlterSchemaSteps(const SysTablesEntryPB& current_pb,
+                                             vector<AlterTableRequestPB::Step> steps,
+                                             Schema* new_schema,
+                                             ColumnId* next_col_id) {
   const SchemaPB& current_schema_pb = current_pb.schema();
   Schema cur_schema;
   RETURN_NOT_OK(SchemaFromPB(current_schema_pb, &cur_schema));
@@ -1133,7 +1133,7 @@ static Status ApplyAlterSteps(const SysTablesEntryPB& current_pb,
     builder.set_next_column_id(ColumnId(current_pb.next_column_id()));
   }
 
-  for (const AlterTableRequestPB::Step& step : req->alter_schema_steps()) {
+  for (const auto& step : steps) {
     switch (step.type()) {
       case AlterTableRequestPB::ADD_COLUMN: {
         if (!step.has_add_column()) {
@@ -1195,8 +1195,7 @@ static Status ApplyAlterSteps(const SysTablesEntryPB& current_pb,
       // TODO: EDIT_COLUMN
 
       default: {
-        return Status::InvalidArgument(
-          Substitute("Invalid alter step type: $0", step.type()));
+        return Status::InvalidArgument("Invalid alter schema step type", step.DebugString());
       }
     }
   }
@@ -1205,15 +1204,156 @@ static Status ApplyAlterSteps(const SysTablesEntryPB& current_pb,
   return Status::OK();
 }
 
+Status CatalogManager::ApplyAlterPartitioningSteps(
+    TableInfo* table,
+    vector<AlterTableRequestPB::Step> steps,
+    vector<scoped_refptr<TabletInfo>>* tablets_to_add,
+    vector<scoped_refptr<TabletInfo>>* tablets_to_drop) {
+
+  Schema schema;
+  RETURN_NOT_OK(SchemaFromPB(table->metadata().state().pb.schema(), &schema));
+  PartitionSchema partition_schema;
+  RETURN_NOT_OK(PartitionSchema::FromPB(table->metadata().state().pb.partition_schema(),
+                                        schema, &partition_schema));
+
+  map<string, TabletInfo*> tablets;
+  {
+    std::lock_guard<simple_spinlock> l(table->lock_);
+    tablets = table->tablet_map_;
+  }
+
+  // faux client schema.
+  Schema client_schema = schema.CopyWithoutColumnIds();
+
+  for (const auto& step : steps) {
+    RowOperationsPBDecoder decoder(&step.add_drop_range_partition().range_bounds(),
+                                   &client_schema, &schema, nullptr);
+    vector<DecodedRowOperation> ops;
+    RETURN_NOT_OK(decoder.DecodeOperations(&ops));
+    if (ops.size() != 2) {
+      return Status::InvalidArgument("expected two row operations for alter range partition step",
+                                     step.DebugString());
+    }
+
+    if (ops[0].type != RowOperationsPB::RANGE_LOWER_BOUND ||
+        ops[1].type != RowOperationsPB::RANGE_UPPER_BOUND) {
+      return Status::InvalidArgument(
+          "expected a lower bound and upper bound row op for alter range partition step",
+          strings::Substitute("$0, $1", ops[0].ToString(schema), ops[1].ToString(schema)));
+    }
+
+    vector<Partition> partitions;
+    RETURN_NOT_OK(partition_schema.CreatePartitions({}, {{ *ops[0].split_row, *ops[1].split_row }},
+                                                    schema, &partitions));
+
+    switch (step.type()) {
+      case AlterTableRequestPB::ADD_RANGE_PARTITION: {
+        for (const Partition& partition : partitions) {
+          const string& lower_bound = partition.partition_key_start();
+          const string& upper_bound = partition.partition_key_end();
+
+          // Iter points at the tablet directly *after* the lower bound (or to
+          // tablets.end(), if such a tablet does not exist).
+          auto iter = tablets.upper_bound(lower_bound);
+
+          // Check that the new tablet doesn't overlap with the returned tablet:
+          if (iter != tablets.end()) {
+            const auto& cow_metadata = iter->second->metadata();
+            CowLock<PersistentTabletInfo> metadata(&cow_metadata,
+                                                   CowLock<PersistentTabletInfo>::READ);
+            if (metadata.data().pb.partition().partition_key_start() < upper_bound) {
+              return Status::NotFound("New partition conflicts with existing partition",
+                                      step.DebugString());
+            }
+          }
+
+          // Check that the new tablet doesn't overlap with the previous tablet:
+          if (iter != tablets.begin()) {
+            auto prev = std::prev(iter);
+            const auto& cow_metadata = prev->second->metadata();
+            CowLock<PersistentTabletInfo> metadata(&cow_metadata,
+                                                   CowLock<PersistentTabletInfo>::READ);
+            if (metadata.data().pb.partition().partition_key_end() > lower_bound) {
+              return Status::NotFound("New partition conflicts with existing partition",
+                                      step.DebugString());
+            }
+          }
+
+          PartitionPB partition_pb;
+          partition.ToPB(&partition_pb);
+          tablets_to_add->emplace_back(CreateTabletInfo(table, partition_pb));
+          tablets.emplace(lower_bound, tablets_to_add->back().get());
+        }
+        break;
+      }
+      case AlterTableRequestPB::DROP_RANGE_PARTITION: {
+        for (const Partition& partition : partitions) {
+          const string& lower_bound = partition.partition_key_start();
+          const string& upper_bound = partition.partition_key_end();
+
+          // Iter points to the tablet if it exists, or the next tablet, or the end.
+          auto iter = tablets.lower_bound(lower_bound);
+
+          if (iter == tablets.end()) {
+            return Status::NotFound("No tablet found for drop partition step", step.DebugString());
+          }
+
+          {
+            const auto& cow_metadata = iter->second->metadata();
+            CowLock<PersistentTabletInfo> metadata(&cow_metadata,
+                                                   CowLock<PersistentTabletInfo>::READ);
+            const auto& partition = metadata.data().pb.partition();
+            if (partition.partition_key_start() != lower_bound ||
+                partition.partition_key_end() != upper_bound) {
+              return Status::NotFound("No tablet found for drop partition step",
+                                      step.DebugString());
+            }
+          }
+
+          tablets_to_drop->emplace_back(iter->second);
+          tablets.erase(iter);
+        }
+        break;
+      }
+      default: {
+        return Status::InvalidArgument("Unknown alter table partitioning step", step.DebugString());
+      }
+    }
+  }
+  return Status::OK();
+}
+
 Status CatalogManager::AlterTable(const AlterTableRequestPB* req,
                                   AlterTableResponsePB* resp,
                                   rpc::RpcContext* rpc) {
-  LOG(INFO) << "Servicing AlterTable request from " << RequestorString(rpc)
-            << ": " << req->ShortDebugString();
+  LOG(INFO) << "AlterTable from " << RequestorString(rpc) << ": " << req->ShortDebugString();
 
   RETURN_NOT_OK(CheckOnline());
 
-  // 1. Lookup the table and verify if it exists
+  vector<AlterTableRequestPB::Step> alter_schema_steps;
+  vector<AlterTableRequestPB::Step> alter_partitioning_steps;
+
+  for (auto& step : req->alter_schema_steps()) {
+    switch (step.type()) {
+      case AlterTableRequestPB::ADD_COLUMN:
+      case AlterTableRequestPB::DROP_COLUMN:
+      case AlterTableRequestPB::RENAME_COLUMN: {
+        alter_schema_steps.emplace_back(std::move(step));
+        break;
+      }
+      case AlterTableRequestPB::ADD_RANGE_PARTITION:
+      case AlterTableRequestPB::DROP_RANGE_PARTITION: {
+        alter_partitioning_steps.emplace_back(std::move(step));
+        break;
+      }
+      case AlterTableRequestPB::ALTER_COLUMN:
+      case AlterTableRequestPB::UNKNOWN: {
+        return Status::InvalidArgument("Invalid alter step type", step.DebugString());
+      }
+    }
+  }
+
+  // 1. Lookup the table and verify if it exists.
   TRACE("Looking up table");
   scoped_refptr<TableInfo> table;
   RETURN_NOT_OK(FindTable(req->table(), &table));
@@ -1231,15 +1371,14 @@ Status CatalogManager::AlterTable(const AlterTableRequestPB* req,
     return s;
   }
 
-  bool has_changes = false;
   string table_name = l.data().name();
 
-  // 2. Calculate new schema for the on-disk state, not persisted yet
+  // 2. Calculate new schema for the on-disk state, not persisted yet.
   Schema new_schema;
   ColumnId next_col_id = ColumnId(l.data().pb.next_column_id());
-  if (req->alter_schema_steps_size()) {
+  if (!alter_schema_steps.empty()) {
     TRACE("Apply alter schema");
-    Status s = ApplyAlterSteps(l.data().pb, req, &new_schema, &next_col_id);
+    Status s = ApplyAlterSchemaSteps(l.data().pb, alter_schema_steps, &new_schema, &next_col_id);
     if (!s.ok()) {
       SetupError(resp->mutable_error(), MasterErrorPB::INVALID_SCHEMA, s);
       return s;
@@ -1247,10 +1386,9 @@ Status CatalogManager::AlterTable(const AlterTableRequestPB* req,
     DCHECK_NE(next_col_id, 0);
     DCHECK_EQ(new_schema.find_column_by_id(next_col_id),
               static_cast<int>(Schema::kColumnNotFound));
-    has_changes = true;
   }
 
-  // 3. Try to acquire the new table name
+  // 3. Try to acquire the new table name.
   if (req->has_new_table_name()) {
     std::lock_guard<LockType> catalog_lock(lock_);
 
@@ -1267,33 +1405,66 @@ Status CatalogManager::AlterTable(const AlterTableRequestPB* req,
     // Acquire the new table name (now we have 2 name for the same table)
     table_names_map_[req->new_table_name()] = table;
     l.mutable_data()->pb.set_name(req->new_table_name());
-
-    has_changes = true;
   }
 
+  // 4. Alter table partitioning.
+  vector<scoped_refptr<TabletInfo>> tablets_to_add;
+  vector<scoped_refptr<TabletInfo>> tablets_to_drop;
+  if (!alter_partitioning_steps.empty()) {
+    TRACE("Apply alter partitioning");
+    Status s = ApplyAlterPartitioningSteps(table.get(), alter_partitioning_steps,
+                                           &tablets_to_add, &tablets_to_drop);
+    if (!s.ok()) {
+      SetupError(resp->mutable_error(), MasterErrorPB::UNKNOWN_ERROR, s);
+      return s;
+    }
+  }
+
+  bool has_schema_changes = req->has_new_table_name() || !alter_schema_steps.empty();
+  bool has_partitioning_changes = !alter_partitioning_steps.empty();
+
   // Skip empty requests...
-  if (!has_changes) {
+  if (!has_schema_changes && !has_partitioning_changes) {
     return Status::OK();
   }
 
-  // 4. Serialize the schema Increment the version number
-  if (new_schema.initialized()) {
-    if (!l.data().pb.has_fully_applied_schema()) {
-      l.mutable_data()->pb.mutable_fully_applied_schema()->CopyFrom(l.data().pb.schema());
+  // 5. Serialize the schema and increment the version number.
+  if (has_schema_changes) {
+    if (new_schema.initialized()) {
+      if (!l.data().pb.has_fully_applied_schema()) {
+        l.mutable_data()->pb.mutable_fully_applied_schema()->CopyFrom(l.data().pb.schema());
+      }
+      CHECK_OK(SchemaToPB(new_schema, l.mutable_data()->pb.mutable_schema()));
     }
-    CHECK_OK(SchemaToPB(new_schema, l.mutable_data()->pb.mutable_schema()));
+    l.mutable_data()->pb.set_version(l.mutable_data()->pb.version() + 1);
+    l.mutable_data()->pb.set_next_column_id(next_col_id);
+    l.mutable_data()->set_state(SysTablesEntryPB::ALTERING,
+                                Substitute("Alter Table version=$0 ts=$1",
+                                           l.mutable_data()->pb.version(),
+                                           LocalTimeAsString()));
   }
-  l.mutable_data()->pb.set_version(l.mutable_data()->pb.version() + 1);
-  l.mutable_data()->pb.set_next_column_id(next_col_id);
-  l.mutable_data()->set_state(SysTablesEntryPB::ALTERING,
-                              Substitute("Alter Table version=$0 ts=$1",
-                                         l.mutable_data()->pb.version(),
-                                         LocalTimeAsString()));
 
-  // 5. Update sys-catalog with the new table schema.
+  // 6. Update sys-catalog with the new table schema and tablets to add/drop.
   TRACE("Updating metadata on disk");
+  string deletion_msg = "Partition dropped at " + LocalTimeAsString();
   SysCatalogTable::Actions actions;
-  actions.table_to_update = table.get();
+  if (has_schema_changes) {
+    actions.table_to_update = table.get();
+  }
+  for (const auto& tablet : tablets_to_add) {
+    actions.tablets_to_add.push_back(tablet.get());
+  }
+
+  ScopedTabletInfoCommitter tablets_to_drop_committer(ScopedTabletInfoCommitter::UNLOCKED);
+
+  tablets_to_drop_committer.AddTablets(tablets_to_drop);
+  tablets_to_drop_committer.LockTabletsForWriting();
+  for (auto& tablet : tablets_to_drop) {
+    tablet->mutable_metadata()->mutable_dirty()->set_state(SysTabletsEntryPB::DELETED,
+                                                            deletion_msg);
+    actions.tablets_to_update.push_back(tablet.get());
+  }
+
   Status s = sys_catalog_->Write(actions);
   if (!s.ok()) {
     s = s.CloneAndPrepend(
@@ -1305,10 +1476,13 @@ Status CatalogManager::AlterTable(const AlterTableRequestPB* req,
       CHECK_EQ(table_names_map_.erase(req->new_table_name()), 1);
     }
     CheckIfNoLongerLeaderAndSetupError(s, resp);
+    tablets_to_drop_committer.Abort();
     return s;
   }
 
-  // 6. Remove the old name
+  tablets_to_drop_committer.Commit();
+
+  // 7. Remove the old name.
   if (req->has_new_table_name()) {
     TRACE("Removing old-name $0 from by-name map", table_name);
     std::lock_guard<LockType> l_map(lock_);
@@ -1317,11 +1491,26 @@ Status CatalogManager::AlterTable(const AlterTableRequestPB* req,
     }
   }
 
-  // 7. Update the in-memory state
-  TRACE("Committing in-memory state");
-  l.Commit();
+  // 8. Update the in-memory state.
+  {
+    TRACE("Committing alterations to in-memory state");
+    std::lock_guard<LockType> lock(lock_);
+    for (const auto& tablet : tablets_to_add) {
+      tablet->mutable_metadata()->CommitMutation();
+      table->AddTablet(tablet.get());
+      InsertOrDie(&tablet_map_, tablet->tablet_id(), std::move(tablet));
+    }
+    for (const auto& tablet : tablets_to_drop) {
+      TabletMetadataLock l(tablet.get(), TabletMetadataLock::READ);
+      CHECK(table->RemoveTablet(tablet->metadata().state().pb.partition().partition_key_start()));
+      SendDeleteTabletRequest(tablet, l, deletion_msg);
+    }
 
-  SendAlterTableRequest(table);
+    l.Commit();
+    SendAlterTableRequest(table);
+  }
+
+  background_tasks_->Wake();
   return Status::OK();
 }
 
@@ -2622,7 +2811,7 @@ void CatalogManager::HandleAssignCreatingTablet(TabletInfo* tablet,
   // The "tablet creation" was already sent, but we didn't receive an answer
   // within the timeout. So the tablet will be replaced by a new one.
   scoped_refptr<TabletInfo> replacement = CreateTabletInfo(tablet->table().get(),
-                                             old_info.pb.partition());
+                                                           old_info.pb.partition());
   LOG(WARNING) << "Tablet " << tablet->ToString() << " was not created within "
                << "the allowed timeout. Replacing with a new tablet "
                << replacement->tablet_id();
@@ -3064,6 +3253,7 @@ Status CatalogManager::GetTableLocations(const GetTableLocationsRequestPB* req,
       LOG(FATAL) << "Unexpected error while building tablet locations: " << s.ToString();
     }
   }
+
   return Status::OK();
 }
 
@@ -3322,7 +3512,7 @@ void TableInfo::GetTaskList(std::vector<scoped_refptr<MonitoredTask> > *ret) {
 void TableInfo::GetAllTablets(vector<scoped_refptr<TabletInfo> > *ret) const {
   ret->clear();
   std::lock_guard<simple_spinlock> l(lock_);
-  for (const TableInfo::TabletInfoMap::value_type& e : tablet_map_) {
+  for (const auto& e : tablet_map_) {
     ret->push_back(make_scoped_refptr(e.second));
   }
 }
