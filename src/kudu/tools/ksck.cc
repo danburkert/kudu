@@ -289,10 +289,12 @@ Status Ksck::ChecksumData(const vector<string>& tables,
   typedef unordered_map<shared_ptr<KsckTablet>, shared_ptr<KsckTable>> TabletTableMap;
   TabletTableMap tablet_table_map;
 
+  int num_tablets = 0;
   int num_tablet_replicas = 0;
   for (const shared_ptr<KsckTable>& table : cluster_->tables()) {
     VLOG(1) << "Table: " << table->name();
     if (!tables_filter.empty() && !ContainsKey(tables_filter, table->name())) continue;
+    num_tablets += table->tablets().size();
     for (const shared_ptr<KsckTablet>& tablet : table->tablets()) {
       VLOG(1) << "Tablet: " << tablet->id();
       if (!tablets_filter.empty() && !ContainsKey(tablets_filter, tablet->id())) continue;
@@ -300,7 +302,9 @@ Status Ksck::ChecksumData(const vector<string>& tables,
       num_tablet_replicas += tablet->replicas().size();
     }
   }
-  if (num_tablet_replicas == 0) {
+  if (num_tablets > 0 && num_tablet_replicas == 0) {
+    // Warn if the table has tablets, but no replicas. The table may have no
+    // tablets if all range partitions have been dropped.
     string msg = "No tablet replicas found.";
     if (!tables.empty() || !tablets.empty()) {
       msg += " Filter: ";
@@ -435,10 +439,6 @@ bool Ksck::VerifyTable(const shared_ptr<KsckTable>& table) {
   bool good_table = true;
   vector<shared_ptr<KsckTablet> > tablets = table->tablets();
   int tablets_count = tablets.size();
-  if (tablets_count == 0) {
-    Warn() << Substitute("Table $0 has 0 tablets", table->name()) << endl;
-    return false;
-  }
   int table_num_replicas = table->num_replicas();
   VLOG(1) << Substitute("Verifying $0 tablets for table $1 configured with num_replicas = $2",
                         tablets_count, table->name(), table_num_replicas);
