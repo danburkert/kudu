@@ -75,9 +75,9 @@ def fix_rpath(path):
     return
   rpath = re.search("R(?:UN)?PATH=(.+)", stdout.strip()).group(1)
   # Fix it to be relative.
-  new_path = ":".join(fix_rpath_component(path, c) for c in rpath.split(":"))
+  new_rpath = ":".join(fix_rpath_component(path, c) for c in rpath.split(":"))
   # Write the new rpath back into the binary.
-  subprocess.check_call(["chrpath", "-r", new_path, path])
+  subprocess.check_call(["chrpath", "-r", new_rpath, path])
 
 def fixup_rpaths(root):
   """

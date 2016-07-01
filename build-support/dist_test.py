@@ -41,6 +41,9 @@ import time
 
 from kudu_util import init_logging
 
+ME = os.path.abspath(__file__)
+ROOT = os.path.realpath(os.path.abspath(os.path.join(os.path.dirname(ME), "..")))
+
 TEST_TIMEOUT_SECS = int(os.environ.get('TEST_TIMEOUT_SECS', '900'))
 ARTIFACT_ARCHIVE_GLOBS = ["build/*/test-logs/**/*"]
 ISOLATE_SERVER = os.environ.get('ISOLATE_SERVER',
@@ -57,8 +60,6 @@ MAX_TASKS_PER_JOB=10000
 # Our non-distributed implementation sets a number of _attempts_, not a number
 # of retries, so we have to subtract 1.
 FLAKY_TEST_RETRIES = int(os.environ.get('KUDU_FLAKY_TEST_ATTEMPTS', 1)) - 1
-
-PATH_TO_REPO = "../"
 
 # Matches the command line listings in 'ctest -V -N'. For example:
 #   262: Test command: /src/kudu/build-support/run-test.sh "/src/kudu/build/debug/bin/jsonwriter-test"
@@ -140,8 +141,11 @@ class TestExecution(object):
     return int(self.env.get("GTEST_SHARD_INDEX", "0"))
 
 def rel_to_abs(rel_path):
-  dirname, _ = os.path.split(os.path.abspath(__file__))
-  abs = os.path.abspath(os.path.join(dirname, PATH_TO_REPO, rel_path))
+  """
+  Given a path relative to the project root directory, return an absolute
+  filesystem path.
+  """
+  abs = os.path.abspath(os.path.join(ROOT, rel_path))
   if rel_path.endswith('/') and not abs.endswith('/'):
     abs += '/'
   return abs
@@ -212,11 +216,32 @@ def is_lib_blacklisted(lib):
     return True
   return False
 
+def resolve_symlinks(path):
+  """
+  In case a library is located on a path that includes a symlink, we
+  canonicalize the prefix of that path using some heuristics. We cannot
+  canonicalize the whole path because there are parts of the path that may
+  contain symlinked components, such as thirdparty/installed/lib64 -> lib. If
+  we canonicalize those before sending them to the remote, then the RPATH in
+  our binary ends up being wrong (the binary RPATH says lib64 but the files end
+  up in lib). Therefore we only canonicalize a prefix of the path here.
+  """
+  # Canonicalize parts of the path leading up to certain sub-paths. We need
+  # /build/ and /thirdparty/ because those are safe for libraries, and we need
+  # /bin/ because we need to resolve the symlink at build/latest for binaries
+  # such as kudu-tserver that are called from some tests.
+  components = ['/build/', '/thirdparty/', '/bin/']
+  for component in components:
+    if component in path:
+      parts = path.split(component, 1)
+      path = os.path.join(os.path.realpath(parts[0] + component), parts[1])
+  return path
 
 def is_outside_of_tree(path):
-  repo_dir = rel_to_abs("./")
-  rel = os.path.relpath(path, repo_dir)
-  return rel.startswith("../")
+  """
+  Returns true if the given path is _not_ contained under the ROOT path.
+  """
+  return not os.path.realpath(path).startswith(ROOT)
 
 def copy_system_library(lib):
   """
@@ -300,7 +325,7 @@ def create_archive_input(staging, execution,
   files.append(rel_test_exe)
   deps = ldd_deps(abs_test_exe)
   for d in DEPS_FOR_ALL:
-    d = os.path.realpath(rel_to_abs(d))
+    d = rel_to_abs(d)
     if os.path.isdir(d):
       d += "/"
     deps.append(d)
@@ -316,6 +341,8 @@ def create_archive_input(staging, execution,
     # tree somewhere.
     if is_outside_of_tree(d):
       d = copy_system_library(d)
+    else:
+      d = resolve_symlinks(d)
     files.append(abs_to_rel(d, staging))
 
   # Add data file dependencies.
@@ -348,7 +375,7 @@ def create_archive_input(staging, execution,
 
   archive_json = dict(args=["-i", out_isolate,
                             "-s", out_isolate + "d"],
-                      dir=rel_to_abs("."),
+                      dir=ROOT,
                       version=1)
   isolate_dict = dict(variables=dict(command=command,
                                      files=files))
