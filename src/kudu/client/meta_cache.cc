@@ -59,6 +59,10 @@ namespace client {
 
 namespace internal {
 
+namespace {
+const int MAX_RETURNED_TABLE_LOCATIONS = 10;
+} // anonymous namespace
+
 ////////////////////////////////////////////////////////////
 
 RemoteTabletServer::RemoteTabletServer(const master::TSInfoPB& pb)
@@ -266,12 +270,12 @@ void RemoteTablet::MarkTServerAsFollower(const RemoteTabletServer* server) {
                 << server->ToString() << ". Replicas: " << ReplicasAsStringUnlocked();
 }
 
-std::string RemoteTablet::ReplicasAsString() const {
+string RemoteTablet::ReplicasAsString() const {
   std::lock_guard<simple_spinlock> l(lock_);
   return ReplicasAsStringUnlocked();
 }
 
-std::string RemoteTablet::ReplicasAsStringUnlocked() const {
+string RemoteTablet::ReplicasAsStringUnlocked() const {
   DCHECK(lock_.is_locked());
   string replicas_str;
   for (const RemoteReplica& rep : replicas_) {
@@ -282,6 +286,42 @@ std::string RemoteTablet::ReplicasAsStringUnlocked() const {
                                 rep.failed ? "FAILED" : "OK");
   }
   return replicas_str;
+}
+
+bool MetaCacheEntry::Contains(const string& partition_key) const {
+  DCHECK(Initialized());
+  return lower_bound_partition_key() <= partition_key &&
+         (upper_bound_partition_key().empty() || upper_bound_partition_key() > partition_key);
+}
+
+bool MetaCacheEntry::stale() const {
+  DCHECK(Initialized());
+  return expiration_time_.ComesBefore(MonoTime::Now(MonoTime::COARSE)) ||
+         (!is_non_covered_range() && tablet_->stale());
+}
+
+string MetaCacheEntry::ToString(const KuduTable* table) const {
+  DCHECK(Initialized());
+  const string& lower_bound = lower_bound_partition_key();
+  const string& upper_bound = upper_bound_partition_key();
+
+  string lower_bound_string = lower_bound.empty() ? "<start>" :
+    table->partition_schema().PartitionKeyDebugString(lower_bound, *table->schema().schema_);
+
+  string upper_bound_string = upper_bound.empty() ? "<end>" :
+    table->partition_schema().PartitionKeyDebugString(upper_bound, *table->schema().schema_);
+
+  MonoDelta ttl = expiration_time_.GetDeltaSince(MonoTime::Now(MonoTime::COARSE));
+
+  if (is_non_covered_range()) {
+    return strings::Substitute(
+        "NonCoveredRange { lower_bound: ($0), upper_bound: ($1), ttl: $2ms }",
+        lower_bound_string, upper_bound_string, ttl.ToMilliseconds());
+  } else {
+    return strings::Substitute(
+        "Tablet { id: $0, lower_bound: ($1), upper_bound: ($2), ttl: $3ms }",
+        tablet()->tablet_id(), lower_bound_string, upper_bound_string, ttl.ToMilliseconds());
+  }
 }
 
 MetaCacheServerPicker::MetaCacheServerPicker(KuduClient* client,
@@ -479,11 +519,13 @@ class LookupRpc : public Rpc {
   virtual void SendRpc() OVERRIDE;
   virtual string ToString() const OVERRIDE;
 
+  const GetTableLocationsRequestPB& req() const { return req_; }
   const GetTableLocationsResponsePB& resp() const { return resp_; }
   const string& table_name() const { return table_->name(); }
   const string& table_id() const { return table_->id(); }
   const string& partition_key() const { return partition_key_; }
   bool is_exact_lookup() const { return is_exact_lookup_; }
+  const KuduTable* table() const { return table_; }
 
  private:
   virtual void SendRpcCb(const Status& status) OVERRIDE;
@@ -522,7 +564,7 @@ class LookupRpc : public Rpc {
 
   // When lookup finishes successfully, the selected tablet is
   // written here prior to invoking 'user_cb_'.
-  scoped_refptr<RemoteTablet> *remote_tablet_;
+  scoped_refptr<RemoteTablet>* remote_tablet_;
 
   // Whether this lookup has acquired a master lookup permit.
   bool has_permit_;
@@ -559,23 +601,31 @@ LookupRpc::~LookupRpc() {
 
 void LookupRpc::SendRpc() {
   // Fast path: lookup in the cache.
-  scoped_refptr<RemoteTablet> result;
-  if (PREDICT_TRUE(meta_cache_->LookupTabletByKeyFastPath(table_, partition_key_, &result)) &&
-      result->HasLeader()) {
-    VLOG(3) << "Fast lookup: found tablet " << result->tablet_id()
+  MetaCacheEntry entry;
+  while (PREDICT_TRUE(meta_cache_->LookupTabletByKeyFastPath(table_, partition_key_, &entry))
+         && (entry.is_non_covered_range() || entry.tablet()->HasLeader())) {
+    VLOG(4) << "Fast lookup: found " << entry.ToString(table_)
             << " for " << table_->partition_schema()
                                  .PartitionKeyDebugString(partition_key_, *table_->schema().schema_)
             << " of " << table_->name();
-    if (remote_tablet_) {
-      *remote_tablet_ = result;
+    if (!entry.is_non_covered_range()) {
+      if (remote_tablet_) {
+        *remote_tablet_ = entry.tablet();
+      }
+      user_cb_.Run(Status::OK());
+      delete this;
+      return;
     }
-    user_cb_.Run(Status::OK());
-    delete this;
-    return;
+    if (is_exact_lookup_ || entry.upper_bound_partition_key().empty()) {
+      user_cb_.Run(Status::NotFound("No tablet covering the requested range partition"));
+      delete this;
+      return;
+    }
+    partition_key_ = entry.upper_bound_partition_key();
   }
 
   // Slow path: must lookup the tablet in the master.
-  VLOG(3) << "Fast lookup: no known tablet"
+  VLOG(4) << "Fast lookup: no cache entry"
           << " for " << table_->partition_schema()
                                .PartitionKeyDebugString(partition_key_, *table_->schema().schema_)
           << " of " << table_->name()
@@ -594,6 +644,7 @@ void LookupRpc::SendRpc() {
   // Fill out the request.
   req_.mutable_table()->set_table_id(table_->id());
   req_.set_partition_key_start(partition_key_);
+  req_.set_max_returned_locations(MAX_RETURNED_TABLE_LOCATIONS);
 
   // The end partition key is left unset intentionally so that we'll prefetch
   // some additional tablets.
@@ -696,10 +747,12 @@ void LookupRpc::SendRpcCb(const Status& status) {
   }
 
   if (new_status.ok()) {
-    scoped_refptr<RemoteTablet> result;
-    new_status = meta_cache_->ProcessLookupResponse(*this, &result);
-    if (remote_tablet_) {
-      *remote_tablet_ = result;
+    MetaCacheEntry entry;
+    new_status = meta_cache_->ProcessLookupResponse(*this, &entry);
+    if (entry.is_non_covered_range()) {
+      new_status = Status::NotFound("No tablet covering the requested range partition");
+    } else if (remote_tablet_) {
+      *remote_tablet_ = entry.tablet();
     }
   } else {
     new_status = new_status.CloneAndPrepend(Substitute("$0 failed", ToString()));
@@ -709,79 +762,121 @@ void LookupRpc::SendRpcCb(const Status& status) {
 }
 
 Status MetaCache::ProcessLookupResponse(const LookupRpc& rpc,
-                                        scoped_refptr<RemoteTablet>* remote_tablet) {
+                                        MetaCacheEntry* cache_entry) {
   VLOG(2) << "Processing master response for " << rpc.ToString()
           << ". Response: " << rpc.resp().ShortDebugString();
+
+  MonoTime expiration_time = MonoTime::Now(MonoTime::COARSE);
+  expiration_time.AddDelta(MonoDelta::FromMilliseconds(rpc.resp().ttl_millis()));
 
   std::lock_guard<rw_spinlock> l(lock_);
   TabletMap& tablets_by_key = LookupOrInsert(&tablets_by_table_and_key_,
                                              rpc.table_id(), TabletMap());
-  for (const TabletLocationsPB& loc : rpc.resp().tablet_locations()) {
-    // First, update the tserver cache, needed for the Refresh calls below.
-    for (const TabletLocationsPB_ReplicaPB& r : loc.replicas()) {
-      UpdateTabletServer(r.ts_info());
-    }
 
-    // Next, update the tablet caches.
-    string tablet_id = loc.tablet_id();
-    scoped_refptr<RemoteTablet> remote = FindPtrOrNull(tablets_by_id_, tablet_id);
-    if (remote.get() != nullptr) {
-      // Partition should not have changed.
-      DCHECK_EQ(loc.partition().partition_key_start(), remote->partition().partition_key_start());
-      DCHECK_EQ(loc.partition().partition_key_end(), remote->partition().partition_key_end());
+  if (rpc.resp().tablet_locations().empty()) {
+    // If there are no tablets in the response, then the table is empty. If
+    // there were any tablets in the table they would have been returned, since
+    // the master guarantees that the if the partition key falls in a
+    // non-covered range, the previous tablet will be returned, and we did not
+    // set an upper bound partition key on the request.
+    DCHECK(!rpc.req().has_partition_key_end());
 
-      VLOG(3) << "Refreshing tablet " << tablet_id << ": " << loc.ShortDebugString();
-      remote->Refresh(ts_cache_, loc.replicas());
-      continue;
-    }
-
-    VLOG(3) << "Caching tablet " << tablet_id << " for (" << rpc.table_name() << "): "
-            << loc.ShortDebugString();
-
-    Partition partition;
-    Partition::FromPB(loc.partition(), &partition);
-    remote = new RemoteTablet(tablet_id, partition);
-    remote->Refresh(ts_cache_, loc.replicas());
-
-    InsertOrDie(&tablets_by_id_, tablet_id, remote);
-    InsertOrDie(&tablets_by_key, partition.partition_key_start(), remote);
-
-    // TODO(KUDU-1421): Once removing partition ranges is supported, we should
-    // inspect the tablet locations for any non-covered ranges. Cached tablets
-    // falling in non-covered ranges should be removed.
-  }
-
-  bool not_found = false;
-  // itr points to the first tablet that is greater than the requested partition key.
-  auto itr = tablets_by_key.upper_bound(rpc.partition_key());
-  if (tablets_by_key.empty()) {
-    not_found = true;
-  } else if (itr == tablets_by_key.begin()) {
-    // The requested partition key is before all tablets.
-    if (rpc.is_exact_lookup()) {
-      not_found = true;
-    }
-    *remote_tablet = itr->second;
-  } else if (std::prev(itr)->second->partition().partition_key_end() > rpc.partition_key() ||
-             std::prev(itr)->second->partition().partition_key_end().empty()) {
-    // Exact match.
-    *remote_tablet = std::prev(itr)->second;
-  } else if (itr == tablets_by_key.end() || rpc.is_exact_lookup()) {
-    // The requested partition key is beyond all tablets,
-    // or falls between two tablets and the lookup is exact.
-    not_found = true;
+    tablets_by_key.clear();
+    MetaCacheEntry entry(expiration_time, "", "");
+    VLOG(3) << "Caching '" << rpc.table_name() << "' entry " << entry.ToString(rpc.table());
+    InsertOrDie(&tablets_by_key, "", std::move(entry));
   } else {
-    // The primary key falls between two tablets; return the second.
-    *remote_tablet = itr->second;
+    string last_upper_bound =
+      rpc.resp().tablet_locations().Get(0).partition().partition_key_start();
+
+    if (rpc.partition_key() < last_upper_bound) {
+      // If the first tablet is past the requested partition key, then the
+      // partition key fell in an initial non-covered range.
+
+      tablets_by_key.erase(tablets_by_key.begin(),
+                           tablets_by_key.lower_bound(last_upper_bound));
+      MetaCacheEntry entry(expiration_time, "", last_upper_bound);
+      VLOG(3) << "Caching '" << rpc.table_name() << "' entry " << entry.ToString(rpc.table());
+      InsertOrDie(&tablets_by_key, "", std::move(entry));
+    }
+
+    for (const TabletLocationsPB& tablet : rpc.resp().tablet_locations()) {
+      if (last_upper_bound < tablet.partition().partition_key_start()) {
+        // There is a non-covered range between the previous tablet and this tablet.
+        tablets_by_key.erase(tablets_by_key.lower_bound(last_upper_bound),
+                             tablets_by_key.lower_bound(tablet.partition().partition_key_start()));
+
+        MetaCacheEntry entry(expiration_time, last_upper_bound,
+                             tablet.partition().partition_key_start());
+        VLOG(3) << "Caching '" << rpc.table_name() << "' entry " << entry.ToString(rpc.table());
+        InsertOrDie(&tablets_by_key, last_upper_bound, std::move(entry));
+      }
+      last_upper_bound = tablet.partition().partition_key_end();
+
+      // First, update the tserver cache, needed for the Refresh calls below.
+      for (const TabletLocationsPB_ReplicaPB& replicas : tablet.replicas()) {
+        UpdateTabletServer(replicas.ts_info());
+      }
+
+      // Next, update the tablet caches.
+      string tablet_id = tablet.tablet_id();
+      scoped_refptr<RemoteTablet> remote = FindPtrOrNull(tablets_by_id_, tablet_id);
+      if (remote.get() != nullptr) {
+        // Partition should not have changed.
+        DCHECK_EQ(tablet.partition().partition_key_start(),
+                  remote->partition().partition_key_start());
+        DCHECK_EQ(tablet.partition().partition_key_end(),
+                  remote->partition().partition_key_end());
+
+        VLOG(3) << "Refreshing tablet " << tablet_id << ": " << tablet.ShortDebugString();
+        remote->Refresh(ts_cache_, tablet.replicas());
+        continue;
+      }
+
+      tablets_by_key.erase(tablets_by_key.lower_bound(tablet.partition().partition_key_start()),
+                           tablet.partition().partition_key_end().empty() ?
+                              tablets_by_key.end() :
+                              tablets_by_key.lower_bound(tablet.partition().partition_key_end()));
+
+      Partition partition;
+      Partition::FromPB(tablet.partition(), &partition);
+      remote = new RemoteTablet(tablet_id, partition);
+      remote->Refresh(ts_cache_, tablet.replicas());
+
+      MetaCacheEntry entry(expiration_time, remote);
+      VLOG(3) << "Caching '" << rpc.table_name() << "' entry " << entry.ToString(rpc.table());
+
+      InsertOrDie(&tablets_by_id_, tablet_id, remote);
+      InsertOrDie(&tablets_by_key, partition.partition_key_start(), std::move(entry));
+    }
+
+    if (!last_upper_bound.empty() &&
+        rpc.resp().tablet_locations().size() < MAX_RETURNED_TABLE_LOCATIONS) {
+      // There is a non-covered range between the last tablet upper bound and
+      // the end of the partition key space.
+      tablets_by_key.erase(tablets_by_key.lower_bound(last_upper_bound),
+                           tablets_by_key.end());
+
+      MetaCacheEntry entry(expiration_time, last_upper_bound, "");
+      VLOG(3) << "Caching '" << rpc.table_name() << "' entry " << entry.ToString(rpc.table());
+      InsertOrDie(&tablets_by_key, last_upper_bound, std::move(entry));
+    }
   }
 
-  return not_found ? Status::NotFound("No tablet covering the requested range partition")
-                   : Status::OK();
+  *cache_entry = *DCHECK_NOTNULL(FindFloorOrNull(tablets_by_key, rpc.partition_key()));
+
+  if (!rpc.is_exact_lookup() && cache_entry->is_non_covered_range() &&
+      !cache_entry->upper_bound_partition_key().empty()) {
+    *cache_entry = *DCHECK_NOTNULL(FindFloorOrNull(tablets_by_key,
+                                                   cache_entry->upper_bound_partition_key()));
+    DCHECK(!cache_entry->is_non_covered_range());
+  }
+  return Status::OK();
 }
 
 bool MetaCache::LookupTabletByKeyFastPath(const KuduTable* table,
                                           const string& partition_key,
-                                          scoped_refptr<RemoteTablet>* remote_tablet) {
+                                          MetaCacheEntry* entry) {
   shared_lock<rw_spinlock> l(lock_);
   const TabletMap* tablets = FindOrNull(tablets_by_table_and_key_, table->id());
   if (PREDICT_FALSE(!tablets)) {
@@ -789,21 +884,19 @@ bool MetaCache::LookupTabletByKeyFastPath(const KuduTable* table,
     return false;
   }
 
-  const scoped_refptr<RemoteTablet>* r = FindFloorOrNull(*tablets, partition_key);
-  if (PREDICT_FALSE(!r)) {
+  const MetaCacheEntry* e = FindFloorOrNull(*tablets, partition_key);
+  if (PREDICT_FALSE(!e)) {
     // No tablets with a start partition key lower than 'partition_key'.
     return false;
   }
 
   // Stale entries must be re-fetched.
-  if ((*r)->stale()) {
+  if (e->stale()) {
     return false;
   }
 
-  if ((*r)->partition().partition_key_end().compare(partition_key) > 0 ||
-      (*r)->partition().partition_key_end().empty()) {
-    // partition_key < partition.end OR tablet doesn't end.
-    *remote_tablet = *r;
+  if (e->Contains(partition_key)) {
+    *entry = *e;
     return true;
   }
 
@@ -857,7 +950,7 @@ void MetaCache::MarkTSFailed(RemoteTabletServer* ts,
   Status ts_status = status.CloneAndPrepend("TS failed");
 
   // TODO: replace with a ts->tablet multimap for faster lookup?
-  for (const TabletMap::value_type& tablet : tablets_by_id_) {
+  for (const auto& tablet : tablets_by_id_) {
     // We just loop on all tablets; if a tablet does not have a replica on this
     // TS, MarkReplicaFailed() returns false and we ignore the return value.
     tablet.second->MarkReplicaFailed(ts, ts_status);
