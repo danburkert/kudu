@@ -750,6 +750,12 @@ void LookupRpc::SendRpcCb(const Status& status) {
     }
   }
 
+  if (new_status.IsServiceUnavailable()) {
+    // One or more of the tablets is not running; retry after a backoff period.
+    mutable_retrier()->DelayedRetry(this, new_status);
+    return;
+  }
+
   if (new_status.ok()) {
     MetaCacheEntry entry;
     new_status = meta_cache_->ProcessLookupResponse(*this, &entry);

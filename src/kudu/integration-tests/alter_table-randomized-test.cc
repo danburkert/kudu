@@ -439,7 +439,8 @@ struct MirrorTable {
   }
 
   void Verify() {
-    LOG(INFO) << "Verifying randomized alterations";
+    LOG(INFO) << "Verifying " << ts_.rows_.size() << " rows in "
+              << ts_.range_partitions_.size() << " tablets";
     // First scan the real table
     vector<string> rows;
     {
@@ -562,6 +563,7 @@ TEST_F(AlterTableRandomized, TestRandomSequence) {
 
   // Not only should the data returned by a scanner match what we expect,
   // we also expect all of the replicas to agree with each other.
+  LOG(INFO) << "Verifying cluster";
   ClusterVerifier v(cluster_.get());
   NO_FATALS(v.CheckCluster());
 }
