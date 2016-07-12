@@ -24,6 +24,7 @@
 #include "kudu/client/client-test-util.h"
 #include "kudu/gutil/map-util.h"
 #include "kudu/gutil/stl_util.h"
+#include "kudu/gutil/strings/join.h"
 #include "kudu/gutil/strings/substitute.h"
 #include "kudu/integration-tests/cluster_verifier.h"
 #include "kudu/integration-tests/external_mini_cluster.h"
@@ -397,7 +398,11 @@ struct MirrorTable {
   void AddRangePartition() {
     ResetClient();
     auto bounds = ts_.AddRangePartition();
-    LOG(INFO) << "Adding range partition: [" << bounds.first << ", " << bounds.second << ")";
+    LOG(INFO) << "Adding range partition: [" << bounds.first << ", " << bounds.second << ")"
+              << " existing partitions: ("
+              << JoinKeysAndValuesIterator(ts_.range_partitions_.begin(),
+                                           ts_.range_partitions_.end(),
+                                           ", ", "], (") << ")";
     KuduSchema schema;
     CHECK_OK(client_->GetTableSchema(kTableName, &schema));
 
@@ -412,7 +417,11 @@ struct MirrorTable {
 
   void DropRangePartition() {
     auto bounds = ts_.DropRangePartition();
-    LOG(INFO) << "Dropping range partition: [" << bounds.first << ", " << bounds.second << ")";
+    LOG(INFO) << "Dropping range partition: [" << bounds.first << ", " << bounds.second << ")"
+              << " existing partitions: ("
+              << JoinKeysAndValuesIterator(ts_.range_partitions_.begin(),
+                                           ts_.range_partitions_.end(),
+                                           ", ", "], (") << ")";
     KuduSchema schema;
     CHECK_OK(client_->GetTableSchema(kTableName, &schema));
 
