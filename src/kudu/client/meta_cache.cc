@@ -708,6 +708,7 @@ void LookupRpc::SendRpcCb(const Status& status) {
   Status new_status = status;
   // Check for generic RPC errors.
   if (new_status.ok() && mutable_retrier()->HandleResponse(this, &new_status)) {
+    LOG(INFO) << "Generic RPC error";
     ignore_result(delete_me.release());
     return;
   }
@@ -754,7 +755,9 @@ void LookupRpc::SendRpcCb(const Status& status) {
 
   if (new_status.IsServiceUnavailable()) {
     // One or more of the tablets is not running; retry after a backoff period.
+    LOG(INFO) << "ServiceUnavailable";
     mutable_retrier()->DelayedRetry(this, new_status);
+    ignore_result(delete_me.release());
     return;
   }
 
