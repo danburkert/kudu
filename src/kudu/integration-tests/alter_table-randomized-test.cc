@@ -476,6 +476,7 @@ struct MirrorTable {
   };
 
   Status DoRealOp(const vector<pair<string, int32_t>>& data, OpType op_type) {
+    LOG(INFO) << "Applying op " << op_type << " " << data[0].first << ": " << data[0].second;
     shared_ptr<KuduSession> session = client_->NewSession();
     shared_ptr<KuduTable> table;
     RETURN_NOT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
