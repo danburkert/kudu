@@ -3207,6 +3207,7 @@ Status CatalogManager::GetTabletLocations(const std::string& tablet_id,
 
 Status CatalogManager::GetTableLocations(const GetTableLocationsRequestPB* req,
                                          GetTableLocationsResponsePB* resp) {
+  LOG(INFO) << "CatalogManager GetTableLocations, req: " << req->DebugString();
   RETURN_NOT_OK(CheckOnline());
 
   // If start-key is > end-key report an error instead of swap the two

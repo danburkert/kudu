@@ -698,6 +698,8 @@ void LookupRpc::NewLeaderMasterDeterminedCb(const Status& status) {
 void LookupRpc::SendRpcCb(const Status& status) {
   gscoped_ptr<LookupRpc> delete_me(this); // delete on scope exit
 
+  LOG(INFO) << "SendRpcCB respons, status: " << status.ToString();
+
   if (!status.ok()) {
     // Non-RPC failure. We only support TimedOut for LookupRpc.
     CHECK(status.IsTimedOut()) << status.ToString();
