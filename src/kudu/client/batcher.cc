@@ -262,11 +262,10 @@ WriteRpc::WriteRpc(const scoped_refptr<Batcher>& batcher,
   int ctr = 0;
   RowOperationsPBEncoder enc(requested);
   for (InFlightOp* op : ops_) {
+#ifndef NDEBUG
     const Partition& partition = op->tablet->partition();
     const PartitionSchema& partition_schema = table()->partition_schema();
     const KuduPartialRow& row = op->write_op->row();
-
-#ifndef NDEBUG
     bool partition_contains_row;
     CHECK(partition_schema.PartitionContainsRow(partition, row, &partition_contains_row).ok());
     CHECK(partition_contains_row)
@@ -380,8 +379,8 @@ RetriableRpcStatus WriteRpc::AnalyzeResponse(const Status& rpc_cb_status) {
 }
 
 Batcher::Batcher(KuduClient* client,
-                 ErrorCollector* error_collector,
-                 const sp::shared_ptr<KuduSession>& session,
+                 const scoped_refptr<ErrorCollector>& error_collector,
+                 const sp::weak_ptr<KuduSession>& session,
                  kudu::client::KuduSession::ExternalConsistencyMode consistency_mode)
   : state_(kGatheringOps),
     client_(client),
@@ -389,10 +388,9 @@ Batcher::Batcher(KuduClient* client,
     consistency_mode_(consistency_mode),
     error_collector_(error_collector),
     had_errors_(false),
-    flush_callback_(NULL),
+    flush_callback_(nullptr),
     next_op_sequence_number_(0),
     outstanding_lookups_(0),
-    max_buffer_size_(7 * 1024 * 1024),
     buffer_bytes_used_(0) {
 }
 
@@ -478,7 +476,9 @@ void Batcher::CheckForFinishedFlush() {
     s = Status::IOError("Some errors occurred");
   }
 
-  flush_callback_->Run(s);
+  if (flush_callback_) {
+    flush_callback_->Run(s);
+  }
 }
 
 MonoTime Batcher::ComputeDeadlineUnlocked() const {
@@ -514,20 +514,11 @@ void Batcher::FlushAsync(KuduStatusCallback* cb) {
   FlushBuffersIfReady();
 }
 
+int64_t Batcher::GetOperationSizeInBuffer(KuduWriteOperation* write_op) {
+  return write_op->SizeInBuffer();
+}
+
 Status Batcher::Add(KuduWriteOperation* write_op) {
-  int64_t required_size = write_op->SizeInBuffer();
-  int64_t size_after_adding = buffer_bytes_used_.IncrementBy(required_size);
-  if (PREDICT_FALSE(size_after_adding > max_buffer_size_)) {
-    buffer_bytes_used_.IncrementBy(-required_size);
-    int64_t size_before_adding = size_after_adding - required_size;
-    return Status::Incomplete(Substitute(
-        "not enough space remaining in buffer for op (required $0, "
-        "$1 already used",
-        HumanReadableNumBytes::ToString(required_size),
-        HumanReadableNumBytes::ToString(size_before_adding)));
-  }
-
-
   // As soon as we get the op, start looking up where it belongs,
   // so that when the user calls Flush, we are ready to go.
   gscoped_ptr<InFlightOp> op(new InFlightOp());
@@ -538,7 +529,6 @@ Status Batcher::Add(KuduWriteOperation* write_op) {
 
   AddInFlightOp(op.get());
   VLOG(3) << "Looking up tablet for " << op->write_op->ToString();
-
   // Increment our reference count for the outstanding callback.
   //
   // deadline_ is set in FlushAsync(), after all Add() calls are done, so
@@ -552,6 +542,9 @@ Status Batcher::Add(KuduWriteOperation* write_op) {
       &op->tablet,
       Bind(&Batcher::TabletLookupFinished, this, op.get()));
   IgnoreResult(op.release());
+
+  buffer_bytes_used_.IncrementBy(write_op->SizeInBuffer());
+
   return Status::OK();
 }
 
@@ -562,6 +555,11 @@ void Batcher::AddInFlightOp(InFlightOp* op) {
   CHECK_EQ(state_, kGatheringOps);
   InsertOrDie(&ops_, op);
   op->sequence_number_ = next_op_sequence_number_++;
+
+  // Set the time of the first operation in the batch, if not set yet.
+  if (PREDICT_FALSE(!first_op_time_.Initialized())) {
+    first_op_time_ = MonoTime::Now();
+  }
 }
 
 bool Batcher::IsAbortedUnlocked() const {
@@ -736,7 +734,6 @@ void Batcher::ProcessWriteResponse(const WriteRpc& rpc,
 
     MarkHadErrors();
   }
-
 
   // Remove all the ops from the "in-flight" list.
   {

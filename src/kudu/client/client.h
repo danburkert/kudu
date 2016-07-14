@@ -405,6 +405,7 @@ class KUDU_EXPORT KuduClient : public sp::enable_shared_from_this<KuduClient> {
   friend class KuduClientBuilder;
   friend class KuduScanner;
   friend class KuduScanTokenBuilder;
+  friend class KuduSession;
   friend class KuduTable;
   friend class KuduTableAlterer;
   friend class KuduTableCreator;
@@ -518,7 +519,7 @@ class KUDU_EXPORT KuduTableCreator {
 
   /// Add a range partition to the table.
   ///
-  /// Multiple range partitions may be added, but they must not overlap.  All
+  /// Multiple range partitions may be added, but they must not overlap. All
   /// range splits specified by @c add_range_partition_split must fall in a
   /// range partition. The lower bound must be less than or equal to the upper
   /// bound.
@@ -1021,24 +1022,23 @@ class KUDU_EXPORT KuduSession : public sp::enable_shared_from_this<KuduSession> 
     /// This is the default flush mode.
     AUTO_FLUSH_SYNC,
 
-    /// Apply() calls will return immediately, but the writes will be sent
-    /// in the background, potentially batched together with other writes
-    /// from the same session. If there is not sufficient buffer space,
-    /// then Apply() will block for buffer space to be available.
+    /// Apply() calls will return immediately (unless there is not enough
+    /// buffer space to accommodate the newly added operations), but
+    /// the writes will be sent in the background, potentially batched together
+    /// with other writes from the same session. If there is not sufficient
+    /// buffer space, Apply() blocks for buffer space to become available.
     ///
     /// Because writes are applied in the background, any errors will be stored
     /// in a session-local buffer. Call CountPendingErrors() or
     /// GetPendingErrors() to retrieve them.
     ///
-    /// The Flush() call can be used to block until the buffer is empty.
-    ///
-    /// @warning This is not implemented yet, see KUDU-456
+    /// In this mode, calling the FlushAsync() or Flush() methods causes a flush
+    /// that normally would have happened at some point in the near future
+    /// to happen right now. The Flush() call can be used to block until current
+    /// batch is sent and the reclaimed space is available for new operations.
     ///
     /// @todo Provide an API for the user to specify a callback to do their own
     ///   error reporting.
-    ///
-    /// @todo Specify which threads the background activity runs on
-    ///   (probably the messenger IO threads?).
     AUTO_FLUSH_BACKGROUND,
 
     /// Apply() calls will return immediately, and the writes will not be
@@ -1116,10 +1116,61 @@ class KUDU_EXPORT KuduSession : public sp::enable_shared_from_this<KuduSession> 
   /// @li MANUAL_FLUSH
   ///   if the buffer space is exhausted, then write calls will return an error
   ///
+  /// By default, the buffer space is set to 7 MiB (i.e. 7 * 1024 * 1024 bytes).
+  ///
   /// @param [in] size_bytes
   ///   Size of the buffer space to set (number of bytes).
   /// @return Operation result status.
   Status SetMutationBufferSpace(size_t size_bytes) WARN_UNUSED_RESULT;
+
+  /// Set the buffer watermark to trigger flush in AUTO_FLUSH_BACKGROUND mode.
+  ///
+  /// This method sets the watermark for fresh operations in the buffer
+  /// when running in AUTO_FLUSH_BACKGROUND mode: once the specified threshold
+  /// is reached, the session starts sending the accumulated write operations
+  /// to the appropriate tablet servers. By default, the buffer flush watermark
+  /// is to to 80%.
+  ///
+  /// @note This setting is applicable only for AUTO_FLUSH_BACKGROUND sessions.
+  ///   I.e., calling this method in other flush modes is safe, but
+  ///   the parameter has no effect until the session is switched into
+  ///   AUTO_FLUSH_BACKGROUND mode.
+  ///
+  /// @note The buffer contains data for fresh (i.e. newly submitted)
+  ///   operations and operations which are scheduled for flush or being
+  ///   flushed. The flush watermark determines how much of the buffer space
+  ///   is taken by newly submitted operations. Setting this level to 1.0
+  ///   (i.e. 100%) results in flushing the buffer when newly submitted
+  ///   operations are about to overflow the buffer.
+  ///
+  /// @param [in] watermark_pct
+  ///   Watermark level as percentage of the mutation buffer size.
+  /// @return Operation result status.
+  Status SetMutationBufferFlushWatermark(double watermark_pct)
+      WARN_UNUSED_RESULT;
+
+  /// Set the interval for periodic flushing of the mutation buffer.
+  ///
+  /// In some cases, while running in AUTO_FLUSH_BACKGROUND mode, the size
+  /// of the mutation buffer for pending operations and the flush watermark
+  /// for fresh operations can be too high for incoming data rate: it would
+  /// take too long to accumulate enough data in the buffer to trigger
+  /// flushing of that data. In that case it make sense to flush
+  /// the accumulated operations on a regular basis. This method sets
+  /// the interval for the periodic flushing which takes place along with
+  /// the flushing triggered by the over-the-watermark criterion.
+  /// By default, the interval is set to 1000 ms (i.e. 1 second).
+  ///
+  /// @note This setting is applicable only for AUTO_FLUSH_BACKGROUND sessions.
+  ///   I.e., calling this method in other flush modes is safe, but
+  ///   the parameter has no effect until the session is switched into
+  ///   AUTO_FLUSH_BACKGROUND mode.
+  ///
+  /// @param [in] millis
+  ///   The duration of the interval for periodic flushing of the accumulated
+  ///   write operations, in milliseconds.
+  /// @return Operation result status.
+  Status SetMutationBufferFlushInterval(unsigned int millis) WARN_UNUSED_RESULT;
 
   /// Set the timeout for writes made in this session.
   ///
@@ -1283,6 +1334,9 @@ class KUDU_EXPORT KuduSession : public sp::enable_shared_from_this<KuduSession> 
 
   friend class KuduClient;
   friend class internal::Batcher;
+  friend class ClientTest;
+  FRIEND_TEST(ClientTest, TestAutoFlushBackgroundApplyBlocks);
+
   explicit KuduSession(const sp::shared_ptr<KuduClient>& client);
 
   // Owned.

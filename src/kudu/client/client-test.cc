@@ -15,10 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <gtest/gtest.h>
-#include <gflags/gflags.h>
-#include <glog/stl_logging.h>
-
 #include <algorithm>
 #include <map>
 #include <memory>
@@ -27,6 +23,10 @@
 #include <utility>
 #include <vector>
 
+#include <gtest/gtest.h>
+#include <gflags/gflags.h>
+#include <glog/stl_logging.h>
+
 #include "kudu/client/callbacks.h"
 #include "kudu/client/client.h"
 #include "kudu/client/client-internal.h"
@@ -34,6 +34,7 @@
 #include "kudu/client/meta_cache.h"
 #include "kudu/client/row_result.h"
 #include "kudu/client/scanner-internal.h"
+#include "kudu/client/session-internal.h"
 #include "kudu/client/value.h"
 #include "kudu/client/write_op.h"
 #include "kudu/common/partial_row.h"
@@ -141,6 +142,14 @@ class ClientTest : public KuduTest {
     ASSERT_NO_FATAL_FAILURE(CreateTable(kTable2Name, 1, {}, {}, &client_table2_));
   }
 
+  void TearDown() override {
+    if (cluster_) {
+      cluster_->Shutdown();
+      cluster_.reset();
+    }
+    KuduTest::TearDown();
+  }
+
   // Looks up the remote tablet entry for a given partition key in the meta cache.
   scoped_refptr<internal::RemoteTablet> MetaCacheLookup(KuduTable* table,
                                                         const string& partition_key) {
@@ -161,19 +170,30 @@ class ClientTest : public KuduTest {
     return rows;
   }
 
-  void TearDown() override {
-    if (cluster_) {
-      cluster_->Shutdown();
-      cluster_.reset();
-    }
-    KuduTest::TearDown();
-  }
-
   // Count the rows of a table, checking that the operation succeeds.
   //
   // Must be public to use as a thread closure.
   void CheckRowCount(KuduTable* table, int expected) {
     CHECK_EQ(CountRowsFromClient(table), expected);
+  }
+
+  // Continuously sample the total size of the buffer used by pending operations
+  // of the specified KuduSession object.
+  //
+  // Must be public to use as a thread closure.
+  void MonitorSessionBufferSize(const KuduSession* session,
+                                CountDownLatch* run_ctl,
+                                int64_t* result_max_size) {
+    int64_t max_size = 0;
+    while (!run_ctl->WaitFor(MonoDelta::FromMicroseconds(1))) {
+      int size = session->data_->GetPendingOperationsSize();
+      if (size > max_size) {
+        max_size = size;
+      }
+    }
+    if (result_max_size != nullptr) {
+      *result_max_size = max_size;
+    }
   }
 
  protected:
@@ -510,6 +530,32 @@ class ClientTest : public KuduTest {
   }
 
   void DoApplyWithoutFlushTest(int sleep_micros);
+
+  // Wait for the operations to be flushed when running the session in
+  // AUTO_FLUSH_BACKGROUND mode.  In most scenarios, oprations should be
+  // flushed after the maximum wait time.  Adding an extra 5x multiplier
+  // due to other OS activity and slow runs under TSAN to avoid flakiness.
+  void WaitForAutoFlushBackground(const shared_ptr<KuduSession>& session,
+                                  int32_t flush_interval_ms) {
+    const int32_t MAX_WAIT_MS = 5 * flush_interval_ms;
+
+    const MonoTime now(MonoTime::Now());
+    const MonoTime deadline(now + MonoDelta::FromMilliseconds(MAX_WAIT_MS));
+    for (MonoTime t = now; session->HasPendingOperations() && t < deadline;
+       t = MonoTime::Now()) {
+      SleepFor(MonoDelta::FromMilliseconds(flush_interval_ms / 2));
+    }
+  }
+
+  // Measure how much time a batch of insert operations with
+  // the specified parameters takes to reach the tablet server if running
+  // ApplyInsertToSession() in the specified flush mode.
+  void TimeInsertOpBatch(KuduSession::FlushMode mode,
+                         size_t buffer_size,
+                         size_t run_idx,
+                         size_t run_num,
+                         const vector<size_t>& string_sizes,
+                         MonoDelta* result);
 
   enum WhichServerToKill {
     DEAD_MASTER,
@@ -2079,10 +2125,12 @@ TEST_F(ClientTest, TestApplyTooMuchWithoutFlushing) {
   // Applying a bunch of small rows without a flush should result
   // in an error.
   {
+    const size_t BUFFER_SIZE = 1024 * 1024;
     bool got_expected_error = false;
     shared_ptr<KuduSession> session = client_->NewSession();
     ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
-    for (int i = 0; i < 1000000; i++) {
+    ASSERT_OK(session->SetMutationBufferSpace(BUFFER_SIZE));
+    for (int i = 0; i < BUFFER_SIZE; i++) {
       Status s = ApplyInsertToSession(session.get(), client_table_, 1, 1, "x");
       if (s.IsIncomplete()) {
         ASSERT_STR_CONTAINS(s.ToString(), "not enough space remaining in buffer");
@@ -2093,16 +2141,418 @@ TEST_F(ClientTest, TestApplyTooMuchWithoutFlushing) {
       }
     }
     ASSERT_TRUE(got_expected_error);
+    EXPECT_TRUE(session->HasPendingOperations());
   }
 
   // Writing a single very large row should also result in an error.
   {
-    string huge_string(10 * 1024 * 1024, 'x');
+    const size_t BUFFER_SIZE = 1024 * 1024;
+    string huge_string(2 * BUFFER_SIZE, 'x');
 
     shared_ptr<KuduSession> session = client_->NewSession();
+    ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
+    ASSERT_OK(session->SetMutationBufferSpace(BUFFER_SIZE));
     Status s = ApplyInsertToSession(session.get(), client_table_, 1, 1, huge_string.c_str());
-    ASSERT_TRUE(s.IsIncomplete()) << "got unexpected status: " << s.ToString();
+    ASSERT_TRUE(s.IsIncomplete()) << "Got unexpected status: " << s.ToString();
+    EXPECT_FALSE(session->HasPendingOperations());
   }
+}
+
+// Applying a big operation which does not fit into the buffer should
+// return an error with session running in any supported flush mode.
+TEST_F(ClientTest, TestCheckMutationBufferSpaceLimitInEffect) {
+  const size_t BUFFER_SIZE = 256;
+  const string LONG_STRING(BUFFER_SIZE + 1, 'x');
+  const KuduSession::FlushMode FLUSH_MODES[] = {
+    KuduSession::AUTO_FLUSH_BACKGROUND,
+    KuduSession::AUTO_FLUSH_SYNC,
+    KuduSession::MANUAL_FLUSH,
+  };
+
+  for (auto mode: FLUSH_MODES) {
+    Status s;
+    shared_ptr<KuduSession> session(client_->NewSession());
+    ASSERT_OK(session->SetFlushMode(mode));
+    ASSERT_FALSE(session->HasPendingOperations());
+
+    ASSERT_OK(session->SetMutationBufferSpace(BUFFER_SIZE));
+    s = ApplyInsertToSession(
+          session.get(), client_table_, 0, 1, LONG_STRING.c_str());
+    ASSERT_TRUE(s.IsIncomplete()) << "Got unexpected status: " << s.ToString();
+    EXPECT_FALSE(session->HasPendingOperations());
+    vector<KuduError*> errors;
+    bool overflowed;
+    session->GetPendingErrors(&errors, &overflowed);
+    EXPECT_FALSE(overflowed);
+    EXPECT_EQ(1, errors.size());
+    EXPECT_TRUE(errors[0]->status().IsIncomplete());
+    EXPECT_EQ(s.ToString(), errors[0]->status().ToString());
+    STLDeleteElements(&errors);
+  }
+}
+
+// For a KuduSession object, it should be OK to switch between flush modes
+// in the middle if there is no pending operations in the buffer.
+TEST_F(ClientTest, TestSwitchFlushModes) {
+  const size_t BUFFER_SIZE = 256;
+  const string LONG_STRING(BUFFER_SIZE / 2, 'x');
+  const int32_t FLUSH_INTERVAL_MS = 100;
+
+  shared_ptr<KuduSession> session(client_->NewSession());
+  ASSERT_OK(session->SetMutationBufferSpace(BUFFER_SIZE));
+  // Start with the AUTO_FLUSH_SYNC mode.
+  ASSERT_OK(session->SetFlushMode(KuduSession::AUTO_FLUSH_SYNC));
+  ASSERT_OK(session->SetMutationBufferFlushInterval(FLUSH_INTERVAL_MS));
+  ASSERT_FALSE(session->HasPendingOperations());
+
+  ASSERT_OK(ApplyInsertToSession(
+      session.get(), client_table_, 0, 1, LONG_STRING.c_str()));
+  // No pending ops: flush should happen synchronously during the Apply() call.
+  ASSERT_FALSE(session->HasPendingOperations());
+
+  // Switch to the MANUAL_FLUSH mode.
+  ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
+  ASSERT_OK(ApplyInsertToSession(
+      session.get(), client_table_, 1, 2, LONG_STRING.c_str()));
+  ASSERT_TRUE(session->HasPendingOperations());
+  ASSERT_OK(session->Flush());
+  ASSERT_FALSE(session->HasPendingOperations());
+
+  // Switch to the AUTO_FLUSH_BACKGROUND mode.
+  ASSERT_OK(session->SetFlushMode(KuduSession::AUTO_FLUSH_BACKGROUND));
+  ASSERT_OK(ApplyInsertToSession(
+      session.get(), client_table_, 2, 3, LONG_STRING.c_str()));
+  WaitForAutoFlushBackground(session, FLUSH_INTERVAL_MS);
+  // There should be no pending ops: the background flusher should do its job.
+  ASSERT_FALSE(session->HasPendingOperations());
+
+  // Switch back to the MANUAL_FLUSH mode.
+  ASSERT_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH);
+  ASSERT_OK(ApplyInsertToSession(
+      session.get(), client_table_, 4, 5, LONG_STRING.c_str()));
+  WaitForAutoFlushBackground(session, FLUSH_INTERVAL_MS);
+  // There should be some pending ops: the automatic background flush
+  // should not be active after switch to the MANUAL_FLUSH mode.
+  ASSERT_TRUE(session->HasPendingOperations());
+  ASSERT_OK(session->Flush()));
+  ASSERT_FALSE(session->HasPendingOperations());
+}
+
+void ClientTest::TimeInsertOpBatch(
+    KuduSession::FlushMode mode,
+    size_t buffer_size,
+    size_t run_idx,
+    size_t run_num,
+    const vector<size_t>& string_sizes,
+    MonoDelta* result) {
+
+  string mode_str = "unknown";
+  switch (mode) {
+    case KuduSession::AUTO_FLUSH_BACKGROUND:
+      mode_str = "AUTO_FLUSH_BACKGROND";
+      break;
+    case KuduSession::AUTO_FLUSH_SYNC:
+      mode_str = "AUTO_FLUSH_SYNC";
+      break;
+    case KuduSession::MANUAL_FLUSH:
+      mode_str = "MANUAL_FLUSH";
+      break;
+  }
+
+  const size_t row_num = string_sizes.size();
+  shared_ptr<KuduSession> session(client_->NewSession());
+  ASSERT_OK(session->SetMutationBufferSpace(buffer_size));
+  ASSERT_OK(session->SetFlushMode(mode));
+  const MonoTime t_begin(MonoTime::Now());
+  LOG_TIMING(INFO, "Running in " + mode_str + " mode") {
+    for (size_t i = 0; i < row_num; ++i) {
+      const string long_string(string_sizes[i], '0');
+      const size_t idx = run_num * i + run_idx;
+      ASSERT_OK(ApplyInsertToSession(session.get(), client_table_, idx, idx,
+                                     long_string.c_str()));
+    }
+    EXPECT_OK(session->Flush());
+  }
+  const MonoTime t_end(MonoTime::Now());
+  ASSERT_EQ(0, session->CountPendingErrors());
+  if (result != nullptr) {
+    *result = t_end - t_begin;
+  }
+}
+
+// A test scenario to compare rate of submission of small write operations
+// in AUTO_FLUSH and AUTO_FLUSH_BACKGROUND mode; all the operations have
+// the same pre-defined size.
+TEST_F(ClientTest, TestFlushModesCompareOpRatesFixedSize) {
+  const size_t BUFFER_SIZE = 32 * 1024;
+  const size_t ROW_NUM = 4 * 1024;
+
+  vector<size_t> str_sizes(ROW_NUM, BUFFER_SIZE / 8);
+  MonoDelta t_diff_afb;
+  TimeInsertOpBatch(KuduSession::AUTO_FLUSH_BACKGROUND,
+                    BUFFER_SIZE, 0, 2, str_sizes,
+                    &t_diff_afb);
+  MonoDelta t_diff_afs;
+  TimeInsertOpBatch(KuduSession::AUTO_FLUSH_SYNC,
+                    BUFFER_SIZE, 1, 2, str_sizes,
+                    &t_diff_afs);
+  // AUTO_FLUSH_BACKGROUND should be faster than AUTO_FLUSH_SYNC.
+  EXPECT_GT(t_diff_afs.ToMilliseconds(), t_diff_afb.ToMilliseconds());
+}
+
+// A test scenario to compare rate of submission of small write operations
+// in AUTO_FLUSH and AUTO_FLUSH_BACKGROUND mode with operations of random size.
+TEST_F(ClientTest, TestFlushModesCompareOpRatesRandomSize) {
+  const size_t BUFFER_SIZE = 32 * 1024;
+  const size_t ROW_NUM = 4 * 1024;
+
+  SeedRandom();
+  vector<size_t> str_sizes(ROW_NUM);
+  for (size_t i = 0; i < ROW_NUM; ++i) {
+    //str_sizes[i] = rand() % (2 * BUFFER_SIZE / 3);
+    str_sizes[i] = rand() % (BUFFER_SIZE / 8);
+  }
+  MonoDelta t_diff_afb;
+  TimeInsertOpBatch(KuduSession::AUTO_FLUSH_BACKGROUND,
+                    BUFFER_SIZE, 0, 2, str_sizes,
+                    &t_diff_afb);
+  MonoDelta t_diff_afs;
+  TimeInsertOpBatch(KuduSession::AUTO_FLUSH_SYNC,
+                    BUFFER_SIZE, 1, 2, str_sizes,
+                    &t_diff_afs);
+  // AUTO_FLUSH_BACKGROUND should be faster than AUTO_FLUSH_SYNC.
+  EXPECT_GT(t_diff_afs.ToMilliseconds(), t_diff_afb.ToMilliseconds());
+}
+
+// A test scenario for AUTO_FLUSH_BACKGROUND mode:
+// applying a bunch of small rows without a flush should not result in
+// an error, even with low limit on the buffer space.  This is because
+// Session::Apply() blocks and waits for buffer space to become available.
+TEST_F(ClientTest, TestAutoFlushBackgroundSmallOps) {
+  const size_t BUFFER_SIZE = 1024;
+  const int32_t FLUSH_INTERVAL_MS = 100;
+  shared_ptr<KuduSession> session(client_->NewSession());
+  ASSERT_OK(session->SetMutationBufferSpace(BUFFER_SIZE));
+  ASSERT_OK(session->SetMutationBufferFlushInterval(FLUSH_INTERVAL_MS));
+  ASSERT_OK(session->SetFlushMode(KuduSession::AUTO_FLUSH_BACKGROUND));
+  for (size_t i = 0; i < 10 * BUFFER_SIZE; ++i) {
+    ASSERT_OK(ApplyInsertToSession(session.get(), client_table_, i, i, "x"));
+  }
+  WaitForAutoFlushBackground(session, FLUSH_INTERVAL_MS);
+  EXPECT_EQ(0, session->CountPendingErrors());
+  EXPECT_FALSE(session->HasPendingOperations());
+}
+
+// A test scenario for AUTO_FLUSH_BACKGROUND mode:
+// applying a bunch of rows every of which is so big in size that
+// a couple of those does not fit into the buffer.  This should be OK:
+// Session::Apply() must manage that as well, blocking on an attempt to add
+// another operation (no error, though).  Once last operation is flushed out
+// of the buffer, Session::Apply() should unblock and work with next operation,
+// and so on.
+TEST_F(ClientTest, TestAutoFlushBackgroundBigOps) {
+  const size_t BUFFER_SIZE = 32 * 1024;
+  const int32_t FLUSH_INTERVAL_MS = 100;
+  shared_ptr<KuduSession> session(client_->NewSession());
+  ASSERT_OK(session->SetMutationBufferSpace(BUFFER_SIZE));
+  ASSERT_OK(session->SetMutationBufferFlushInterval(FLUSH_INTERVAL_MS));
+  ASSERT_OK(session->SetFlushMode(KuduSession::AUTO_FLUSH_BACKGROUND));
+  for (size_t i = 3; i < 256; ++i) {
+    const string long_string((i - 1) * BUFFER_SIZE / i, 'x');
+    ASSERT_OK(ApplyInsertToSession(session.get(), client_table_, i, i,
+                                   long_string.c_str()));
+  }
+  WaitForAutoFlushBackground(session, FLUSH_INTERVAL_MS);
+  EXPECT_EQ(0, session->CountPendingErrors());
+  EXPECT_FALSE(session->HasPendingOperations());
+}
+
+// A test scenario for AUTO_FLUSH_BACKGROUND mode:
+// interleave write operations of random lenth.
+// Every single operation fits into the buffer.
+TEST_F(ClientTest, TestAutoFlushBackgroundRandomOps) {
+  const size_t BUFFER_SIZE = 1024;
+  const size_t ROW_NUM = 512;
+  const int32_t FLUSH_INTERVAL_MS = 100;
+
+  shared_ptr<KuduSession> session(client_->NewSession());
+  ASSERT_OK(session->SetMutationBufferSpace(BUFFER_SIZE));
+  ASSERT_OK(session->SetMutationBufferFlushInterval(FLUSH_INTERVAL_MS));
+  ASSERT_OK(session->SetFlushMode(KuduSession::AUTO_FLUSH_BACKGROUND));
+  SeedRandom();
+  for (size_t i = 0; i < ROW_NUM; ++i) {
+    // Every operation takes less than 2/3 of the buffer space, so no
+    // error on 'operation size is bigger than the limit' is expected.
+    const string long_string(rand() % (2 * BUFFER_SIZE / 3), 'x');
+    ASSERT_OK(ApplyInsertToSession(session.get(), client_table_, i, i,
+                                   long_string.c_str()));
+  }
+  WaitForAutoFlushBackground(session, FLUSH_INTERVAL_MS);
+  EXPECT_EQ(0, session->CountPendingErrors());
+  EXPECT_FALSE(session->HasPendingOperations());
+}
+
+// Test that in AUTO_FLUSH_BACKGROUND mode even a small amount of tiny
+// operations are put into the queue and flushed after some time.
+// Since the buffer size limit is relatively huge compared with the total size
+// of operations getting into the buffer, the high-watermark flush criteria
+// is not going to be met and the timer expiration criteria starts playing here.
+TEST_F(ClientTest, TestAutoFlushBackgroundFlushTimeout) {
+  const int32_t FLUSH_INTERVAL_MS = 100;
+  shared_ptr<KuduSession> session(client_->NewSession());
+  ASSERT_OK(session->SetMutationBufferSpace(1 * 1024 * 1024));
+  ASSERT_OK(session->SetMutationBufferFlushInterval(FLUSH_INTERVAL_MS));
+  ASSERT_OK(session->SetFlushMode(KuduSession::AUTO_FLUSH_BACKGROUND));
+  ASSERT_OK(ApplyInsertToSession(session.get(), client_table_, 0, 0, "x"));
+  ASSERT_TRUE(session->HasPendingOperations());
+  WaitForAutoFlushBackground(session, FLUSH_INTERVAL_MS);
+  EXPECT_EQ(0, session->CountPendingErrors());
+  EXPECT_FALSE(session->HasPendingOperations());
+}
+
+// Test that in AUTO_FLUSH_BACKGROUND mode applying two big operations in a row
+// works without unnecessary delay in the case illustrated by the diagram below.
+//
+//                                          +-------------------+
+//                                          |                   |
+//                                          | Data of the next  |
+//                   +---buffer_limit----+  | operation to add. |
+// flush watermark ->|                   |  |                   |
+//                   +-------------------+  +---------0---------+
+//                   |                   |
+//                   | Data of the first |
+//                   | operation.        |
+//                   |                   |
+//                   +---------0---------+
+TEST_F(ClientTest, TestAutoFlushBackgroundExtraFlush) {
+  const size_t BUFFER_SIZE = 1024;
+  const size_t STRING_LEN = 2 * BUFFER_SIZE / 3;
+  const int32 FLUSH_INTERVAL_MS = 2000;
+
+  shared_ptr<KuduSession> session(client_->NewSession());
+  ASSERT_OK(session->SetMutationBufferSpace(BUFFER_SIZE));
+  ASSERT_OK(session->SetMutationBufferFlushWatermark(0.99)); // 99%
+  ASSERT_OK(session->SetMutationBufferFlushInterval(FLUSH_INTERVAL_MS));
+  ASSERT_OK(session->SetFlushMode(KuduSession::AUTO_FLUSH_BACKGROUND));
+
+  const int32_t wait_timeout_ms = FLUSH_INTERVAL_MS;
+  for (size_t i = 0; i < 2; ++i) {
+    unique_ptr<KuduInsert> insert(client_table_->NewInsert());
+    const string str(STRING_LEN, '0' + i);
+    ASSERT_OK(insert->mutable_row()->SetInt32("key", i));
+    ASSERT_OK(insert->mutable_row()->SetInt32("int_val", i));
+    ASSERT_OK(insert->mutable_row()->SetStringCopy("string_val", str));
+
+    const MonoTime t_begin(MonoTime::Now());
+    ASSERT_OK(session->Apply(insert.release()));
+    const MonoTime t_end(MonoTime::Now());
+
+    ASSERT_TRUE(session->HasPendingOperations());
+
+    // The first Apply() call must not block because the buffer was empty.
+    //
+    // The second Apply() should go through fast because an extra flush
+    // should happen to send the first operation to the server.  It's supposed
+    // that sending an operation to the server at least on order of magnitude
+    // less than the periodic flush interval.
+    MonoDelta t_diff = t_end - t_begin;
+    EXPECT_GT(wait_timeout_ms / 10, t_diff.ToMilliseconds());
+  }
+
+  // An extra delay to let the flusher do its job and the flushed operations
+  // sent to the tablet server. It's supposed the flushed operations
+  // reach the tablet server faster than wait_timeout_ms.
+  WaitForAutoFlushBackground(session, FLUSH_INTERVAL_MS);
+
+  // At this point nothing should be in the buffer.
+  EXPECT_EQ(0, session->CountPendingErrors());
+  EXPECT_FALSE(session->HasPendingOperations());
+}
+
+// Test that and Apply() call blocks in AUTO_FLUSH_BACKGROUND mode if
+// the write operation/mutation buffer does not have enough space to accomodate
+// an incoming write operation.
+//
+// The test scenario uses the combination of watermark level
+// settings and the 'flush by timeout' behavior.  The idea is the following:
+//
+//   a. Set the high-watermark level to 200% of the buffer size limit.
+//      This setting and the fact that Apply() does not allow operations' data
+//      to accumulate over the size of the buffer
+//      gurantees that the high-watermark event will not trigger.
+//   b. Set the timeout for the flush to be high enough to distinguish
+//      between occasional delays due to other OS activity and waiting
+//      on the invocation of the blocking Apply() method.
+//   c. Try to add two write operations each of 2/3 of the buffer space in size.
+//      The first Apply() call should succeed instantly, but the second one
+//      should block.
+//   d. Measure how much time it took to return from the second invocation
+//      of the Apply() call: it should be close to the wait timeout.
+//
+TEST_F(ClientTest, TestAutoFlushBackgroundApplyBlocks) {
+  const size_t BUFFER_SIZE = 8 * 1024;
+  const size_t STRING_LEN = 2 * BUFFER_SIZE / 3;
+  const int32 FLUSH_INTERVAL_MS = 1000;
+
+  shared_ptr<KuduSession> session(client_->NewSession());
+  ASSERT_OK(session->SetMutationBufferSpace(BUFFER_SIZE));
+  ASSERT_OK(session->SetMutationBufferFlushWatermark(1.0));
+  session->data_->buffer_extra_flush_enabled_ = false;
+  ASSERT_OK(session->SetMutationBufferFlushInterval(FLUSH_INTERVAL_MS));
+  ASSERT_OK(session->SetFlushMode(KuduSession::AUTO_FLUSH_BACKGROUND));
+
+  const int32_t wait_timeout_ms = FLUSH_INTERVAL_MS;
+  {
+    unique_ptr<KuduInsert> insert(client_table_->NewInsert());
+    const string str(STRING_LEN, '0');
+    ASSERT_OK(insert->mutable_row()->SetInt32("key", 0));
+    ASSERT_OK(insert->mutable_row()->SetInt32("int_val", 0));
+    ASSERT_OK(insert->mutable_row()->SetStringCopy("string_val", str));
+
+    const MonoTime t_begin(MonoTime::Now());
+    ASSERT_OK(session->Apply(insert.release()));
+    const MonoTime t_end(MonoTime::Now());
+
+    ASSERT_TRUE(session->HasPendingOperations());
+
+    // The first Apply() call must not block, so the time spent on calling it
+    // should be at least one order of magnitude less than the periodic flush
+    // interval.
+    MonoDelta t_diff = t_end - t_begin;
+    EXPECT_GT(wait_timeout_ms / 10, t_diff.ToMilliseconds());
+  }
+  MonoDelta t_diff_blocking;
+  {
+    unique_ptr<KuduInsert> insert(client_table_->NewInsert());
+    const string str(STRING_LEN, '1');
+    ASSERT_OK(insert->mutable_row()->SetInt32("key", 1));
+    ASSERT_OK(insert->mutable_row()->SetInt32("int_val", 1));
+    ASSERT_OK(insert->mutable_row()->SetStringCopy("string_val", str));
+
+    // The second Apply() call must block until the flusher pushes already
+    // scheduled operation out of the buffer.  The second Apply() call should
+    // unblock as soon as flusher triggers purging buffered operations
+    // by timeout.
+    const MonoTime t_begin(MonoTime::Now());
+    ASSERT_OK(session->Apply(insert.release()));
+    const MonoTime t_end(MonoTime::Now());
+    t_diff_blocking = t_end - t_begin;
+  }
+
+  // An extra delay to let the flusher do its job and the flushed operations
+  // sent to the tablet server.  It's supposed the flushed operations
+  // reach the tablet server faster than wait_timeout_ms.
+  //SleepFor(MonoDelta::FromMilliseconds((1 + 1) * wait_timeout_ms));
+  WaitForAutoFlushBackground(session, FLUSH_INTERVAL_MS);
+
+  // At this point nothing should be in the buffer.
+  EXPECT_EQ(0, session->CountPendingErrors());
+  EXPECT_FALSE(session->HasPendingOperations());
+
+  // Check that t_diff_ms is close enough to wait_time_ms.
+  const int32_t t_diff_blocking_ms = t_diff_blocking.ToMilliseconds();
+  EXPECT_GT(wait_timeout_ms + wait_timeout_ms / 2, t_diff_blocking_ms);
+  EXPECT_LT(wait_timeout_ms / 2, t_diff_blocking_ms);
 }
 
 // Test that update updates and delete deletes with expected use

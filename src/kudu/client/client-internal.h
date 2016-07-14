@@ -237,6 +237,7 @@ class KuduClient::Data {
 
   AtomicInt<uint64_t> latest_observed_timestamp_;
 
+ private:
   DISALLOW_COPY_AND_ASSIGN(Data);
 };
 
