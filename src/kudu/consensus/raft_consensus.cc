@@ -73,12 +73,6 @@ DEFINE_double(leader_failure_max_missed_heartbeat_periods, 3.0,
              "The value passed to this flag may be fractional.");
 TAG_FLAG(leader_failure_max_missed_heartbeat_periods, advanced);
 
-DEFINE_int32(leader_failure_exp_backoff_max_delta_ms, 20 * 1000,
-             "Maximum time to sleep in between leader election retries, in addition to the "
-             "regular timeout. When leader election fails the interval in between retries "
-             "increases exponentially, up to this value.");
-TAG_FLAG(leader_failure_exp_backoff_max_delta_ms, experimental);
-
 DEFINE_bool(enable_leader_failure_detection, true,
             "Whether to enable failure detection of tablet leaders. If enabled, attempts will be "
             "made to elect a follower as a new leader when the leader is detected to have failed.");
@@ -1985,11 +1979,9 @@ MonoDelta RaftConsensus::LeaderElectionExpBackoffDeltaUnlocked() {
   // taken place since a leader was successfully elected.
   int term_difference = state_->GetCurrentTermUnlocked() -
     state_->GetCommittedOpIdUnlocked().term();
-  double backoff_factor = pow(1.1, term_difference);
+  double backoff_factor = pow(1.5, term_difference);
   double min_timeout = MinimumElectionTimeout().ToMilliseconds();
-  double max_timeout = std::min<double>(
-      min_timeout * backoff_factor,
-      FLAGS_leader_failure_exp_backoff_max_delta_ms);
+  double max_timeout = min_timeout * backoff_factor;
 
   // Randomize the timeout between the minimum and the calculated value.
   // We do this after the above capping to the max. Otherwise, after a
