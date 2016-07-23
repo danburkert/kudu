@@ -27,6 +27,7 @@ package org.apache.kudu.client;
 
 import com.stumbleupon.async.DeferredGroupException;
 import com.stumbleupon.async.TimeoutException;
+
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.annotations.InterfaceStability;
 

@@ -17,6 +17,7 @@
 package org.apache.kudu;
 
 import com.google.common.collect.ImmutableList;
+
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.annotations.InterfaceStability;
 import org.apache.kudu.client.Bytes;

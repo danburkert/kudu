@@ -17,7 +17,6 @@
 package org.apache.kudu.client;
 
 import com.google.protobuf.Message;
-import static org.apache.kudu.master.Master.*;
 
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.util.Pair;
@@ -25,6 +24,8 @@ import org.jboss.netty.buffer.ChannelBuffer;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.apache.kudu.master.Master.*;
 
 @InterfaceAudience.Private
 public class ListTabletServersRequest extends KuduRpc<ListTabletServersResponse> {

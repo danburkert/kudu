@@ -16,22 +16,22 @@
 // under the License.
 package org.apache.kudu.client;
 
-import org.apache.kudu.Schema;
-import org.apache.kudu.WireProtocol.AppStatusPB;
-import org.apache.kudu.client.AsyncKuduClient.RemoteTablet;
-import org.apache.kudu.tserver.Tserver.TabletServerErrorPB;
-
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
 import com.stumbleupon.async.DeferredGroupException;
 import com.stumbleupon.async.TimeoutException;
+
+import org.apache.kudu.Schema;
+import org.apache.kudu.WireProtocol.AppStatusPB;
+import org.apache.kudu.client.AsyncKuduClient.RemoteTablet;
+import org.apache.kudu.tserver.Tserver.TabletServerErrorPB;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.List;
 
 import static org.junit.Assert.*;
 

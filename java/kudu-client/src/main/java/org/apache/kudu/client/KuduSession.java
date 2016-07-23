@@ -16,15 +16,14 @@
 // under the License.
 package org.apache.kudu.client;
 
-import com.stumbleupon.async.DeferredGroupException;
-import com.stumbleupon.async.TimeoutException;
-import org.apache.kudu.annotations.*;
-
 import com.stumbleupon.async.Deferred;
-import java.util.List;
 
+import org.apache.kudu.annotations.InterfaceAudience;
+import org.apache.kudu.annotations.InterfaceStability;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
 
 /**
  * Synchronous version of {@link AsyncKuduSession}.

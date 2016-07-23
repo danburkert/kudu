@@ -17,12 +17,12 @@
 package org.apache.kudu.client;
 
 import com.google.common.collect.Lists;
-import org.junit.Test;
+
 import org.apache.kudu.ColumnSchema;
 import org.apache.kudu.Type;
 import org.apache.kudu.tserver.Tserver;
+import org.junit.Test;
 
-import java.io.IOException;
 import java.util.List;
 
 import static org.junit.Assert.*;

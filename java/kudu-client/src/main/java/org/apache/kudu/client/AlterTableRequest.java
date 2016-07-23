@@ -17,6 +17,7 @@
 package org.apache.kudu.client;
 
 import com.google.protobuf.Message;
+
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.util.Pair;
 import org.jboss.netty.buffer.ChannelBuffer;

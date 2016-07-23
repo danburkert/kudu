@@ -16,11 +16,11 @@
 // under the License.
 package org.apache.kudu.client;
 
+import org.apache.kudu.client.Statistics.Statistic;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.apache.kudu.client.Statistics.Statistic;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 public class TestStatistics extends BaseKuduTest {
 

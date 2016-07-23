@@ -16,11 +16,9 @@
 // under the License.
 package org.apache.kudu.client;
 
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
-import com.stumbleupon.async.TimeoutException;
 import org.junit.Test;
+
+import static org.junit.Assert.*;
 
 public class TestTimeouts extends BaseKuduTest {
 

@@ -17,7 +17,6 @@
 package org.apache.kudu.client;
 
 import org.apache.kudu.annotations.InterfaceAudience;
-import org.apache.kudu.annotations.InterfaceStability;
 
 @InterfaceAudience.Private
 public class CreateTableResponse extends KuduRpcResponse {

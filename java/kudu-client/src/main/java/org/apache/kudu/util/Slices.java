@@ -22,6 +22,7 @@
 package org.apache.kudu.util;
 
 import com.google.common.base.Preconditions;
+
 import org.apache.kudu.annotations.InterfaceAudience;
 
 import java.nio.ByteBuffer;

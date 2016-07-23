@@ -16,13 +16,14 @@
 // under the License.
 package org.apache.kudu.client;
 
-import static org.junit.Assert.*;
-
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Ticker;
+
 import org.junit.Test;
 
 import java.util.concurrent.atomic.AtomicLong;
+
+import static org.junit.Assert.*;
 
 public class TestDeadlineTracker {
 

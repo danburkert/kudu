@@ -16,13 +16,12 @@
 // under the License.
 package org.apache.kudu.client;
 
-import java.util.List;
-
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.rpc.RpcHeader;
 import org.apache.kudu.util.Slice;
-
 import org.jboss.netty.buffer.ChannelBuffer;
+
+import java.util.List;
 
 /**
  * This class handles information received from an RPC response, providing

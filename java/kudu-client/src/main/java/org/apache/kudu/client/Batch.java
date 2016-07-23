@@ -21,11 +21,6 @@ import com.google.common.base.MoreObjects;
 import com.google.protobuf.Message;
 import com.google.protobuf.ZeroCopyLiteralByteString;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
-import org.jboss.netty.buffer.ChannelBuffer;
 import org.apache.kudu.WireProtocol;
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.client.Statistics.Statistic;
@@ -34,6 +29,11 @@ import org.apache.kudu.tserver.Tserver;
 import org.apache.kudu.tserver.Tserver.TabletServerErrorPB;
 import org.apache.kudu.util.Pair;
 import org.apache.kudu.util.Slice;
+import org.jboss.netty.buffer.ChannelBuffer;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Used internally to group Operations for a single tablet together before sending to the tablet

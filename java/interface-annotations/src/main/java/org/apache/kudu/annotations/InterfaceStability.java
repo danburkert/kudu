@@ -18,13 +18,13 @@
  */
 package org.apache.kudu.annotations;
 
-import java.lang.annotation.Documented;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-
 import org.apache.kudu.annotations.InterfaceAudience.LimitedPrivate;
 import org.apache.kudu.annotations.InterfaceAudience.Private;
 import org.apache.kudu.annotations.InterfaceAudience.Public;
+
+import java.lang.annotation.Documented;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 
 /**
  * Annotation to inform users of how much to rely on a particular package,

@@ -20,9 +20,9 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.sun.security.auth.module.UnixSystem;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.management.VMManagement;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -43,6 +43,8 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Set;
+
+import sun.management.VMManagement;
 
 /**
  * A grouping of methods that help unit testing.

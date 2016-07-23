@@ -22,8 +22,9 @@ import com.sun.javadoc.DocErrorReporter;
 import com.sun.javadoc.LanguageVersion;
 import com.sun.javadoc.RootDoc;
 
-import jdiff.JDiff;
 import org.apache.kudu.annotations.InterfaceAudience;
+
+import jdiff.JDiff;
 
 /**
  * A <a href="http://java.sun.com/javase/6/docs/jdk/api/javadoc/doclet/">Doclet</a>

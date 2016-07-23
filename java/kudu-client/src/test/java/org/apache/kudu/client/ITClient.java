@@ -17,6 +17,7 @@
 package org.apache.kudu.client;
 
 import com.google.common.collect.ImmutableList;
+
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;

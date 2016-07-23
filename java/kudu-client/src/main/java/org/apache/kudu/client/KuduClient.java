@@ -17,10 +17,10 @@
 package org.apache.kudu.client;
 
 import com.stumbleupon.async.Deferred;
+
 import org.apache.kudu.Schema;
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.annotations.InterfaceStability;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

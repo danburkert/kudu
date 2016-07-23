@@ -16,22 +16,21 @@
 // under the License.
 package org.apache.kudu.client;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import com.google.common.collect.ImmutableList;
+import com.google.common.primitives.Longs;
 
-import java.util.ArrayList;
-
-import org.junit.Test;
 import org.apache.kudu.ColumnSchema;
 import org.apache.kudu.Schema;
 import org.apache.kudu.Type;
 import org.apache.kudu.WireProtocol.RowOperationsPB;
 import org.apache.kudu.client.Operation.ChangeType;
 import org.apache.kudu.tserver.Tserver.WriteRequestPBOrBuilder;
+import org.junit.Test;
 import org.mockito.Mockito;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.primitives.Longs;
+import java.util.ArrayList;
+
+import static org.junit.Assert.*;
 
 /**
  * Unit tests for Operation

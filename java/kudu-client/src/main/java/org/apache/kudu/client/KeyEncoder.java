@@ -18,6 +18,7 @@ package org.apache.kudu.client;
 
 import com.google.common.primitives.UnsignedLongs;
 import com.sangupta.murmur.Murmur2;
+
 import org.apache.kudu.ColumnSchema;
 import org.apache.kudu.Schema;
 import org.apache.kudu.Type;

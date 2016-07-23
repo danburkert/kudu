@@ -18,12 +18,19 @@ package org.apache.kudu.mapreduce;
 
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import org.apache.kudu.Schema;
-import org.apache.kudu.client.*;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.RecordReader;
+import org.apache.kudu.Schema;
+import org.apache.kudu.client.AsyncKuduSession;
+import org.apache.kudu.client.BaseKuduTest;
+import org.apache.kudu.client.Insert;
+import org.apache.kudu.client.KuduPredicate;
+import org.apache.kudu.client.KuduTable;
+import org.apache.kudu.client.PartialRow;
+import org.apache.kudu.client.RowResult;
 import org.junit.Test;
 
 import java.io.IOException;

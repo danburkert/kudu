@@ -17,7 +17,6 @@
 package org.apache.kudu.client;
 
 import org.junit.Test;
-import org.apache.kudu.client.Status;
 
 import static org.junit.Assert.*;
 

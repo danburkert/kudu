@@ -16,16 +16,17 @@
 // under the License.
 package org.apache.kudu.client;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import com.google.common.collect.ImmutableList;
+
 import org.apache.kudu.Common;
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.annotations.InterfaceStability;
 import org.apache.kudu.tserver.Tserver;
 import org.apache.kudu.util.HybridTimeUtil;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Abstract class to extend in order to create builders for scanners.

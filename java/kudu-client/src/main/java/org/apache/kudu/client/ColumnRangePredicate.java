@@ -18,6 +18,7 @@ package org.apache.kudu.client;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.ZeroCopyLiteralByteString;
+
 import org.apache.kudu.ColumnSchema;
 import org.apache.kudu.Type;
 import org.apache.kudu.annotations.InterfaceAudience;

@@ -18,12 +18,12 @@ package org.apache.kudu.client;
 
 import com.google.common.collect.ImmutableList;
 
+import org.apache.kudu.annotations.InterfaceAudience;
+import org.apache.kudu.tserver.Tserver;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
-import org.apache.kudu.annotations.InterfaceAudience;
-import org.apache.kudu.tserver.Tserver;
 
 /**
  * Response type for Batch (which is used internally by AsyncKuduSession).

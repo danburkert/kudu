@@ -17,14 +17,14 @@
 package org.apache.kudu.client;
 
 import com.google.common.collect.Lists;
+
+import org.apache.kudu.Schema;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.apache.kudu.Schema;
 
 import java.util.Random;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Integration test that inserts enough data to trigger flushes and getting multiple data

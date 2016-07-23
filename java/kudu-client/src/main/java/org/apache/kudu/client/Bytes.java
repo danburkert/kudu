@@ -28,6 +28,7 @@ package org.apache.kudu.client;
 import com.google.common.io.BaseEncoding;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.ZeroCopyLiteralByteString;
+
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.util.Slice;
 import org.jboss.netty.buffer.ChannelBuffer;

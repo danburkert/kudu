@@ -29,12 +29,13 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.ZeroCopyLiteralByteString;
+
+import org.apache.kudu.annotations.InterfaceAudience;
+import org.apache.kudu.rpc.RpcHeader;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
 import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.Channels;
-import org.apache.kudu.annotations.InterfaceAudience;
-import org.apache.kudu.rpc.RpcHeader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

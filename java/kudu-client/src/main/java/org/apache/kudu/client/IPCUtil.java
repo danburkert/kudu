@@ -20,6 +20,7 @@ package org.apache.kudu.client;
 
 import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.Message;
+
 import org.apache.kudu.annotations.InterfaceAudience;
 
 import java.io.IOException;

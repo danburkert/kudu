@@ -16,10 +16,10 @@
 // under the License.
 package org.apache.kudu.mapreduce;
 
+import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.annotations.InterfaceStability;
 import org.apache.kudu.client.Operation;
-import org.apache.hadoop.mapreduce.Reducer;
 
 @InterfaceAudience.Public
 @InterfaceStability.Evolving

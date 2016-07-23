@@ -17,12 +17,13 @@
 package org.apache.kudu.client;
 
 import com.google.protobuf.Message;
-import static org.apache.kudu.consensus.Metadata.*;
-import static org.apache.kudu.master.Master.*;
 
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.util.Pair;
 import org.jboss.netty.buffer.ChannelBuffer;
+
+import static org.apache.kudu.consensus.Metadata.*;
+import static org.apache.kudu.master.Master.*;
 
 /**
  * Package-private RPC that can only go to master.

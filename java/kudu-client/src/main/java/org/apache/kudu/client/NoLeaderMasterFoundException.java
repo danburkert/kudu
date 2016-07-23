@@ -19,8 +19,6 @@ package org.apache.kudu.client;
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.annotations.InterfaceStability;
 
-import java.util.List;
-
 /**
  * Indicates that the request failed because we couldn't find a leader master server.
  */

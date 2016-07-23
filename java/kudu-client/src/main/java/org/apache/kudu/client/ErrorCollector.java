@@ -17,6 +17,7 @@
 package org.apache.kudu.client;
 
 import com.google.common.base.Preconditions;
+
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.annotations.InterfaceStability;
 

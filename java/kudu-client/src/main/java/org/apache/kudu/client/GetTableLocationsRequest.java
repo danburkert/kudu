@@ -19,6 +19,7 @@ package org.apache.kudu.client;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
 import com.google.protobuf.ZeroCopyLiteralByteString;
+
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.master.Master;
 import org.apache.kudu.util.Pair;

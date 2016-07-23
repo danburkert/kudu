@@ -23,8 +23,6 @@ import java.util.List;
 
 import static org.junit.Assert.*;
 
-import com.google.common.collect.ImmutableList;
-
 public class TestRowErrors extends BaseKuduTest {
 
   private static KuduTable table;

@@ -17,7 +17,6 @@
 package org.apache.kudu.client;
 
 import org.apache.kudu.annotations.InterfaceAudience;
-import org.apache.kudu.annotations.InterfaceStability;
 
 /**
  * Exception indicating that an operation attempted to access a non-covered range partition.

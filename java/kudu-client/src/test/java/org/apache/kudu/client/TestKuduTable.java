@@ -16,13 +16,13 @@
 // under the License.
 package org.apache.kudu.client;
 
-import org.junit.Rule;
-import org.junit.rules.TestName;
 import org.apache.kudu.ColumnSchema;
 import org.apache.kudu.Schema;
 import org.apache.kudu.Type;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

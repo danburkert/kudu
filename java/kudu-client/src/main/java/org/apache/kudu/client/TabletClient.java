@@ -29,14 +29,12 @@ package org.apache.kudu.client;
 import com.google.common.annotations.VisibleForTesting;
 import com.stumbleupon.async.Deferred;
 
-import org.jboss.netty.handler.timeout.ReadTimeoutException;
 import org.apache.kudu.WireProtocol;
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.master.Master;
 import org.apache.kudu.rpc.RpcHeader;
 import org.apache.kudu.tserver.Tserver;
 import org.apache.kudu.util.Pair;
-
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
 import org.jboss.netty.channel.Channel;
@@ -49,10 +47,9 @@ import org.jboss.netty.channel.Channels;
 import org.jboss.netty.channel.ExceptionEvent;
 import org.jboss.netty.handler.codec.replay.ReplayingDecoder;
 import org.jboss.netty.handler.codec.replay.VoidEnum;
+import org.jboss.netty.handler.timeout.ReadTimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.security.sasl.SaslException;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -60,6 +57,7 @@ import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.security.sasl.SaslException;
 
 /**
  * Stateful handler that manages a connection to a specific TabletServer.

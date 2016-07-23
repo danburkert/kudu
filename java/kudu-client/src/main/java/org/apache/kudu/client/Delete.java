@@ -16,8 +16,6 @@
 // under the License.
 package org.apache.kudu.client;
 
-import org.apache.kudu.ColumnSchema;
-import org.apache.kudu.Type;
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.annotations.InterfaceStability;
 

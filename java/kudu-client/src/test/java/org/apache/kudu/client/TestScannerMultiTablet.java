@@ -19,6 +19,7 @@ package org.apache.kudu.client;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.stumbleupon.async.Deferred;
+
 import org.apache.kudu.ColumnSchema;
 import org.apache.kudu.Schema;
 import org.junit.BeforeClass;
@@ -26,9 +27,8 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 
-import static org.junit.Assert.assertNull;
 import static org.apache.kudu.Type.STRING;
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 public class TestScannerMultiTablet extends BaseKuduTest {
   // Generate a unique table name

@@ -18,14 +18,14 @@ package org.apache.kudu.client;
 
 import com.google.protobuf.Message;
 
-import java.util.Collection;
-import java.util.List;
-
 import org.apache.kudu.Schema;
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.master.Master;
 import org.apache.kudu.util.Pair;
 import org.jboss.netty.buffer.ChannelBuffer;
+
+import java.util.Collection;
+import java.util.List;
 
 /**
  * RPC to create new tables

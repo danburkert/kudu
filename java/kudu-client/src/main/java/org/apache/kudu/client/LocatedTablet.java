@@ -19,12 +19,12 @@
  */
 package org.apache.kudu.client;
 
-import java.util.List;
-
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.annotations.InterfaceStability;
 import org.apache.kudu.consensus.Metadata.RaftPeerPB.Role;
 import org.apache.kudu.master.Master.TabletLocationsPB.ReplicaPB;
+
+import java.util.List;
 
 /**
  * Information about the locations of tablets in a Kudu table.

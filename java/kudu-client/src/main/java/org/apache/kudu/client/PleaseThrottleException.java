@@ -26,6 +26,7 @@
 package org.apache.kudu.client;
 
 import com.stumbleupon.async.Deferred;
+
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.annotations.InterfaceStability;
 

@@ -16,18 +16,17 @@
 // under the License.
 package org.apache.kudu.client;
 
-import com.google.common.base.Joiner;
 import com.google.common.primitives.UnsignedBytes;
+
+import org.apache.kudu.annotations.InterfaceAudience;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Comparator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import javax.annotation.concurrent.ThreadSafe;
-
-import org.apache.kudu.annotations.InterfaceAudience;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A cache of the non-covered range partitions in a Kudu table.

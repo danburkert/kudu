@@ -16,10 +16,15 @@
 // under the License.
 package org.apache.kudu.mapreduce;
 
-import org.apache.kudu.client.*;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.RecordWriter;
+import org.apache.kudu.client.AsyncKuduScanner;
+import org.apache.kudu.client.BaseKuduTest;
+import org.apache.kudu.client.Insert;
+import org.apache.kudu.client.KuduTable;
+import org.apache.kudu.client.Operation;
+import org.apache.kudu.client.PartialRow;
 import org.junit.BeforeClass;
 import org.junit.Test;
 

@@ -16,11 +16,11 @@
 // under the License.
 package org.apache.kudu.client;
 
+import com.stumbleupon.async.Deferred;
+
 import org.apache.kudu.Schema;
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.annotations.InterfaceStability;
-
-import com.stumbleupon.async.Deferred;
 
 import java.util.List;
 

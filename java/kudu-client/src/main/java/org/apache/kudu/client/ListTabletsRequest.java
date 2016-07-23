@@ -17,10 +17,9 @@
 package org.apache.kudu.client;
 
 import com.google.protobuf.Message;
+
 import org.apache.kudu.annotations.InterfaceAudience;
-import org.apache.kudu.tablet.Tablet;
 import org.apache.kudu.tserver.Tserver;
-import org.apache.kudu.tserver.TserverService;
 import org.apache.kudu.util.Pair;
 import org.jboss.netty.buffer.ChannelBuffer;
 

@@ -23,8 +23,9 @@ import com.google.common.net.HostAndPort;
 import com.google.protobuf.ByteString;
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
-import org.apache.kudu.annotations.InterfaceAudience;
+
 import org.apache.kudu.Common;
+import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.consensus.Metadata;
 import org.apache.kudu.master.Master;
 import org.apache.kudu.util.NetUtil;

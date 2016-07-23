@@ -17,6 +17,7 @@
 package org.apache.kudu.util;
 
 import com.google.common.base.Objects;
+
 import org.apache.kudu.annotations.InterfaceAudience;
 
 @InterfaceAudience.Private

@@ -16,9 +16,9 @@
 // under the License.
 package org.apache.kudu.client;
 
-import static org.junit.Assert.assertEquals;
-
 import org.junit.Test;
+
+import static org.junit.Assert.*;
 
 public class TestRequestTracker {
 

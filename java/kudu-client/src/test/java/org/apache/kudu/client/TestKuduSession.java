@@ -16,16 +16,15 @@
 // under the License.
 package org.apache.kudu.client;
 
-import java.util.List;
+import com.google.common.collect.ImmutableList;
 
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 
-import static org.junit.Assert.*;
+import java.util.List;
 
-import com.google.common.collect.ImmutableList;
+import static org.junit.Assert.*;
 
 public class TestKuduSession extends BaseKuduTest {
   @Rule

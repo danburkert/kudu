@@ -19,12 +19,12 @@ package org.apache.kudu.mapreduce.tools;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.util.ToolRunner;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.Test;
 import org.apache.kudu.client.BaseKuduTest;
 import org.apache.kudu.mapreduce.CommandLineParser;
 import org.apache.kudu.mapreduce.HadoopTestingUtility;
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.Test;
 
 public class ITIntegrationTestBigLinkedList extends BaseKuduTest {
 

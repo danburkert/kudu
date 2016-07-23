@@ -17,11 +17,12 @@
 package org.apache.kudu.client;
 
 import com.google.protobuf.Message;
-import static org.apache.kudu.master.Master.*;
 
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.util.Pair;
 import org.jboss.netty.buffer.ChannelBuffer;
+
+import static org.apache.kudu.master.Master.*;
 
 /**
  * RPC used to check if an alter is running for the specified table
