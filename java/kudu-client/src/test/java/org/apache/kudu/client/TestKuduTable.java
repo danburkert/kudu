@@ -277,6 +277,52 @@ public class TestKuduTable extends BaseKuduTest {
     return row.encodePrimaryKey();
   }
 
+  @Test(timeout = 100000)
+  public void testAlterTableNonCoveringRange() throws Exception {
+    String tableName = name.getMethodName();
+    syncClient.createTable(tableName, basicSchema, getBasicTableOptionsWithNonCoveredRange());
+    KuduTable table = syncClient.openTable(tableName);
+    KuduSession session = syncClient.newSession();
+
+    AlterTableOptions ato = new AlterTableOptions();
+    PartialRow bLowerBound = schema.newPartialRow();
+    bLowerBound.addInt("key", 300);
+    PartialRow bUpperBound = schema.newPartialRow();
+    bUpperBound.addInt("key", 400);
+    ato.addRangePartition(bLowerBound, bUpperBound);
+    syncClient.alterTable(tableName, ato);
+
+    Insert insert = createBasicSchemaInsert(table, 301);
+    session.apply(insert);
+
+    List<LocatedTablet> tablets;
+
+    // all tablets
+    tablets = table.getTabletsLocations(getKeyInBytes(300), null, 100000);
+    assertEquals(1, tablets.size());
+    assertArrayEquals(getKeyInBytes(300), tablets.get(0).getPartition().getPartitionKeyStart());
+    assertArrayEquals(getKeyInBytes(400), tablets.get(0).getPartition().getPartitionKeyEnd());
+
+    insert = createBasicSchemaInsert(table, 201);
+    session.apply(insert);
+
+    ato = new AlterTableOptions();
+    bLowerBound = schema.newPartialRow();
+    bLowerBound.addInt("key", 200);
+    bUpperBound = schema.newPartialRow();
+    bUpperBound.addInt("key", 300);
+    ato.dropRangePartition(bLowerBound, bUpperBound);
+    syncClient.alterTable(tableName, ato);
+
+    insert = createBasicSchemaInsert(table, 202);
+    try {
+      session.apply(insert);
+      fail("Should get a non-recoverable");
+    } catch (NonCoveredRangeException e) {
+      // Expected.
+    }
+  }
+
   public KuduTable createTableWithSplitsAndTest(int splitsCount) throws Exception {
     String tableName = name.getMethodName() + System.currentTimeMillis();
     CreateTableOptions builder = getBasicCreateTableOptions();
