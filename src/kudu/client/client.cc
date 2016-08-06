@@ -912,18 +912,19 @@ Status KuduTableAlterer::Alter() {
     data_->client_->default_admin_operation_timeout();
   MonoTime deadline = MonoTime::Now(MonoTime::FINE);
   deadline.AddDelta(timeout);
+  string table_id;
   RETURN_NOT_OK(data_->client_->data_->AlterTable(data_->client_, req, deadline,
-                                                  data_->has_alter_partitioning_steps));
+                                                  data_->has_alter_partitioning_steps,
+                                                  &table_id));
 
   if (data_->has_alter_partitioning_steps) {
     // If the table partitions change, clear the local meta cache so that the
     // new tablets can immediately be written to and scanned, and the old
     // tablets won't be seen again. This also prevents rows being batched for
     // the wrong tablet when a partition is dropped and added in the same alter
-    // table transaction. We could clear the meta cache for just the table being
-    // altered or just the partition key ranges being changed, but that would
-    // require opening the table in order to get the ID, schema, and partition
-    // schema.
+    // table transaction. We could clear the meta cache for just partition key
+    // ranges being changed, but that would require opening the table in order
+    // to get the ID, schema, and partition schema.
     //
     // It is not necessary to wait for the alteration to be completed before
     // clearing the cache (i.e. the tablets to be created), because the master
@@ -932,7 +933,7 @@ Status KuduTableAlterer::Alter() {
     // write or scan, the master will return a ServiceUnavailable response if
     // the new tablets are not yet running. The meta cache will automatically
     // retry after a delay when it encounters this error.
-    data_->client_->data_->meta_cache_->ClearCache();
+    data_->client_->data_->meta_cache_->ClearCache(table_id);
   }
 
   if (data_->wait_) {

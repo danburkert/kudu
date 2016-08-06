@@ -374,8 +374,8 @@ class MetaCache : public RefCountedThreadSafe<MetaCache> {
                                scoped_refptr<RemoteTablet>* remote_tablet,
                                const StatusCallback& callback);
 
-  // Clears the meta cache.
-  void ClearCache();
+  // Clears the cache of all entries for the table.
+  void ClearCache(const std::string& table_id);
 
   // Mark any replicas of any tablets hosted by 'ts' as failed. They will
   // not be returned in future cache lookups.

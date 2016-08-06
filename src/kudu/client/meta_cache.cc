@@ -939,12 +939,12 @@ bool MetaCache::LookupTabletByKeyFastPath(const KuduTable* table,
   return false;
 }
 
-void MetaCache::ClearCache() {
-  VLOG(3) << "Clearing cache";
+void MetaCache::ClearCache(const string& table_id) {
+  VLOG(3) << "Clearing cache for table " << table_id;
   std::lock_guard<rw_spinlock> l(lock_);
-  STLDeleteValues(&ts_cache_);
-  tablets_by_id_.clear();
-  tablets_by_table_and_key_.clear();
+  delete EraseKeyReturnValuePtr(&ts_cache_, table_id);
+  tablets_by_id_.erase(table_id);
+  tablets_by_table_and_key_.erase(table_id);
 }
 
 void MetaCache::LookupTabletByKey(const KuduTable* table,

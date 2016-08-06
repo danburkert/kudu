@@ -439,7 +439,8 @@ Status KuduClient::Data::DeleteTable(KuduClient* client,
 Status KuduClient::Data::AlterTable(KuduClient* client,
                                     const AlterTableRequestPB& req,
                                     const MonoTime& deadline,
-                                    bool has_add_drop_partition) {
+                                    bool has_add_drop_partition,
+                                    string* table_id) {
   vector<uint32_t> required_feature_flags;
   if (has_add_drop_partition) {
     required_feature_flags.push_back(MasterFeatures::ADD_DROP_RANGE_PARTITIONS);
@@ -458,6 +459,7 @@ Status KuduClient::Data::AlterTable(KuduClient* client,
   if (resp.has_error()) {
     return StatusFromPB(resp.error().status());
   }
+  *table_id = std::move(*resp.mutable_table_id());
   return Status::OK();
 }
 
