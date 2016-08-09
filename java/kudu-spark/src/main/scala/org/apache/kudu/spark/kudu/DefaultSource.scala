@@ -22,25 +22,24 @@ import java.sql.Timestamp
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Row, SQLContext, SaveMode}
+import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.kudu.Type
 import org.apache.kudu.annotations.InterfaceStability
 import org.apache.kudu.client._
 import org.apache.kudu.client.KuduPredicate.ComparisonOp
-import org.apache.kudu.client.SessionConfiguration.FlushMode
-import org.apache.spark.sql.SaveMode._
 
 import scala.collection.JavaConverters._
 
 /**
   * DefaultSource for integration with Spark's dataframe datasources.
-  * This class will produce a relationProvider based on input given to it from spark.
+  * This class will produce a relationProvider based on input given to it from Spark.
   */
 @InterfaceStability.Unstable
-class DefaultSource extends RelationProvider with CreatableRelationProvider {
+class DefaultSource extends RelationProvider {
 
   val TABLE_KEY = "kudu.table"
   val KUDU_MASTER = "kudu.master"
+  val UPSERT = "kudu.upsert"
 
   /**
     * Construct a BaseRelation using the provided context and parameters.
@@ -56,38 +55,12 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider {
       throw new IllegalArgumentException(s"Kudu table name must be specified in create options " +
         s"using key '$TABLE_KEY'"))
     val kuduMaster = parameters.getOrElse(KUDU_MASTER, "localhost")
-
-    new KuduRelation(tableName, kuduMaster)(sqlContext)
-  }
-
-  /**
-    * Creates a relation and inserts data to specified table.
-    *
-    * @param sqlContext
-    * @param mode Append will not overwrite existing data, Overwrite will perform update, but will
-    *             not insert data, use upsert on KuduContext if you require both
-    * @param parameters Nessisary parameters for kudu.table and kudu.master
-    * @param data Dataframe to save into kudu
-    * @return returns populated base relation
-    */
-  override def createRelation(sqlContext: SQLContext, mode: SaveMode,
-                              parameters: Map[String, String], data: DataFrame): BaseRelation = {
-    val tableName = parameters.getOrElse(TABLE_KEY,
-      throw new IllegalArgumentException(s"Kudu table name must be specified in create options " +
-        s"using key '$TABLE_KEY'"))
-
-    val kuduMaster = parameters.getOrElse(KUDU_MASTER, "localhost")
-
-    val kuduRelation = new KuduRelation(tableName, kuduMaster)(sqlContext)
-    mode match {
-      case Append | Ignore => kuduRelation.insert(data, overwrite = false)
-      case Overwrite => kuduRelation.insert(data, overwrite = true)
-      case ErrorIfExists =>
-          throw new UnsupportedOperationException(
-            "ErrorIfExists is currently not supported")
+    val upsert = parameters.getOrElse(UPSERT, "true").toLowerCase match {
+      case "true" => true
+      case _ => false
     }
 
-    kuduRelation
+    new KuduRelation(tableName, kuduMaster, upsert)(sqlContext)
   }
 }
 
@@ -96,11 +69,13 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider {
   *
   * @param tableName Kudu table that we plan to read from
   * @param kuduMaster Kudu master addresses
+  * @param upsert Whether the relation will be inserted or upserted by default
   * @param sqlContext SparkSQL context
   */
 @InterfaceStability.Unstable
 class KuduRelation(private val tableName: String,
-                   private val kuduMaster: String)(
+                   private val kuduMaster: String,
+                   private val upsert: Boolean)(
                    val sqlContext: SQLContext)
 extends BaseRelation
 with PrunedFilteredScan
@@ -193,12 +168,20 @@ with InsertableRelation {
   }
 
   /**
-    * Inserts data into an existing Kudu table.
+    * By default, upserts data into an existing Kudu table.
+    * If the kudu.upsert parameter is set to false, data is inserted instead of upserted.
     * @param data [[DataFrame]] to be inserted into Kudu
-    * @param overwrite If True it will update existing records, but will not perform inserts.
+    * @param overwrite must be false; otherwise, throws [[UnsupportedOperationException]]
     */
   override def insert(data: DataFrame, overwrite: Boolean): Unit = {
-    context.writeRows(data, tableName, overwrite)
+    if (overwrite) {
+      throw new UnsupportedOperationException("overwrite is not supported")
+    }
+    if (upsert) {
+      context.upsertRows(data, tableName)
+    } else {
+      context.insertRows(data, tableName)
+    }
   }
 }
 
