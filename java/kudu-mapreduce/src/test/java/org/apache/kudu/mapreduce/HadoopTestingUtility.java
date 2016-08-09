@@ -19,11 +19,11 @@
 package org.apache.kudu.mapreduce;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -33,7 +33,7 @@ import java.io.IOException;
  */
 public class HadoopTestingUtility {
 
-  private static final Log LOG = LogFactory.getLog(HadoopTestingUtility.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HadoopTestingUtility.class);
 
   private File testDir;
 
@@ -72,7 +72,7 @@ public class HadoopTestingUtility {
     System.setProperty("hadoop.home.dir", this.testDir.toString());
     conf.set("hadoop.tmp.dir", this.testDir.toString() + "/mapred");
 
-    LOG.info("Test configured to write to " + this.testDir);
+    LOG.info("Test configured to write to {}", this.testDir);
     return this.testDir;
   }
 
@@ -95,7 +95,7 @@ public class HadoopTestingUtility {
     try {
       FileUtils.deleteDirectory(dir);
     } catch (IOException ex) {
-      LOG.warn("Failed to delete " + dir.getAbsolutePath());
+      LOG.warn("Failed to delete {}", dir.getAbsolutePath());
     }
   }
 }

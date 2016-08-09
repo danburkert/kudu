@@ -30,8 +30,6 @@ import org.apache.commons.cli.GnuParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FileSystem;
@@ -59,6 +57,8 @@ import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -71,12 +71,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * <p>
  * This is an integration test borrowed from goraci, written by Keith Turner,
- * which is in turn inspired by the Accumulo test called continous ingest (ci).
+ * which is in turn inspired by the Accumulo test called continuous ingest (ci).
  * The original source code can be found here:
  * </p>
  * <ul>
@@ -186,7 +185,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Delete - Disabled. A standalone program that deletes a single node
  * </li>
  * <li>
- * Walker - Disabled. A standalong program that start following a linked list and emits timing
+ * Walker - Disabled. A standalone program that start following a linked list and emits timing
  * info.
  * </li>
  * </ul>
@@ -197,16 +196,16 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <ul>
  * <li>
- * The 16 bytes row key is divided into two 8 byte long since we don't have a "bytes" type in
- * Kudu. Note that the C++ client can store bytes directly in string columns. Using longs
- * enables us to pretty print human readable keys than can then be passed back just as easily.
+ * The 16 bytes row key is divided into two 8 byte long columns. Using longs
+ * enables us to pretty print human readable keys that can then be passed back
+ * just as easily.
  * </li>
  * <li>
  * The table can be pre-split when running the Generator. The row keys' first component will be
  * spread over the Long.MIN_VALUE - Long.MAX_VALUE keyspace.
  * </li>
  * <li>
- * The Walker and Deleter progams were disabled to save some time but they can be re-enabled then
+ * The Walker and Deleter programs were disabled to save some time but they can be re-enabled then
  * ported to Kudu without too much effort.
  * </li>
  * </ul>
@@ -216,13 +215,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class IntegrationTestBigLinkedList extends Configured implements Tool {
   private static final byte[] NO_KEY = new byte[1];
 
-  protected static final String TABLE_NAME_KEY = "IntegrationTestBigLinkedList.table";
+  private static final String TABLE_NAME_KEY = "IntegrationTestBigLinkedList.table";
 
-  protected static final String DEFAULT_TABLE_NAME = "IntegrationTestBigLinkedList";
+  private static final String DEFAULT_TABLE_NAME = "IntegrationTestBigLinkedList";
 
-  protected static final String HEADS_TABLE_NAME_KEY = "IntegrationTestBigLinkedList.heads_table";
+  private static final String HEADS_TABLE_NAME_KEY = "IntegrationTestBigLinkedList.heads_table";
 
-  protected static final String DEFAULT_HEADS_TABLE_NAME = "IntegrationTestBigLinkedListHeads";
+  private static final String DEFAULT_HEADS_TABLE_NAME = "IntegrationTestBigLinkedListHeads";
 
   /** Row key, two times 8 bytes. */
   private static final String COLUMN_KEY_ONE = "key1";
@@ -254,14 +253,14 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
   private static final String GENERATOR_WRAP_KEY
       = "IntegrationTestBigLinkedList.generator.wrap";
 
-  private static final int WIDTH_DEFAULT = 1000000;
+  private static final int WIDTH_DEFAULT = 1_000_000;
   private static final int WRAP_DEFAULT = 25;
   private static final int ROWKEY_LENGTH = 16;
 
   private String toRun;
   private String[] otherArgs;
 
-  static class CINode {
+  private static class CINode {
     String key;
     String prev;
     String client;
@@ -269,8 +268,8 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
     int updateCount;
   }
 
-  static Schema getTableSchema() {
-    List<ColumnSchema> columns = new ArrayList<ColumnSchema>(7);
+  private static Schema getTableSchema() {
+    List<ColumnSchema> columns = new ArrayList<>(7);
     columns.add(new ColumnSchema.ColumnSchemaBuilder(COLUMN_KEY_ONE, Type.INT64)
         .key(true)
         .build());
@@ -293,7 +292,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
   }
 
   static Schema getHeadsTableSchema() {
-    List<ColumnSchema> columns = new ArrayList<ColumnSchema>(2);
+    List<ColumnSchema> columns = new ArrayList<>(2);
     columns.add(new ColumnSchema.ColumnSchemaBuilder(COLUMN_KEY_ONE, Type.INT64)
         .key(true)
         .build());
@@ -306,29 +305,29 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
   /**
    * A Map only job that generates random linked list and stores them.
    */
-  static class Generator extends Configured implements Tool {
+  private static class Generator extends Configured implements Tool {
 
-    private static final Log LOG = LogFactory.getLog(Generator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(Generator.class);
 
-    static class GeneratorInputFormat extends InputFormat<BytesWritable,NullWritable> {
+    static class GeneratorInputFormat extends InputFormat<BytesWritable, NullWritable> {
       static class GeneratorInputSplit extends InputSplit implements Writable {
         @Override
-        public long getLength() throws IOException, InterruptedException {
+        public long getLength() {
           return 1;
         }
         @Override
-        public String[] getLocations() throws IOException, InterruptedException {
+        public String[] getLocations() {
           return new String[0];
         }
         @Override
-        public void readFields(DataInput arg0) throws IOException {
+        public void readFields(DataInput arg0) {
         }
         @Override
-        public void write(DataOutput arg0) throws IOException {
+        public void write(DataOutput arg0) {
         }
       }
 
-      static class GeneratorRecordReader extends RecordReader<BytesWritable,NullWritable> {
+      static class GeneratorRecordReader extends RecordReader<BytesWritable, NullWritable> {
         private long count;
         private long numNodes;
         private Random rand;
@@ -423,8 +422,8 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
      *             |                 |--------||
      *             |___________________________|
      */
-    static class GeneratorMapper
-        extends Mapper<BytesWritable, NullWritable, NullWritable, NullWritable> {
+    private static class GeneratorMapper extends Mapper<BytesWritable, NullWritable,
+                                                        NullWritable, NullWritable> {
 
       private byte[][] first = null;
       private byte[][] prev = null;
@@ -446,12 +445,8 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
         Configuration conf = context.getConfiguration();
         CommandLineParser parser = new CommandLineParser(conf);
         client = parser.getClient();
-        try {
-          table = client.openTable(getTableName(conf));
-          headsTable = client.openTable(getHeadsTable(conf));
-        } catch (Exception e) {
-          throw new IOException(e);
-        }
+        table = client.openTable(getTableName(conf));
+        headsTable = client.openTable(getHeadsTable(conf));
         session = client.newSession();
         session.setFlushMode(SessionConfiguration.FlushMode.MANUAL_FLUSH);
         session.setMutationBufferSpace(WIDTH_DEFAULT);
@@ -460,29 +455,23 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
         this.width = context.getConfiguration().getInt(GENERATOR_WIDTH_KEY, WIDTH_DEFAULT);
         current = new byte[this.width][];
         int wrapMultiplier = context.getConfiguration().getInt(GENERATOR_WRAP_KEY, WRAP_DEFAULT);
-        this.wrap = (long)wrapMultiplier * width;
-        this.numNodes = context.getConfiguration().getLong(
-            GENERATOR_NUM_ROWS_PER_MAP_KEY, (long)WIDTH_DEFAULT * WRAP_DEFAULT);
+        this.wrap = (long) wrapMultiplier * width;
+        this.numNodes = context.getConfiguration().getLong(GENERATOR_NUM_ROWS_PER_MAP_KEY,
+                                                           (long) WIDTH_DEFAULT * WRAP_DEFAULT);
         if (this.numNodes < this.wrap) {
           this.wrap = this.numNodes;
         }
       }
 
       @Override
-      protected void cleanup(Context context) throws IOException, InterruptedException {
-        try {
-          session.close();
-          client.shutdown();
-        } catch (Exception ex) {
-          // ugh.
-          throw new IOException(ex);
-        }
+      protected void cleanup(Context context) throws KuduException {
+        session.close();
+        client.shutdown();
       }
 
       @Override
       protected void map(BytesWritable key, NullWritable value, Context output) throws IOException {
-        current[i] = new byte[key.getLength()];
-        System.arraycopy(key.getBytes(), 0, current[i], 0, key.getLength());
+        current[i] = key.copyBytes();
         if (++i == current.length) {
           persist(output, current, false);
           i = 0;
@@ -524,51 +513,45 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
 
       private static <T> void circularLeftShift(T[] first) {
         T ez = first[0];
-        for (int i = 0; i < first.length - 1; i++)
-          first[i] = first[i + 1];
+        System.arraycopy(first, 1, first, 0, first.length - 1);
         first[first.length - 1] = ez;
       }
 
-      private void persist(Context output, byte[][] data, boolean update)
-          throws IOException {
-        try {
-          for (int i = 0; i < data.length; i++) {
-            Operation put = update ? table.newUpdate() : table.newInsert();
-            PartialRow row = put.getRow();
+      private void persist(Context output, byte[][] data, boolean update) throws KuduException {
+        for (int i = 0; i < data.length; i++) {
+          Operation put = update ? table.newUpdate() : table.newInsert();
+          PartialRow row = put.getRow();
 
-            long keyOne = Bytes.getLong(data[i]);
-            long keyTwo = Bytes.getLong(data[i], 8);
+          long keyOne = Bytes.getLong(data[i]);
+          long keyTwo = Bytes.getLong(data[i], 8);
 
-            row.addLong(COLUMN_KEY_ONE, keyOne);
-            row.addLong(COLUMN_KEY_TWO, keyTwo);
+          row.addLong(COLUMN_KEY_ONE, keyOne);
+          row.addLong(COLUMN_KEY_TWO, keyTwo);
 
-            // prev is null for the first line, we'll update it at the end.
-            if (prev == null) {
-              row.setNull(COLUMN_PREV_ONE);
-              row.setNull(COLUMN_PREV_TWO);
-            } else {
-              row.addLong(COLUMN_PREV_ONE, Bytes.getLong(prev[i]));
-              row.addLong(COLUMN_PREV_TWO, Bytes.getLong(prev[i], 8));
-            }
-
-            if (!update) {
-              // We only add those for new inserts, we don't update the heads with a new row, etc.
-              row.addLong(COLUMN_ROW_ID, rowId + i);
-              row.addString(COLUMN_CLIENT, id);
-              row.addInt(COLUMN_UPDATE_COUNT, 0);
-            }
-            session.apply(put);
-
-            if (i % 1000 == 0) {
-              // Tickle progress every so often else maprunner will think us hung
-              output.progress();
-            }
+          // prev is null for the first line, we'll update it at the end.
+          if (prev == null) {
+            row.setNull(COLUMN_PREV_ONE);
+            row.setNull(COLUMN_PREV_TWO);
+          } else {
+            row.addLong(COLUMN_PREV_ONE, Bytes.getLong(prev[i]));
+            row.addLong(COLUMN_PREV_TWO, Bytes.getLong(prev[i], 8));
           }
 
-          session.flush();
-        } catch (Exception ex) {
-          throw new IOException(ex);
+          if (!update) {
+            // We only add those for new inserts, we don't update the heads with a new row, etc.
+            row.addLong(COLUMN_ROW_ID, rowId + i);
+            row.addString(COLUMN_CLIENT, id);
+            row.addInt(COLUMN_UPDATE_COUNT, 0);
+          }
+          session.apply(put);
+
+          if (i % 1000 == 0) {
+            // Tickle progress every so often else maprunner will think us hung
+            output.progress();
+          }
         }
+
+        session.flush();
       }
     }
 
@@ -592,13 +575,14 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
       return run(numMappers, numNodes, numTablets, tmpOutput, width, wrapMultiplier);
     }
 
-    protected void createTables(int numTablets) throws Exception {
-
+    protected void createTables(int numTablets) throws KuduException {
       createSchema(getTableName(getConf()), getTableSchema(), numTablets);
-      createSchema(getHeadsTable(getConf()), getHeadsTableSchema(), numTablets);
+      createSchema(getHeadsTable(getConf()), getHeadsTableSchema(), 1);
     }
 
-    protected void createSchema(String tableName, Schema schema, int numTablets) throws Exception {
+    protected void createSchema(String tableName,
+                                Schema schema,
+                                int numTablets) throws KuduException {
       CommandLineParser parser = new CommandLineParser(getConf());
       KuduClient client = parser.getClient();
       try {
@@ -618,14 +602,14 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
           BigInteger max = BigInteger.valueOf(Long.MAX_VALUE);
           BigInteger step = max.multiply(BigInteger.valueOf(2)).divide(BigInteger.valueOf
               (numTablets));
-          LOG.info(min.longValue());
-          LOG.info(max.longValue());
-          LOG.info(step.longValue());
+          LOG.info("{}", min.longValue());
+          LOG.info("{}", max.longValue());
+          LOG.info("{}", step.longValue());
           PartialRow splitRow = schema.newPartialRow();
           splitRow.addLong("key2", Long.MIN_VALUE);
           for (int i = 1; i < numTablets; i++) {
             long key = min.add(step.multiply(BigInteger.valueOf(i))).longValue();
-            LOG.info("key " + key);
+            LOG.info("key {}", key);
             splitRow.addLong("key1", key);
             builder.addSplitRow(splitRow);
           }
@@ -640,8 +624,8 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
 
     public int runRandomInputGenerator(int numMappers, long numNodes, Path tmpOutput,
                                        Integer width, Integer wrapMultiplier) throws Exception {
-      LOG.info("Running RandomInputGenerator with numMappers=" + numMappers
-          + ", numNodes=" + numNodes);
+      LOG.info("Running RandomInputGenerator with numMappers={}, numNodes={}",
+               numMappers, numNodes);
       Job job = new Job(getConf());
 
       job.setJobName("Random Input Generator");
@@ -664,9 +648,13 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
       return success ? 0 : 1;
     }
 
-    public int runGenerator(int numMappers, long numNodes, int numTablets, Path tmpOutput,
-                            Integer width, Integer wrapMultiplier) throws Exception {
-      LOG.info("Running Generator with numMappers=" + numMappers +", numNodes=" + numNodes);
+    public int runGenerator(int numMappers,
+                            long numNodes,
+                            int numTablets,
+                            Path tmpOutput,
+                            Integer width,
+                            Integer wrapMultiplier) throws Exception {
+      LOG.info("Running Generator with numMappers={}, numNodes={}", numMappers, numNodes);
       createTables(numTablets);
 
       Job job = new Job(getConf());
@@ -714,9 +702,9 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
    * A Map Reduce job that verifies that the linked lists generated by
    * {@link Generator} do not have any holes.
    */
-  static class Verify extends Configured implements Tool {
+  private static class Verify extends Configured implements Tool {
 
-    private static final Log LOG = LogFactory.getLog(Verify.class);
+    private static final Logger LOG = LoggerFactory.getLogger(Verify.class);
     private static final BytesWritable DEF = new BytesWritable(NO_KEY);
     private static final Joiner COMMA_JOINER = Joiner.on(",");
     private static final byte[] rowKey = new byte[ROWKEY_LENGTH];
@@ -725,13 +713,13 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
     private Job job;
 
     public static class VerifyMapper extends Mapper<NullWritable, RowResult,
-        BytesWritable, BytesWritable> {
+                                                    BytesWritable, BytesWritable> {
       private BytesWritable row = new BytesWritable();
       private BytesWritable ref = new BytesWritable();
 
       @Override
       protected void map(NullWritable key, RowResult value, Mapper.Context context)
-          throws IOException ,InterruptedException {
+          throws IOException, InterruptedException {
         Bytes.setLong(rowKey, value.getLong(0));
         Bytes.setLong(rowKey, value.getLong(1), 8);
 
@@ -739,7 +727,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
         // Emit that the row is defined
         context.write(row, DEF);
         if (value.isNull(2)) {
-          LOG.warn(String.format("Prev is not set for: %s", Bytes.pretty(rowKey)));
+          LOG.warn("Prev is not set for: {}", Bytes.pretty(rowKey));
         } else {
           Bytes.setLong(prev, value.getLong(2));
           Bytes.setLong(prev, value.getLong(3), 8);
@@ -755,9 +743,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
     }
 
     public static class VerifyReducer extends Reducer<BytesWritable,BytesWritable,Text,Text> {
-      private ArrayList<byte[]> refs = new ArrayList<byte[]>();
-
-      private AtomicInteger rows = new AtomicInteger(0);
+      private ArrayList<byte[]> refs = new ArrayList<>();
 
       @Override
       public void reduce(BytesWritable key, Iterable<BytesWritable> values, Context context)
@@ -788,7 +774,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
           keyString = COMMA_JOINER.join(Bytes.getLong(key.getBytes()),
               Bytes.getLong(key.getBytes(), 8));
 
-          LOG.error("Linked List error: Key = " + keyString + " References = " + refsList);
+          LOG.error("Linked List error: Key = {} References = {}", keyString, refsList);
         }
 
         if (defCount == 0 && refs.size() > 0) {
@@ -810,7 +796,6 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
           // node is defined and referenced
           context.getCounter(Counts.REFERENCED).increment(1);
         }
-
       }
     }
 
@@ -833,7 +818,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
     }
 
     public int run(Path outputDir, int numReducers) throws Exception {
-      LOG.info("Running Verify with outputDir=" + outputDir +", numReducers=" + numReducers);
+      LOG.info("Running Verify with outputDir={}, numReducers={}", outputDir, numReducers);
 
       job = new Job(getConf());
 
@@ -877,20 +862,21 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
       boolean success = true;
       //assert
       if (expectedReferenced != referenced.getValue()) {
-        LOG.error("Expected referenced count does not match with actual referenced count. " +
-            "Expected referenced=" + expectedReferenced + ", actual=" + referenced.getValue());
+        LOG.error("Expected referenced count ({}) does not match actual referenced count ({})",
+                  expectedReferenced, referenced.getValue());
         success = false;
       }
 
       if (unreferenced.getValue() > 0) {
         boolean couldBeMultiRef = (multiref.getValue() == unreferenced.getValue());
-        LOG.error("Unreferenced nodes were not expected. Unreferenced count=" + unreferenced.getValue()
-            + (couldBeMultiRef ? "; could be due to duplicate random numbers" : ""));
+        LOG.error("Unreferenced nodes were not expected. Unreferenced count={}{}",
+                  unreferenced.getValue(),
+                  (couldBeMultiRef ? "; could be due to duplicate random numbers" : ""));
         success = false;
       }
 
       if (undefined.getValue() > 0) {
-        LOG.error("Found an undefined node. Undefined count=" + undefined.getValue());
+        LOG.error("Found an undefined node. Undefined count={}", undefined.getValue());
         success = false;
       }
 
@@ -926,7 +912,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
    */
   static class Loop extends Configured implements Tool {
 
-    private static final Log LOG = LogFactory.getLog(Loop.class);
+    private static final Logger LOG = LoggerFactory.getLogger(Loop.class);
 
     IntegrationTestBigLinkedList it;
 
@@ -957,7 +943,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
       for (int i = 0; i < retries; i++) {
         if (i > 0) {
           long sleep = 60 * 1000;
-          LOG.info("Retrying in " + sleep + "ms");
+          LOG.info("Retrying in {}ms", sleep);
           Thread.sleep(sleep);
         }
 
@@ -969,12 +955,12 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
         verify.setConf(getConf());
         int retCode = verify.run(iterationOutput, numReducers);
         if (retCode > 0) {
-          LOG.warn("Verify.run failed with return code: " + retCode);
+          LOG.warn("Verify.run failed with return code: {}", retCode);
         } else if (!verify.verify(expectedNumNodes)) {
           LOG.warn("Verify.verify failed");
         } else {
           fs.delete(iterationOutput, true);
-          LOG.info("Verify finished with success. Total nodes=" + expectedNumNodes);
+          LOG.info("Verify finished with success. Total nodes={}", expectedNumNodes);
           return;
         }
       }
@@ -989,7 +975,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
             "<start expected nodes> <num_verify_retries>]");
         return 1;
       }
-      LOG.info("Running Loop with args:" + Arrays.deepToString(args));
+      LOG.info("Running Loop with args: {}", Arrays.deepToString(args));
 
       int numIterations = Integer.parseInt(args[0]);
       int numMappers = Integer.parseInt(args[1]);
@@ -1009,7 +995,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
       fs = FileSystem.get(getConf());
 
       for (int i = 0; i < numIterations; i++) {
-        LOG.info("Starting iteration = " + i);
+        LOG.info("Starting iteration = {}", i);
         runGenerator(numMappers, numNodes, numTablets, outputDir, width, wrapMultiplier);
         expectedNumNodes += numMappers * numNodes;
 
@@ -1113,7 +1099,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
    */
   private static class Updater extends Configured implements Tool {
 
-    private static final Log LOG = LogFactory.getLog(Updater.class);
+    private static final Logger LOG = LoggerFactory.getLogger(Updater.class);
 
     private static final String MAX_LINK_UPDATES_PER_MAPPER = "kudu.updates.per.mapper";
 
@@ -1158,18 +1144,11 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
         Configuration conf = context.getConfiguration();
         CommandLineParser parser = new CommandLineParser(conf);
         client = parser.getClient();
-        try {
-          table = client.openTable(getTableName(conf));
-        } catch (Exception e) {
-          throw new IOException("Couldn't open the linked list table", e);
-        }
+        table = client.openTable(getTableName(conf));
         session = client.newSession();
 
-        Schema tableSchema = table.getSchema();
-
-
         numUpdatesPerMapper = conf.getLong(MAX_LINK_UPDATES_PER_MAPPER, 1);
-        headsCache = new ArrayList<Pair<Long, Long>>((int)numUpdatesPerMapper);
+        headsCache = new ArrayList<>((int)numUpdatesPerMapper);
       }
 
       @Override
@@ -1185,8 +1164,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
 
         // At this point we've exhausted the scanner and hopefully gathered all the linked list
         // heads we needed.
-        LOG.info("Processing " + headsCache.size() +
-            " linked lists, out of " + numUpdatesPerMapper);
+        LOG.info("Processing {} linked lists, out of {}", headsCache.size(), numUpdatesPerMapper);
         processAllHeads(context);
       }
 
@@ -1206,20 +1184,20 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
         String client = null;
 
         // Always printing this out, really useful when debugging.
-        LOG.info("Head: " + getStringFromKeys(headKeyOne, headKeyTwo));
+        LOG.info("Head: {}", getStringFromKeys(headKeyOne, headKeyTwo));
 
         do {
           RowResult prev = nextNode(prevKeyOne, prevKeyTwo);
           if (prev == null) {
             context.getCounter(Counts.BROKEN_LINKS).increment(1);
-            LOG.warn(getStringFromKeys(prevKeyOne, prevKeyTwo) + " doesn't exist");
+            LOG.warn("{} doesn't exist", getStringFromKeys(prevKeyOne, prevKeyTwo));
             break;
           }
 
           // It's possible those columns are null, let's not break trying to read them.
           if (prev.isNull(0) || prev.isNull(1)) {
             context.getCounter(Counts.BROKEN_LINKS).increment(1);
-            LOG.warn(getStringFromKeys(prevKeyOne, prevKeyTwo) + " isn't referencing anywhere");
+            LOG.warn("{} isn't referencing anywhere", getStringFromKeys(prevKeyOne, prevKeyTwo));
             break;
           }
 
@@ -1234,16 +1212,17 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
 
           if (prevCount != currentCount) {
             context.getCounter(Counts.BAD_UPDATE_COUNTS).increment(1);
-            LOG.warn(getStringFromKeys(prevKeyOne, prevKeyTwo) + " has a wrong updateCount, " +
-                prevCount + " instead of " + currentCount);
+            LOG.warn("{} has a wrong updateCount, {} instead of {}",
+                     getStringFromKeys(prevKeyOne, prevKeyTwo),
+                     prevCount, currentCount);
             // Game over, there's corruption.
             break;
           }
 
           if (!prevClient.equals(client)) {
             context.getCounter(Counts.BROKEN_LINKS).increment(1);
-            LOG.warn(getStringFromKeys(prevKeyOne, prevKeyTwo) + " has the wrong client, " +
-                "bad reference? Bad client= " + prevClient);
+            LOG.warn("{} has the wrong client, bad reference? Bad client= {}",
+                     getStringFromKeys(prevKeyOne, prevKeyTwo), prevClient);
             break;
           }
 
@@ -1286,7 +1265,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
         row.addInt(COLUMN_UPDATE_COUNT, newCount);
         try {
           session.apply(update);
-        } catch (Exception e) {
+        } catch (KuduException e) {
           // Goes right out and fails the job.
           throw new IOException("Couldn't update the following row: " +
               getStringFromKeys(keyOne, keyTwo), e);
@@ -1322,19 +1301,14 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
       }
 
       @Override
-      protected void cleanup(Context context) throws IOException, InterruptedException {
-        try {
-          session.close();
-          client.shutdown();
-        } catch (Exception ex) {
-          // Goes right out and fails the job.
-          throw new IOException("Coulnd't close the scanner after the task completed", ex);
-        }
+      protected void cleanup(Context context) throws KuduException {
+        session.close();
+        client.shutdown();
       }
     }
 
     public int run(long maxLinkUpdatesPerMapper) throws Exception {
-      LOG.info("Running Updater with maxLinkUpdatesPerMapper=" + maxLinkUpdatesPerMapper);
+      LOG.info("Running Updater with maxLinkUpdatesPerMapper={}", maxLinkUpdatesPerMapper);
 
       Job job = new Job(getConf());
 
@@ -1390,7 +1364,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
             " or zero");
         return 1;
       }
-      LOG.info("Running Loop with args:" + Arrays.deepToString(args));
+      LOG.info("Running Loop with args: {}", Arrays.deepToString(args));
 
       int numIterations = Integer.parseInt(args[0]);
       long maxUpdates = Long.parseLong(args[1]);
@@ -1404,7 +1378,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
       }
 
       for (int i = 0; i < numIterations; i++) {
-        LOG.info("Starting iteration = " + i);
+        LOG.info("Starting iteration = {}", i);
         int ret = run(maxUpdates);
         if (ret != 0) {
           LOG.error("Can't continue updating, last run failed.");
@@ -1454,7 +1428,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
     private KuduTable table;
 
     @Override
-    public int run(String[] args) throws IOException {
+    public int run(String[] args) throws KuduException {
       if (args.length < 1) {
         System.err.println("Usage: Walker <start key> [<num nodes>]");
         System.err.println(" where <num nodes> defaults to 100 nodes that will be printed out");
@@ -1477,15 +1451,11 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
 
       System.out.println("Walking with " + getStringFromKeys(keyOne, keyTwo));
 
-      try {
-        walk(keyOne, keyTwo, maxNumNodes);
-      } catch (Exception e) {
-        throw new IOException(e);
-      }
+      walk(keyOne, keyTwo, maxNumNodes);
       return 0;
     }
 
-    private void walk(long headKeyOne, long headKeyTwo, int maxNumNodes) throws Exception {
+    private void walk(long headKeyOne, long headKeyTwo, int maxNumNodes) throws KuduException {
       CommandLineParser parser = new CommandLineParser(getConf());
       client = parser.getClient();
       table = client.openTable(getTableName(getConf()));
@@ -1514,7 +1484,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
           maxNumNodes));
     }
 
-    private RowResult nextNode(long keyOne, long keyTwo) throws Exception {
+    private RowResult nextNode(long keyOne, long keyTwo) throws KuduException {
       KuduScanner.KuduScannerBuilder builder = client.newScannerBuilder(table);
       configureScannerForRandomRead(builder, table, keyOne, keyTwo);
 
@@ -1566,17 +1536,17 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
   }
 
   private static String getStringFromKeys(long key1, long key2) {
-    return new StringBuilder().append(key1).append(",").append(key2).toString();
+    return String.format("%s,%s", key1, key2);
   }
 
-  private static RowResult getOneRowResult(KuduScanner scanner) throws Exception {
+  private static RowResult getOneRowResult(KuduScanner scanner) throws KuduException {
     RowResultIterator rowResults;
     rowResults = scanner.nextRows();
     if (rowResults.getNumRows() == 0) {
       return null;
     }
     if (rowResults.getNumRows() > 1) {
-      throw new Exception("Received too many rows from scanner " + scanner);
+      throw new IllegalStateException("Received too many rows from scanner " + scanner);
     }
     return rowResults.next();
   }
@@ -1616,7 +1586,7 @@ public class IntegrationTestBigLinkedList extends Configured implements Tool {
 
   @Override
   public int run(String[] args) throws Exception {
-    Tool tool = null;
+    Tool tool;
     processOptions(args);
     if (toRun.equals("Generator")) {
       tool = new Generator();
