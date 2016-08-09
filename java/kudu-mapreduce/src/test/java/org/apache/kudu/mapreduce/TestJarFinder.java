@@ -16,10 +16,9 @@
 // under the License.
 package org.apache.kudu.mapreduce;
 
-import org.apache.commons.logging.LogFactory;
 import org.junit.Assert;
 import org.junit.Test;
-import org.junit.experimental.categories.Category;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -44,7 +43,7 @@ public class TestJarFinder {
   public void testJar() throws Exception {
 
     // Picking a class that is for sure in a JAR in the classpath
-    String jar = JarFinder.getJar(LogFactory.class);
+    String jar = JarFinder.getJar(LoggerFactory.class);
     Assert.assertTrue(new File(jar).exists());
   }
 

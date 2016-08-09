@@ -28,8 +28,6 @@ import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.commons.net.util.Base64;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -45,6 +43,8 @@ import org.apache.kudu.client.ColumnRangePredicate;
 import org.apache.kudu.client.KuduPredicate;
 import org.apache.kudu.client.KuduTable;
 import org.apache.kudu.client.Operation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Utility class to setup MR jobs that use Kudu as an input and/or output.
@@ -54,7 +54,7 @@ import org.apache.kudu.client.Operation;
 public class KuduTableMapReduceUtil {
   // Mostly lifted from HBase's TableMapReduceUtil
 
-  private static final Log LOG = LogFactory.getLog(KuduTableMapReduceUtil.class);
+  private static final Logger LOG = LoggerFactory.getLogger(KuduTableMapReduceUtil.class);
 
   /**
    * Doesn't need instantiation
