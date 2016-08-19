@@ -576,6 +576,120 @@ public class PartialRow {
   }
 
   /**
+   * Sets the column to the minimum possible value for the column's type.
+   * @param index the index of the column to set to the minimum
+   */
+  void setMin(int index) {
+    Type type = schema.getColumnByIndex(index).getType();
+    switch (type) {
+      case BOOL: addBoolean(index, false); break;
+      case INT8: addByte(index, Byte.MIN_VALUE); break;
+      case INT16: addShort(index, Short.MIN_VALUE); break;
+      case INT32: addInt(index, Integer.MIN_VALUE); break;
+      case INT64:
+      case TIMESTAMP: addLong(index, Integer.MIN_VALUE); break;
+      case FLOAT: addFloat(index, -Float.MAX_VALUE); break;
+      case DOUBLE: addDouble(index, -Double.MAX_VALUE); break;
+      case STRING: addStringUtf8(index, AsyncKuduClient.EMPTY_ARRAY); break;
+      case BINARY: addBinary(index, AsyncKuduClient.EMPTY_ARRAY); break;
+    }
+  }
+
+  /**
+   * Sets the column to the provided raw value.
+   * @param index the index of the column to set
+   * @param value the raw value
+   */
+  void setRaw(int index, byte[] value) {
+    Type type = schema.getColumnByIndex(index).getType();
+    switch (type) {
+      case BOOL:
+      case INT8:
+      case INT16:
+      case INT32:
+      case INT64:
+      case TIMESTAMP:
+      case FLOAT:
+      case DOUBLE: {
+        Preconditions.checkArgument(value.length == type.getSize());
+        System.arraycopy(value, 0, rowAlloc, getPositionInRowAllocAndSetBitSet(index), value.length);
+        break;
+      }
+      case STRING:
+      case BINARY: {
+        addVarLengthData(index, value);
+        break;
+      }
+    }
+  }
+
+  /**
+   * Increments the column at the given index, returning {@code false} if the
+   * value is already the maximum.
+   *
+   * @param index the column index to increment
+   * @return {@code true} if the column is successfully incremented, or false if
+   *         it is already the maximum value
+   */
+  boolean incrementColumn(int index) {
+    Type type = schema.getColumnByIndex(index).getType();
+    Preconditions.checkState(isSet(index));
+    int offset = getPositionInRowAllocAndSetBitSet(index);
+    switch (type) {
+      case BOOL: {
+        boolean isFalse = rowAlloc[offset] == 0;
+        rowAlloc[offset] = 1;
+        return isFalse;
+      }
+      case INT8:{
+        byte existing = rowAlloc[offset];
+        if (existing == Byte.MAX_VALUE) return false;
+        rowAlloc[offset] = (byte) (existing + 1);
+        return true;
+      }
+      case INT16: {
+        short existing = Bytes.getShort(rowAlloc, offset);
+        if (existing == Short.MAX_VALUE) return false;
+        Bytes.setShort(rowAlloc, (short) (existing + 1), offset);
+        return true;
+      }
+      case INT32: {
+        int existing = Bytes.getInt(rowAlloc, offset);
+        if (existing == Integer.MAX_VALUE) return false;
+        Bytes.setInt(rowAlloc, existing + 1, offset);
+        return true;
+      }
+      case INT64:
+      case TIMESTAMP: {
+        long existing = Bytes.getLong(rowAlloc, offset);
+        if (existing == Long.MAX_VALUE) return false;
+        Bytes.setLong(rowAlloc, existing + 1, offset);
+        return true;
+      }
+      case FLOAT: {
+        float existing = Bytes.getFloat(rowAlloc, offset);
+        float incremented = Math.nextAfter(existing, Float.POSITIVE_INFINITY);
+        if (existing == incremented) return false;
+        Bytes.setFloat(rowAlloc, incremented, offset);
+        return true;
+      }
+      case DOUBLE: {
+        double existing = Bytes.getFloat(rowAlloc, offset);
+        double incremented = Math.nextAfter(existing, Double.POSITIVE_INFINITY);
+        if (existing == incremented) return false;
+        Bytes.setDouble(rowAlloc, incremented, offset);
+        return true;
+      }
+      case STRING:
+      case BINARY: {
+        varLengthData.get(index).put((byte) 0);
+        return true;
+      }
+    }
+    throw new RuntimeException("unreachable");
+  }
+
+  /**
    * Get the schema used for this row.
    * @return a schema that came from KuduTable
    */
