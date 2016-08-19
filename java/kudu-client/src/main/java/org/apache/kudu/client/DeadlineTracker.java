@@ -16,6 +16,7 @@
 // under the License.
 package org.apache.kudu.client;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Stopwatch;
 
 import java.util.concurrent.TimeUnit;
@@ -147,11 +148,11 @@ public class DeadlineTracker {
     this.deadline = deadline;
   }
 
+  @Override
   public String toString() {
-    StringBuffer buf = new StringBuffer("DeadlineTracker(timeout=");
-    buf.append(deadline);
-    buf.append(", elapsed=").append(stopwatch.elapsed(TimeUnit.MILLISECONDS));
-    buf.append(")");
-    return buf.toString();
+    return MoreObjects.toStringHelper(this)
+                      .add("timeout", deadline)
+                      .add("elapsed", getElapsedMillis())
+                      .toString();
   }
 }

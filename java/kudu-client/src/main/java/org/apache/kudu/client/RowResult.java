@@ -38,7 +38,7 @@ import java.util.TimeZone;
 public class RowResult {
 
   private static final int INDEX_RESET_LOCATION = -1;
-  private static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+  private static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-ddTHH:mm:ss");
   {
     DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("GMT"));
   }
@@ -326,7 +326,7 @@ public class RowResult {
     checkValidColumn(columnIndex);
     checkNull(columnIndex);
     checkType(columnIndex, Type.STRING);
-    // C++ puts a Slice in rowData which is 16 bytes long for simplity, but we only support ints
+    // C++ puts a Slice in rowData which is 16 bytes long for simplicity, but we only support ints.
     long offset = getLong(columnIndex);
     long length = rowData.getLong(getCurrentRowDataOffsetForColumn(columnIndex) + 8);
     assert offset < Integer.MAX_VALUE;
@@ -503,18 +503,17 @@ public class RowResult {
   }
 
   /**
-   * Transforms a timestamp into a string, whose formatting and timezone is consistent
-   * across kudu.
+   * Transforms a timestamp into an ISO8601 formatted string.
+   *
    * @param timestamp the timestamp, in microseconds
-   * @return a string, in the format: YYYY-MM-DD HH:MM:SS.ssssss GMT
+   * @return a string, in the format: YYYY-MM-DDTHH:MM:SS.ssssssZ
    */
-  static String timestampToString(long timestamp) {
+  static StringBuilder appendTimestamp(long timestamp, StringBuilder sb) {
     long tsMillis = timestamp / MS_IN_S;
     long tsMicros = timestamp % US_IN_S;
-    StringBuffer formattedTs = new StringBuffer();
-    formattedTs.append(DATE_FORMAT.format(new Date(tsMillis)));
-    formattedTs.append(String.format(".%06d GMT", tsMicros));
-    return formattedTs.toString();
+    sb.append(DATE_FORMAT.format(new Date(tsMillis)));
+    sb.append(String.format(".%06dZ", tsMicros));
+    return sb;
   }
 
   /**
@@ -522,7 +521,7 @@ public class RowResult {
    * form.
    */
   public String rowToString() {
-    StringBuffer buf = new StringBuffer();
+    StringBuilder buf = new StringBuilder();
     for (int i = 0; i < schema.getColumnCount(); i++) {
       ColumnSchema col = schema.getColumnByIndex(i);
       if (i != 0) {
@@ -535,13 +534,10 @@ public class RowResult {
       } else {
         switch (col.getType()) {
           case INT8: buf.append(getByte(i)); break;
-          case INT16: buf.append(getShort(i));
-            break;
+          case INT16: buf.append(getShort(i)); break;
           case INT32: buf.append(getInt(i)); break;
           case INT64: buf.append(getLong(i)); break;
-          case TIMESTAMP: {
-            buf.append(timestampToString(getLong(i)));
-          } break;
+          case TIMESTAMP: appendTimestamp(getLong(i), buf); break;
           case STRING: buf.append(getString(i)); break;
           case BINARY: buf.append(Bytes.pretty(getBinaryCopy(i))); break;
           case FLOAT: buf.append(getFloat(i)); break;
@@ -559,12 +555,11 @@ public class RowResult {
    * the iterator as well as its data.
    */
   public String toStringLongFormat() {
-    StringBuffer buf = new StringBuffer(this.rowSize); // super rough estimation
+    StringBuilder buf = new StringBuilder(this.rowSize); // super rough estimation
     buf.append(this.toString());
     buf.append("{");
     buf.append(rowToString());
     buf.append("}");
     return buf.toString();
   }
-
 }

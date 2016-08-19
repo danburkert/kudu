@@ -24,14 +24,12 @@ import static org.apache.kudu.client.KuduPredicate.ComparisonOp.GREATER;
 import static org.apache.kudu.client.KuduPredicate.ComparisonOp.GREATER_EQUAL;
 import static org.apache.kudu.client.KuduPredicate.ComparisonOp.LESS;
 import static org.apache.kudu.client.KuduPredicate.ComparisonOp.LESS_EQUAL;
-import static org.apache.kudu.client.RowResult.timestampToString;
+import static org.apache.kudu.client.RowResult.appendTimestamp;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
-import com.google.common.collect.Lists;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -278,9 +276,9 @@ public class TestKuduClient extends BaseKuduTest {
     for (int i = 0; i < rowStrings.size(); i++) {
       StringBuilder expectedRow = new StringBuilder();
       expectedRow.append(String.format("TIMESTAMP key=%s, TIMESTAMP c1=",
-          timestampToString(timestamps.get(i))));
+                                       appendTimestamp(timestamps.get(i))));
       if (i % 2 == 1) {
-        expectedRow.append(timestampToString(timestamps.get(i)));
+        expectedRow.append(appendTimestamp(timestamps.get(i)));
       } else {
         expectedRow.append("NULL");
       }

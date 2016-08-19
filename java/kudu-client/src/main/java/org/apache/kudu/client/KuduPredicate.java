@@ -627,7 +627,8 @@ public class KuduPredicate {
       case INT16: return Short.toString(Bytes.getShort(value));
       case INT32: return Integer.toString(Bytes.getInt(value));
       case INT64: return Long.toString(Bytes.getLong(value));
-      case TIMESTAMP: return RowResult.timestampToString(Bytes.getLong(value));
+      case TIMESTAMP:
+        return RowResult.appendTimestamp(Bytes.getLong(value), new StringBuilder()).toString();
       case FLOAT: return Float.toString(Bytes.getFloat(value));
       case DOUBLE: return Double.toString(Bytes.getDouble(value));
       case STRING: {

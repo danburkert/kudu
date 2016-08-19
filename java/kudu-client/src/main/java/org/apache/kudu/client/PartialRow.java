@@ -23,11 +23,14 @@ import java.util.List;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.common.escape.Escapers;
+
 import org.apache.kudu.ColumnSchema;
 import org.apache.kudu.Schema;
 import org.apache.kudu.Type;
 import org.apache.kudu.annotations.InterfaceAudience;
 import org.apache.kudu.annotations.InterfaceStability;
+import org.apache.kudu.util.Slice;
 
 /**
  * Class used to represent parts of a row along with its schema.<p>
@@ -536,43 +539,54 @@ public class PartialRow {
       sb.append(" ");
       sb.append(col.getName());
       sb.append("=");
-
-      if (type == Type.STRING || type == Type.BINARY) {
-        ByteBuffer value = getVarLengthData().get(i).duplicate();
-        value.reset(); // Make sure we start at the beginning.
-        byte[] data = new byte[value.limit()];
-        value.get(data);
-        if (type == Type.STRING) {
-          sb.append(Bytes.getString(data));
-        } else {
-          sb.append(Bytes.pretty(data));
-        }
-      } else {
-        switch (type) {
-          case INT8:
-            sb.append(Bytes.getByte(rowAlloc, schema.getColumnOffset(i)));
-            break;
-          case INT16:
-            sb.append(Bytes.getShort(rowAlloc, schema.getColumnOffset(i)));
-            break;
-          case INT32:
-            sb.append(Bytes.getInt(rowAlloc, schema.getColumnOffset(i)));
-            break;
-          case INT64:
-            sb.append(Bytes.getLong(rowAlloc, schema.getColumnOffset(i)));
-            break;
-          case TIMESTAMP:
-            sb.append(Bytes.getLong(rowAlloc, schema.getColumnOffset(i)));
-            break;
-          default:
-            throw new IllegalArgumentException(String.format(
-                "The column type %s is not a valid key component type", type));
-        }
-      }
+      appendColumnValueString(i, sb);
     }
     sb.append(")");
 
     return sb.toString();
+  }
+
+  /**
+   * Appends a stringified column value to the buffer.
+   * @param index the index of the column to format
+   * @param sb the buffer
+   * @return the buffer
+   */
+  private StringBuilder appendColumnValueString(int index, StringBuilder sb) {
+    if (!isSet(index)) return sb;
+    if (isSetToNull(index)) return sb.append("NULL");
+
+    final Type type = schema.getColumnByIndex(index).getType();
+    final int offset = schema.getColumnOffset(index);
+    switch (type) {
+      case BOOL: return sb.append(Bytes.getBoolean(rowAlloc, offset));
+      case INT8: return sb.append(Bytes.getByte(rowAlloc, offset));
+      case INT16: return sb.append(Bytes.getShort(rowAlloc, offset));
+      case INT32: return sb.append(Bytes.getInt(rowAlloc, offset));
+      case INT64: return sb.append(Bytes.getLong(rowAlloc, offset));
+      case TIMESTAMP: return RowResult.appendTimestamp(Bytes.getLong(rowAlloc, offset), sb);
+      case FLOAT: return sb.append(Bytes.getFloat(rowAlloc, offset));
+      case DOUBLE: return sb.append(Bytes.getDouble(rowAlloc, offset));
+      case STRING: {
+        sb.append('"');
+        ByteBuffer value = getVarLengthData().get(index).duplicate();
+        value.reset(); // Make sure we start at the beginning.
+        byte[] data = new byte[value.limit()];
+        value.get(data);
+        // TODO: does this value need to be escaped?
+        sb.append(Bytes.getString(data));
+        return sb.append('"');
+      }
+      case BINARY: {
+        ByteBuffer value = getVarLengthData().get(index).duplicate();
+        value.reset(); // Make sure we start at the beginning.
+        byte[] data = new byte[value.limit()];
+        value.get(data);
+        sb.append(Bytes.hex(data));
+        return sb.append(Bytes.hex(data));
+      }
+      default: throw new RuntimeException(String.format("Unknown data type %s", type));
+    }
   }
 
   /**
