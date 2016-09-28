@@ -72,6 +72,7 @@ ADD_KUDU_TEST(ts_recovery-itest)
 ADD_KUDU_TEST(ts_tablet_manager-itest)
 ADD_KUDU_TEST(webserver-stress-itest)
 ADD_KUDU_TEST(write_throttling-itest)
+ADD_KUDU_TEST(insert-verify-itest)
 
 # Tests that should not be run automatically by ctest.
 ADD_KUDU_TEST_NO_CTEST(version_migration-test)
