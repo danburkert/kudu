@@ -492,6 +492,20 @@ Status LogBlockContainer::ReadContainerRecords(deque<BlockRecordPB>* records) co
       local_records.pop_back();
       break;
     }
+
+    const auto& record = local_records.back();
+    if (data_file_size < record.offset() + record.length()) {
+      // This codepath can be used in read-only mode as part of a tool running
+      // against a live tablet server. In this case, the tablet server may be
+      // actively appending entries to the container, so the data_file_size may
+      // need to be occasionally updated to account for new data entries. The
+      // pb_reader will read metadata entries which have been appended after the
+      // first call to get the data file size, so it's important that the file
+      // size get updated because CheckBlockRecord will crash the process if the
+      // data file size does not allow for the block.
+
+      RETURN_NOT_OK(data_file_->Size(&data_file_size));
+    }
     CheckBlockRecord(local_records.back(), data_file_size);
   }
   // NOTE: 'read_status' will never be OK here.
