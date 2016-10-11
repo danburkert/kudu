@@ -29,8 +29,7 @@
 :experimental:
 
 [[rn_1.0.1]]
-
-== Overview
+== Kudu 1.0.1 Release Notes
 
 Apache Kudu 1.0.1 is a bug fix release, with no new features or backwards
 incompatible changes.
@@ -72,8 +71,7 @@ incompatible changes.
   startup.
 
 [[rn_1.0.0]]
-
-== Overview
+== Kudu 1.0.0 Release Notes
 
 After approximately a year of beta releases, Apache Kudu has reached version 1.0.
 This version number signifies that the development team feels that Kudu is stable
