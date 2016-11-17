@@ -519,6 +519,8 @@ class TestDisableInit : public KuduTest {
   }
 };
 
+// We are not able to detect mutexes not being set with the macOS version of libsasl.
+#ifndef __APPLE__
 // Test disabling SASL but not remembering to initialize the SASL mutex support.
 TEST_F(TestDisableInit, TestDisableSasl_NoMutexImpl) {
   DoTest([]() {
@@ -528,6 +530,7 @@ TEST_F(TestDisableInit, TestDisableSasl_NoMutexImpl) {
       ASSERT_STR_CONTAINS(s.ToString(), "not provided with a mutex implementation");
     });
 }
+#endif
 
 // Test disabling SASL but not actually properly initializing it before usage.
 TEST_F(TestDisableInit, TestDisableSasl_NotInitialized) {

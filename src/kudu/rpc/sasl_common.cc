@@ -36,11 +36,6 @@
 
 using std::set;
 
-// This symbol is exported by the SASL library but not defined
-// in the headers. It's marked as an API in the library source,
-// so seems safe to rely on.
-extern "C" sasl_utils_t* sasl_global_utils;
-
 namespace kudu {
 namespace rpc {
 
@@ -178,8 +173,27 @@ void SaslSetMutex() {
 }
 } // namespace internal
 
+// Sasl initialization detection methods. The OS X SASL library doesn't define
+// the sasl_global_utils symbol, so we have to use less robust methods of
+// detection.
+#if defined(__APPLE__)
+static bool SaslIsInitialized() {
+  return sasl_global_listmech() != nullptr;
+}
 static bool SaslMutexImplementationProvided() {
-  if (sasl_global_utils == nullptr) return false;
+  return SaslIsInitialized();
+}
+#else
+
+// This symbol is exported by the SASL library but not defined
+// in the headers. It's marked as an API in the library source,
+// so seems safe to rely on.
+extern "C" sasl_utils_t* sasl_global_utils;
+static bool SaslIsInitialized() {
+  return sasl_global_utils != nullptr;
+}
+static bool SaslMutexImplementationProvided() {
+  if (!SaslIsInitialized()) return false;
   void* m = sasl_global_utils->mutex_alloc();
   sasl_global_utils->mutex_free(m);
   // The default implementation of mutex_alloc just returns the constant pointer 0x1.
@@ -187,6 +201,7 @@ static bool SaslMutexImplementationProvided() {
   // provide a valid implementation that returns an invalid pointer value.
   return m != reinterpret_cast<void*>(1);
 }
+#endif
 
 // Actually perform the initialization for the SASL subsystem.
 // Meant to be called via GoogleOnceInitArg().
@@ -198,7 +213,7 @@ static void DoSaslInit(void* app_name_char_array) {
   sasl_init_data = new InitializationData();
   sasl_init_data->app_name = app_name;
 
-  bool sasl_initialized = sasl_global_utils != nullptr;
+  bool sasl_initialized = SaslIsInitialized();
   if (sasl_initialized && !g_disable_sasl_init) {
     LOG(WARNING) << "SASL was initialized prior to Kudu's initialization. Skipping "
                  << "initialization. Call kudu::client::DisableSaslInitialization() "
