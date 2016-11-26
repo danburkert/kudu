@@ -33,23 +33,30 @@ METRIC_DEFINE_counter(tablet, rows_inserted, "Rows Inserted",
     kudu::MetricUnit::kRows,
     "Number of rows inserted into this tablet since service start");
 METRIC_DEFINE_counter(tablet, rows_upserted, "Rows Upserted",
-    kudu::MetricUnit::kRows,
-    "Number of rows upserted into this tablet since service start");
+                      kudu::MetricUnit::kRows,
+                      "Number of rows upserted into this tablet since service start");
 METRIC_DEFINE_counter(tablet, rows_updated, "Rows Updated",
-    kudu::MetricUnit::kRows,
-    "Number of row update operations performed on this tablet since service start");
+                      kudu::MetricUnit::kRows,
+                      "Number of row update operations performed on this tablet since service "
+                      "start");
 METRIC_DEFINE_counter(tablet, rows_deleted, "Rows Deleted",
-    kudu::MetricUnit::kRows,
-    "Number of row delete operations performed on this tablet since service start");
+                      kudu::MetricUnit::kRows,
+                      "Number of row delete operations performed on this tablet since service "
+                      "start");
 
 METRIC_DEFINE_counter(tablet, insertions_failed_dup_key, "Duplicate Key Inserts",
                       kudu::MetricUnit::kRows,
-                      "Number of inserts which failed because the key already existed");
+                      "Number of inserts which failed because the key already existed since "
+                      "service start");
+METRIC_DEFINE_counter(tablet, insertions_ignored_dup_key, "Duplicate Key Inserts Ignored",
+                      kudu::MetricUnit::kRows,
+                      "Number of inserts ignored because the key already existed since service "
+                      "start");
 
 METRIC_DEFINE_counter(tablet, upserts_as_updates, "Upserts converted into updates",
                       kudu::MetricUnit::kRows,
                       "Number of upserts which were applied as updates because the key already "
-                          "existed.");
+                      "existed.");
 
 METRIC_DEFINE_counter(tablet, scanner_rows_returned, "Scanner Rows Returned",
                       kudu::MetricUnit::kRows,
@@ -270,6 +277,7 @@ TabletMetrics::TabletMetrics(const scoped_refptr<MetricEntity>& entity)
     MINIT(rows_updated),
     MINIT(rows_deleted),
     MINIT(insertions_failed_dup_key),
+    MINIT(insertions_ignored_dup_key),
     MINIT(upserts_as_updates),
     MINIT(scanner_rows_returned),
     MINIT(scanner_cells_returned),

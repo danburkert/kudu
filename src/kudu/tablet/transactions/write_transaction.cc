@@ -202,6 +202,7 @@ void WriteTransaction::Finish(TransactionResult result) {
     metrics->rows_upserted->IncrementBy(state_->metrics().successful_upserts);
     metrics->rows_updated->IncrementBy(state_->metrics().successful_updates);
     metrics->rows_deleted->IncrementBy(state_->metrics().successful_deletes);
+    metrics->insertions_ignored_dup_key->IncrementBy(state_->metrics().inserts_ignored);
 
     if (type() == consensus::LEADER) {
       if (state()->external_consistency_mode() == COMMIT_WAIT) {
@@ -345,6 +346,13 @@ void WriteTransactionState::UpdateMetricsForOp(const RowOp& op) {
   switch (op.decoded_op.type) {
     case RowOperationsPB::INSERT:
       tx_metrics_.successful_inserts++;
+      break;
+    case RowOperationsPB::INSERT_IGNORE:
+      if (op.insert_error_ignored) {
+        tx_metrics_.inserts_ignored++;
+      } else {
+        tx_metrics_.successful_inserts++;
+      }
       break;
     case RowOperationsPB::UPSERT:
       tx_metrics_.successful_upserts++;

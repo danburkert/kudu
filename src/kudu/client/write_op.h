@@ -69,7 +69,8 @@ class KUDU_EXPORT KuduWriteOperation {
     INSERT = 1,
     UPDATE = 2,
     DELETE = 3,
-    UPSERT = 4
+    UPSERT = 4,
+    INSERT_IGNORE = 5
   };
   virtual ~KuduWriteOperation();
 
@@ -160,6 +161,37 @@ class KUDU_EXPORT KuduInsert : public KuduWriteOperation {
   explicit KuduInsert(const sp::shared_ptr<KuduTable>& table);
 };
 
+/// @brief A single row insert ignore to be sent to the cluster.
+///
+/// Insert ignore differs from a plain insert only when the row is already
+/// present (a primary key violation): insert ignore will return an OK result as
+/// if the row was succesfully inserted.
+///
+/// @pre An INSERT IGNORE requires all key columns to be set, as well as all
+///   columns which do not have default values.
+class KUDU_EXPORT KuduInsertIgnore : public KuduWriteOperation {
+ public:
+  virtual ~KuduInsertIgnore();
+
+  /// @copydoc KuduWriteOperation::ToString()
+  virtual std::string ToString() const OVERRIDE { return "INSERT IGNORE " + row_.ToString(); }
+
+ protected:
+  /// @cond PROTECTED_MEMBERS_DOCUMENTED
+
+  /// @copydoc KuduWriteOperation::type()
+  virtual Type type() const OVERRIDE {
+    return INSERT_IGNORE;
+  }
+
+  /// @endcond
+
+ private:
+  friend class KuduTable;
+  explicit KuduInsertIgnore(const sp::shared_ptr<KuduTable>& table);
+};
+
+
 /// @brief A single row upsert to be sent to the cluster.
 ///
 /// See KuduInsert for more details.
@@ -184,7 +216,6 @@ class KUDU_EXPORT KuduUpsert : public KuduWriteOperation {
   friend class KuduTable;
   explicit KuduUpsert(const sp::shared_ptr<KuduTable>& table);
 };
-
 
 /// @brief A single row update to be sent to the cluster.
 ///

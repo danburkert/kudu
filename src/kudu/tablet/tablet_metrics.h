@@ -33,7 +33,7 @@ struct ProbeStats;
 
 // Container for all metrics specific to a single tablet.
 struct TabletMetrics {
-  explicit TabletMetrics(const scoped_refptr<MetricEntity>& metric_entity);
+  explicit TabletMetrics(const scoped_refptr<MetricEntity>& entity);
 
   // Add a batch of probe stats to the metrics.
   //
@@ -49,6 +49,7 @@ struct TabletMetrics {
   scoped_refptr<Counter> rows_updated;
   scoped_refptr<Counter> rows_deleted;
   scoped_refptr<Counter> insertions_failed_dup_key;
+  scoped_refptr<Counter> insertions_ignored_dup_key;
   scoped_refptr<Counter> upserts_as_updates;
 
   // Scanner metrics

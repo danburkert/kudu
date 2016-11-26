@@ -45,6 +45,7 @@ struct RowOp {
   // Only one of the following four functions must be called, at most once.
   void SetFailed(const Status& s);
   void SetInsertSucceeded(int mrs_id);
+  void SetInsertErrorIgnored();
   void SetMutateSucceeded(gscoped_ptr<OperationResultPB> result);
   // Sets the result of a skipped operation on bootstrap.
   // TODO(dralves) Currently this performs a copy. Might be avoided with some refactoring.
@@ -102,6 +103,9 @@ struct RowOp {
 
   // The result of the operation, after Apply.
   gscoped_ptr<OperationResultPB> result;
+
+  // True if an INSERT IGNORE was ignored
+  bool insert_error_ignored = false;
 };
 
 

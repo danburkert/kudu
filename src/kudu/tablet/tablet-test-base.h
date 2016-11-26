@@ -322,6 +322,14 @@ class TabletTestBase : public KuduTabletTest {
     InsertOrUpsertTestRows(RowOperationsPB::INSERT, first_row, count, val, ts);
   }
 
+  // Insert "count" rows, ignoring duplicate key errors.
+  void InsertIgnoreTestRows(int64_t first_row,
+                            int64_t count,
+                            int32_t val,
+                            TimeSeries *ts = NULL) {
+    InsertOrUpsertTestRows(RowOperationsPB::INSERT_IGNORE, first_row, count, val, ts);
+  }
+
   // Upserts "count" rows.
   void UpsertTestRows(int64_t first_row,
                       int64_t count,
@@ -343,6 +351,8 @@ class TabletTestBase : public KuduTabletTest {
       setup_.BuildRow(&row, i, val);
       if (type == RowOperationsPB::INSERT) {
         CHECK_OK(writer.Insert(row));
+      } else if (type == RowOperationsPB::INSERT_IGNORE) {
+        CHECK_OK(writer.InsertIgnore(row));
       } else if (type == RowOperationsPB::UPSERT) {
         CHECK_OK(writer.Upsert(row));
       } else {

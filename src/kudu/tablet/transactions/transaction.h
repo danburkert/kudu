@@ -63,6 +63,7 @@ struct TransactionMetrics {
   int successful_upserts;
   int successful_updates;
   int successful_deletes;
+  int inserts_ignored;
   uint64_t commit_wait_duration_usec;
 };
 

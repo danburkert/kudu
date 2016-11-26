@@ -529,8 +529,8 @@ class Tablet {
   // cell is being updated to an invalid (too large) value.
   Status ValidateMutateUnlocked(const RowOp& op) const;
 
-  // Perform an INSERT or UPSERT operation, assuming that the transaction is already in
-  // prepared state. This state ensures that:
+  // Perform an INSERT, INSERT IGNORE, or UPSERT operation, assuming that the transaction is
+  // already in a prepared state. This state ensures that:
   // - the row lock is acquired
   // - the tablet components have been acquired
   // - the operation has been decoded

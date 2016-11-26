@@ -75,6 +75,7 @@ DECLARE_bool(use_hybrid_clock);
 // the fuzz test.
 enum TestOpType {
   TEST_INSERT,
+  TEST_INSERT_IGNORE,
   TEST_INSERT_PK_ONLY,
   TEST_UPSERT,
   TEST_UPSERT_PK_ONLY,
@@ -126,6 +127,7 @@ namespace tablet {
 
 const char* TestOpType_names[] = {
   "TEST_INSERT",
+  "TEST_INSERT_IGNORE",
   "TEST_INSERT_PK_ONLY",
   "TEST_UPSERT",
   "TEST_UPSERT_PK_ONLY",
@@ -265,6 +267,8 @@ class FuzzTest : public KuduTest {
     unique_ptr<KuduWriteOperation> op;
     if (type == TEST_INSERT || type == TEST_INSERT_PK_ONLY) {
       op.reset(table_->NewInsert());
+    } else if (type == TEST_INSERT_IGNORE) {
+      op.reset(table_->NewInsertIgnore());
     } else {
       op.reset(table_->NewUpsert());
     }
@@ -288,6 +292,10 @@ class FuzzTest : public KuduTest {
         // For "upsert PK only", we expect the row to keep its old value if
         // the row existed, or NULL if there was no old row.
         ret.val = old_row ? old_row->val : boost::none;
+        break;
+      }
+      case TEST_INSERT_IGNORE: {
+        ret.val = old_row->val;
         break;
       }
       default: LOG(FATAL) << "Invalid test op type: " << TestOpType_names[type];
@@ -522,6 +530,16 @@ void GenerateTestCase(vector<TestOp>* ops, int len, TestOpSets sets = ALL) {
         ops_pending = true;
         data_in_mrs = true;
         break;
+      case TEST_INSERT_IGNORE:
+        ops->push_back({TEST_INSERT_IGNORE, row_key});
+        ops_pending = true;
+        // If the row doesn't currently exist, this will act like an insert
+        // and put it into MRS.
+        if (!exists[row_key]) {
+          data_in_mrs = true;
+        }
+        exists[row_key] = true;
+        break;
       case TEST_UPSERT:
       case TEST_UPSERT_PK_ONLY:
         ops->push_back({r, row_key});
@@ -669,6 +687,7 @@ void FuzzTest::RunFuzzCase(const vector<TestOp>& test_ops,
     LOG(INFO) << test_op.ToString();
     switch (test_op.type) {
       case TEST_INSERT:
+      case TEST_INSERT_IGNORE:
       case TEST_INSERT_PK_ONLY:
       case TEST_UPSERT:
       case TEST_UPSERT_PK_ONLY: {

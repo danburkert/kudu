@@ -54,7 +54,7 @@ class RowOperationsPBEncoder {
 struct DecodedRowOperation {
   RowOperationsPB::Type type;
 
-  // For INSERT or UPSERT, the whole projected row.
+  // For INSERT, INSERT IGNORE, or UPSERT, the whole projected row.
   // For UPDATE or DELETE, the row key.
   const uint8_t* row_data;
 

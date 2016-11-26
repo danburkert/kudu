@@ -40,6 +40,7 @@
 #include "kudu/common/rowblock.h"
 #include "kudu/common/schema.h"
 #include "kudu/common/timestamp.h"
+#include "kudu/common/wire_protocol.pb.h"
 #include "kudu/fs/block_id.h"
 #include "kudu/fs/block_manager.h"
 #include "kudu/gutil/gscoped_ptr.h"
@@ -724,6 +725,53 @@ TYPED_TEST(TestTablet, TestInsertsPersist) {
   this->VerifyTestRowsWithTimestampAndVerifier(0, max_rows, t, boost::none);
 
   // TODO: add some more data, re-flush
+}
+
+TYPED_TEST(TestTablet, TestInsertIgnore) {
+  LocalTabletWriter writer(this->tablet().get(), &this->client_schema_);
+  KuduPartialRow row(&this->client_schema_);
+  vector<string> rows;
+
+  // Single batch, insert then insert ingore of same row, operation should succeed
+  this->setup_.BuildRow(&row, 0, 1000);
+  vector<LocalTabletWriter::Op> ops;
+  ops.push_back(LocalTabletWriter::Op(RowOperationsPB::INSERT, &row));
+  ops.push_back(LocalTabletWriter::Op(RowOperationsPB::INSERT_IGNORE, &row));
+  ASSERT_OK(writer.WriteBatch(ops));
+  ASSERT_OK(this->IterateToStringList(&rows));
+  ASSERT_EQ(1, rows.size());
+  EXPECT_EQ(vector<string>{ this->setup_.FormatDebugRow(0, 1000, false) }, rows);
+
+  ASSERT_OK(this->DeleteTestRow(&writer, 0));
+
+  ops.clear();
+  this->setup_.BuildRow(&row, 0, 1001);
+  ops.push_back(LocalTabletWriter::Op(RowOperationsPB::INSERT_IGNORE, &row));
+  ops.push_back(LocalTabletWriter::Op(RowOperationsPB::INSERT, &row));
+  Status s = writer.WriteBatch(ops);
+  ASSERT_STR_CONTAINS(s.ToString(), "key already present");
+  ASSERT_OK(this->IterateToStringList(&rows));
+  ASSERT_EQ(1, rows.size());
+  EXPECT_EQ(vector<string>{ this->setup_.FormatDebugRow(0, 1001, false) }, rows);
+
+  // INSERT IGNORE a row that is in MRS, ensure value doesn't change
+  this->InsertIgnoreTestRows(0, 1, 2000);
+  ASSERT_OK(this->IterateToStringList(&rows));
+  ASSERT_EQ(1, rows.size());
+  EXPECT_EQ(vector<string>{ this->setup_.FormatDebugRow(0, 1001, false) }, rows);
+
+  this->UpsertTestRows(0, 1, 1011);
+
+  // Flush it.
+  ASSERT_OK(this->tablet()->Flush());
+  ASSERT_OK(this->IterateToStringList(&rows));
+  EXPECT_EQ(vector<string>{ this->setup_.FormatDebugRow(0, 1011, false) }, rows);
+
+  // INSERT IGNORE a row that is in DRS, ensure value doesn't change.
+  this->InsertIgnoreTestRows(0, 1, 1000);
+  ASSERT_OK(this->IterateToStringList(&rows));
+  ASSERT_EQ(1, rows.size());
+  EXPECT_EQ(vector<string>{ this->setup_.FormatDebugRow(0, 1011, false) }, rows);
 }
 
 TYPED_TEST(TestTablet, TestUpsert) {

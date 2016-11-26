@@ -69,6 +69,7 @@ namespace client {
 
 class KuduDelete;
 class KuduInsert;
+class KuduInsertIgnore;
 class KuduLoggingCallback;
 class KuduPartitioner;
 class KuduScanBatch;
@@ -943,6 +944,11 @@ class KUDU_EXPORT KuduTable : public sp::enable_shared_from_this<KuduTable> {
   ///   responsibility to free the result, unless it is passed to
   ///   KuduSession::Apply().
   KuduInsert* NewInsert();
+
+  /// @return New @c INSERT IGNORE operation for this table. It is the
+  ///   caller's responsibility to free the result, unless it is passed to
+  ///   KuduSession::Apply().
+  KuduInsertIgnore* NewInsertIgnore();
 
   /// @return New @c UPSERT operation for this table. It is the caller's
   ///   responsibility to free the result, unless it is passed to

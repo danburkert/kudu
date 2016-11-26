@@ -530,6 +530,7 @@ bool Tablet::ValidateOpOrMarkFailed(RowOp* op) const {
 Status Tablet::ValidateOp(const RowOp& op) const {
   switch (op.decoded_op.type) {
     case RowOperationsPB::INSERT:
+    case RowOperationsPB::INSERT_IGNORE:
     case RowOperationsPB::UPSERT:
       return ValidateInsertOrUpsertUnlocked(op);
 
@@ -611,19 +612,36 @@ Status Tablet::InsertOrUpsertUnlocked(const IOContext* io_context,
   DCHECK(op->checked_present);
   DCHECK(op->validated);
 
-  const bool is_upsert = op->decoded_op.type == RowOperationsPB::UPSERT;
   const TabletComponents* comps = DCHECK_NOTNULL(tx_state->tablet_components());
 
+  // Handles a primary key constraint violation in the provided rowset according
+  // to the type of the operation (INSERT, INSERT IGNORE, or UPSERT).
+  auto handle_already_present = [=] (RowSet* rowset) -> Status {
+    switch (op->decoded_op.type) {
+      case RowOperationsPB::UPSERT:
+        return ApplyUpsertAsUpdate(io_context, tx_state, op, rowset, stats);
+      case RowOperationsPB::INSERT: {
+        if (metrics_) {
+          metrics_->insertions_failed_dup_key->Increment();
+        }
+        Status s = Status::AlreadyPresent("key already present");
+        op->SetFailed(s);
+        return s;
+      }
+      case RowOperationsPB::INSERT_IGNORE:
+        if (metrics_) {
+          metrics_->insertions_ignored_dup_key->Increment();
+        }
+        op->SetInsertErrorIgnored();
+        return Status::OK();
+      default:
+        LOG(FATAL) << "Unhandled operation type: "
+                   << RowOperationsPB_Type_Name(op->decoded_op.type);
+    }
+  };
+
   if (op->present_in_rowset) {
-    if (is_upsert) {
-      return ApplyUpsertAsUpdate(io_context, tx_state, op, op->present_in_rowset, stats);
-    }
-    Status s = Status::AlreadyPresent("key already present");
-    if (metrics_) {
-      metrics_->insertions_failed_dup_key->Increment();
-    }
-    op->SetFailed(s);
-    return s;
+    return handle_already_present(op->present_in_rowset);
   }
 
   Timestamp ts = tx_state->timestamp();
@@ -637,17 +655,12 @@ Status Tablet::InsertOrUpsertUnlocked(const IOContext* io_context,
   Status s = comps->memrowset->Insert(ts, row, tx_state->op_id());
   if (s.ok()) {
     op->SetInsertSucceeded(comps->memrowset->mrs_id());
+  } else if (s.IsAlreadyPresent()) {
+    return handle_already_present(comps->memrowset.get());
   } else {
-    if (s.IsAlreadyPresent()) {
-      if (is_upsert) {
-        return ApplyUpsertAsUpdate(io_context, tx_state, op, comps->memrowset.get(), stats);
-      }
-      if (metrics_) {
-        metrics_->insertions_failed_dup_key->Increment();
-      }
-    }
     op->SetFailed(s);
   }
+
   return s;
 }
 
@@ -990,6 +1003,7 @@ Status Tablet::ApplyRowOperation(const IOContext* io_context,
   Status s;
   switch (row_op->decoded_op.type) {
     case RowOperationsPB::INSERT:
+    case RowOperationsPB::INSERT_IGNORE:
     case RowOperationsPB::UPSERT:
       s = InsertOrUpsertUnlocked(io_context, tx_state, row_op, stats);
       if (s.IsAlreadyPresent()) {
