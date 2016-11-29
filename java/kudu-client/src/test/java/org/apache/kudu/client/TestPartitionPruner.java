@@ -610,6 +610,6 @@ public class TestPartitionPruner extends BaseKuduTest {
 
     // timestamp IS NOT NULL
     assertEquals(4, countPartitions(table, partitions,
-          KuduPredicate.newIsNotNullPredicate(timestamp)));
+          KuduPredicate.isNotNull(timestamp)));
   }
 }
