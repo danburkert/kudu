@@ -184,9 +184,11 @@ static Status DoClientNegotiation(Connection* conn,
 
   RETURN_NOT_OK(WaitForClientConnect(conn, deadline));
   RETURN_NOT_OK(conn->SetNonBlocking(false));
-  RETURN_NOT_OK(conn->InitSSLIfNecessary());
   conn->sasl_client().set_deadline(deadline);
   RETURN_NOT_OK(conn->sasl_client().Negotiate());
+  if (ContainsKey(conn->sasl_client().server_features(), TLS)) {
+    RETURN_NOT_OK(conn->InitTls(false));
+  }
   RETURN_NOT_OK(SendConnectionContext(conn, deadline));
   RETURN_NOT_OK(DisableSocketTimeouts(conn));
 
@@ -202,10 +204,12 @@ static Status DoServerNegotiation(Connection* conn,
     SleepFor(MonoDelta::FromMilliseconds(FLAGS_rpc_negotiation_inject_delay_ms));
   }
   RETURN_NOT_OK(conn->SetNonBlocking(false));
-  RETURN_NOT_OK(conn->InitSSLIfNecessary());
   RETURN_NOT_OK(conn->InitSaslServer());
   conn->sasl_server().set_deadline(deadline);
   RETURN_NOT_OK(conn->sasl_server().Negotiate());
+  if (ContainsKey(conn->sasl_server().client_features(), TLS)) {
+    RETURN_NOT_OK(conn->InitTls(true));
+  }
   RETURN_NOT_OK(RecvConnectionContext(conn, deadline));
   RETURN_NOT_OK(DisableSocketTimeouts(conn));
 

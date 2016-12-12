@@ -89,6 +89,7 @@ SaslClient::SaslClient(string app_name, Socket* socket)
     : app_name_(std::move(app_name)),
       sock_(socket),
       helper_(SaslHelper::CLIENT),
+      client_features_(kSupportedClientRpcFeatureFlags),
       client_state_(SaslNegotiationState::NEW),
       negotiated_mech_(SaslMechanism::INVALID),
       deadline_(MonoTime::Max()) {
@@ -117,6 +118,12 @@ Status SaslClient::EnablePlain(const string& user, const string& pass) {
 Status SaslClient::EnableGSSAPI() {
   DCHECK_EQ(client_state_, SaslNegotiationState::NEW);
   return helper_.EnableGSSAPI();
+}
+
+Status SaslClient::EnableTls() {
+  DCHECK_EQ(client_state_, SaslNegotiationState::NEW);
+  client_features_.insert(TLS);
+  return Status::OK();
 }
 
 SaslMechanism::Type SaslClient::negotiated_mechanism() const {
@@ -274,7 +281,7 @@ Status SaslClient::SendNegotiateMessage() {
   msg.set_state(SaslMessagePB::NEGOTIATE);
 
   // Advertise our supported features.
-  for (RpcFeatureFlag feature : kSupportedClientRpcFeatureFlags) {
+  for (RpcFeatureFlag feature : client_features_) {
     msg.add_supported_features(feature);
   }
 
@@ -324,7 +331,7 @@ Status SaslClient::HandleNegotiateResponse(const SaslMessagePB& response) {
     // We only add the features that our local build knows about.
     RpcFeatureFlag feature_flag = RpcFeatureFlag_IsValid(flag) ?
                                   static_cast<RpcFeatureFlag>(flag) : UNKNOWN;
-    if (ContainsKey(kSupportedClientRpcFeatureFlags, feature_flag)) {
+    if (ContainsKey(client_features_, feature_flag)) {
       server_features_.insert(feature_flag);
     }
   }

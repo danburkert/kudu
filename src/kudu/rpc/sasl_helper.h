@@ -99,6 +99,9 @@ class SaslHelper {
   // Check for the PLAIN SASL mechanism.
   bool IsPlainEnabled() const;
 
+  // Check if TLS is supported.
+  Status IsTlsEnabled();
+
   // Sanity check that the call ID is the SASL call ID.
   // Logs DFATAL if call_id does not match.
   Status SanityCheckSaslCallId(int32_t call_id) const;

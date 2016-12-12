@@ -60,6 +60,9 @@ class SaslClient {
   // Call after Init().
   Status EnableGSSAPI();
 
+  // Enable TLS connection support.
+  Status EnableTls();
+
   // Returns mechanism negotiated by this connection.
   // Must be called after Negotiate().
   SaslMechanism::Type negotiated_mechanism() const;
@@ -158,6 +161,9 @@ class SaslClient {
   string plain_auth_user_;
   string plain_pass_;
   gscoped_ptr<sasl_secret_t, FreeDeleter> psecret_;
+
+  // The set of features supported by this client.
+  std::set<RpcFeatureFlag> client_features_;
 
   // The set of features supported by the server.
   std::set<RpcFeatureFlag> server_features_;

@@ -150,7 +150,7 @@ class Connection : public RefCountedThreadSafe<Connection> {
   SaslServer &sasl_server() { return sasl_server_; }
 
   // Initialize underlying SSLSocket if SSL is enabled.
-  Status InitSSLIfNecessary();
+  Status InitTls(bool is_server);
 
   // Initialize SASL client before negotiation begins.
   Status InitSaslClient();

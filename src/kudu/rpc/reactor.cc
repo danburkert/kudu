@@ -340,15 +340,8 @@ Status ReactorThread::FindOrStartConnection(const ConnectionId &conn_id,
   bool connect_in_progress;
   RETURN_NOT_OK(StartConnect(&sock, conn_id.remote(), &connect_in_progress));
 
-  std::unique_ptr<Socket> new_socket;
-  if (reactor()->messenger()->ssl_enabled()) {
-    new_socket = reactor()->messenger()->ssl_factory()->CreateSocket(sock.Release(), false);
-  } else {
-    new_socket.reset(new Socket(sock.Release()));
-  }
-
   // Register the new connection in our map.
-  *conn = new Connection(this, conn_id.remote(), new_socket.release(), Connection::CLIENT);
+  *conn = new Connection(this, conn_id.remote(), new Socket(sock.Release()), Connection::CLIENT);
   (*conn)->set_user_credentials(conn_id.user_credentials());
 
   // Kick off blocking client connection negotiation.
@@ -606,14 +599,8 @@ class RegisterConnectionTask : public ReactorTask {
 
 void Reactor::RegisterInboundSocket(Socket *socket, const Sockaddr &remote) {
   VLOG(3) << name_ << ": new inbound connection to " << remote.ToString();
-  std::unique_ptr<Socket> new_socket;
-  if (messenger()->ssl_enabled()) {
-    new_socket = messenger()->ssl_factory()->CreateSocket(socket->Release(), true);
-  } else {
-    new_socket.reset(new Socket(socket->Release()));
-  }
   scoped_refptr<Connection> conn(
-    new Connection(&thread_, remote, new_socket.release(), Connection::SERVER));
+    new Connection(&thread_, remote, new Socket(socket->Release()), Connection::SERVER));
   auto task = new RegisterConnectionTask(conn);
   ScheduleReactorTask(task);
 }

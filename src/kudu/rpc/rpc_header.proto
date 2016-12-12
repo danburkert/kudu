@@ -71,6 +71,11 @@ enum RpcFeatureFlag {
   // The RPC system is required to support application feature flags in the
   // request and response headers.
   APPLICATION_FEATURE_FLAGS = 1;
+
+  // The RPC system supports TLS protected connections. If both sides support
+  // TLS, the connection will automatically be wrapped in a TLS protected
+  // channel following the SASL handshake.
+  TLS = 2;
 };
 
 // Message type passed back & forth for the SASL negotiation.

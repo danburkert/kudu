@@ -627,10 +627,17 @@ std::string Connection::ToString() const {
     remote_.ToString());
 }
 
-Status Connection::InitSSLIfNecessary() {
-  if (!reactor_thread_->reactor()->messenger()->ssl_enabled()) return Status::OK();
-  SSLSocket* ssl_socket = down_cast<SSLSocket*>(socket_.get());
+Status Connection::InitTls(bool is_server) {
+  DCHECK(reactor_thread_->reactor()->messenger()->ssl_enabled());
+
+  std::unique_ptr<SSLSocket> ssl_socket =
+    reactor_thread_->reactor()
+                   ->messenger()
+                   ->ssl_factory()
+                   ->CreateSocket(socket_.release()->Release(), is_server);
+
   RETURN_NOT_OK(ssl_socket->DoHandshake());
+  socket_.reset(ssl_socket.release());
   return Status::OK();
 }
 
@@ -659,6 +666,10 @@ Status Connection::InitSaslClient() {
   // TODO(todd): we dont seem to ever use ANONYMOUS. Should we remove it?
   RETURN_NOT_OK(sasl_client().EnableAnonymous());
   RETURN_NOT_OK(sasl_client().EnablePlain(user_credentials().real_user(), ""));
+  if (reactor_thread_->reactor()->messenger()->ssl_enabled()) {
+    sasl_client().EnableTls();
+  }
+
   RETURN_NOT_OK(sasl_client().Init(kSaslProtoName));
   return Status::OK();
 }
@@ -669,6 +680,11 @@ Status Connection::InitSaslServer() {
   } else {
     RETURN_NOT_OK(sasl_server().EnablePlain());
   }
+
+  if (reactor_thread_->reactor()->messenger()->ssl_enabled()) {
+    sasl_server().EnableTls();
+  }
+
   RETURN_NOT_OK(sasl_server().Init(kSaslProtoName));
   return Status::OK();
 }
