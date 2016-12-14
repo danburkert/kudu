@@ -43,7 +43,7 @@ namespace rpc {
 
 using std::string;
 
-class SaslMessagePB;
+class NegotiatePB;
 
 // Helper class which contains functionality that is common to SaslClient & SaslServer.
 // Most of these methods are convenience methods for interacting with the libsasl2 library.
@@ -98,7 +98,7 @@ class SaslHelper {
   Status SanityCheckSaslCallId(int32_t call_id) const;
 
   // Parse msg from the given Slice.
-  Status ParseSaslMessage(const Slice& param_buf, SaslMessagePB* msg);
+  Status ParseSaslMessage(const Slice& param_buf, NegotiatePB* msg);
 
   // Encode and send a message over a socket, sending the connection header if necessary.
   Status SendSaslMessage(Socket* sock, const google::protobuf::MessageLite& header,

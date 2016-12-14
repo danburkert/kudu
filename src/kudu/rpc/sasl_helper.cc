@@ -157,7 +157,7 @@ Status SaslHelper::SanityCheckSaslCallId(int32_t call_id) const {
   return Status::OK();
 }
 
-Status SaslHelper::ParseSaslMessage(const Slice& param_buf, SaslMessagePB* msg) {
+Status SaslHelper::ParseSaslMessage(const Slice& param_buf, NegotiatePB* msg) {
   if (!msg->ParseFromArray(param_buf.data(), param_buf.size())) {
     return Status::IOError(tag_ + ": Invalid SASL message, missing fields",
         msg->InitializationErrorString());
