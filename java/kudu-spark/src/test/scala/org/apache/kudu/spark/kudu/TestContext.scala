@@ -20,15 +20,13 @@ import java.util.Date
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.IndexedSeq
-
 import com.google.common.collect.ImmutableList
 import org.apache.spark.{SparkConf, SparkContext}
 import org.scalatest.{BeforeAndAfterAll, Suite}
-
 import org.apache.kudu.ColumnSchema.ColumnSchemaBuilder
 import org.apache.kudu.client.KuduClient.KuduClientBuilder
 import org.apache.kudu.client.MiniKuduCluster.MiniKuduClusterBuilder
-import org.apache.kudu.client.{CreateTableOptions, KuduClient, KuduTable, MiniKuduCluster}
+import org.apache.kudu.client.{CreateTableOptions, KuduClient, KuduTable, MiniKuduCluster, PartialRow}
 import org.apache.kudu.{Schema, Type}
 
 trait TestContext extends BeforeAndAfterAll { self: Suite =>
@@ -69,6 +67,7 @@ trait TestContext extends BeforeAndAfterAll { self: Suite =>
     miniCluster = new MiniKuduClusterBuilder()
       .numMasters(1)
       .numTservers(1)
+      .addTserverFlag("--scanner_inject_latency_on_each_batch_ms=100")
       .build()
     val envMap = Map[String,String](("Xmx", "512m"))
 
@@ -81,6 +80,10 @@ trait TestContext extends BeforeAndAfterAll { self: Suite =>
 
     val tableOptions = new CreateTableOptions().setRangePartitionColumns(List("key").asJava)
                                                .setNumReplicas(1)
+    val bound = schema.newPartialRow()
+    bound.addInt("key", 0)
+
+    tableOptions.addRangePartition(bound, schema.newPartialRow())
     table = kuduClient.createTable(tableName, schema, tableOptions)
   }
 
@@ -110,7 +113,7 @@ trait TestContext extends BeforeAndAfterAll { self: Suite =>
       row.addBoolean(5, i%2==1)
       row.addShort(6, i.toShort)
       row.addFloat(7, i.toFloat)
-      row.addBinary(8, s"bytes ${i}".getBytes())
+      row.addBinary(8, s"bytes $i".getBytes())
       val ts = System.currentTimeMillis() * 1000
       row.addLong(9, ts)
       row.addByte(10, i.toByte)

@@ -19,18 +19,17 @@ package org.apache.kudu.spark.kudu
 
 import java.util
 
-import scala.collection.mutable
-
 import org.apache.hadoop.util.ShutdownHookManager
+import org.apache.kudu.annotations.InterfaceStability
+import org.apache.kudu.client.SessionConfiguration.FlushMode
+import org.apache.kudu.client._
+import org.apache.kudu.{ColumnSchema, Schema, Type}
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{DataType, DataTypes, StructType}
 import org.apache.spark.sql.{DataFrame, Row}
 
-import org.apache.kudu.annotations.InterfaceStability
-import org.apache.kudu.client.SessionConfiguration.FlushMode
-import org.apache.kudu.client._
-import org.apache.kudu.{ColumnSchema, Schema, Type}
+import scala.collection.mutable
 
 /**
   * KuduContext is a serializable container for Kudu client connections.

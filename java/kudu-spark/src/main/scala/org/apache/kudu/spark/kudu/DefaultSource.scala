@@ -45,6 +45,7 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider {
   val TABLE_KEY = "kudu.table"
   val KUDU_MASTER = "kudu.master"
   val OPERATION = "kudu.operation"
+  val BATCH_SIZE = "kudu.batch-size"
 
   /**
     * Construct a BaseRelation using the provided context and parameters.
@@ -71,7 +72,9 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider {
       case _ => throw new IllegalArgumentException(s"Unsupported operation type '$opParam'")
     }
 
-    new KuduRelation(tableName, kuduMaster, operationType)(sqlContext)
+    val batchSize = parameters.get(BATCH_SIZE).map(_.toInt).getOrElse(1024 * 1024 * 20)
+
+    new KuduRelation(tableName, kuduMaster, operationType, batchSize)(sqlContext)
   }
 
   /**
@@ -108,7 +111,8 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider {
 @InterfaceStability.Unstable
 class KuduRelation(private val tableName: String,
                    private val masterAddrs: String,
-                   private val operationType: OperationType)(
+                   private val operationType: OperationType,
+                   private val batchSize: Integer)(
                    val sqlContext: SQLContext)
 extends BaseRelation
 with PrunedFilteredScan
@@ -147,7 +151,7 @@ with InsertableRelation {
     */
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
     val predicates = filters.flatMap(filterToPredicate)
-    new KuduRDD(masterAddrs, 1024 * 1024 * 20, requiredColumns, predicates,
+    new KuduRDD(masterAddrs, batchSize, requiredColumns, predicates,
                 table, context, sqlContext.sparkContext)
   }
 
