@@ -49,8 +49,7 @@ class RpcConnectionPB;
 class ReactorThread;
 class RpczStore;
 
-//
-// A connection between an endpoint and us.
+// A connection between a remote endpoint and us.
 //
 // Inbound connections are created by AcceptorPools, which eventually schedule
 // RegisterConnection() to be called from the reactor thread.
@@ -65,7 +64,6 @@ class RpczStore;
 //
 // This class is not fully thread-safe.  It is accessed only from the context of a
 // single ReactorThread except where otherwise specified.
-//
 class Connection : public RefCountedThreadSafe<Connection> {
  public:
   enum Direction {
@@ -144,10 +142,10 @@ class Connection : public RefCountedThreadSafe<Connection> {
   Socket* socket() { return socket_.get(); }
 
   // Return SASL client instance for this connection.
-  SaslClient &sasl_client() { return sasl_client_; }
+  SaslClient& sasl_client() { return sasl_client_; }
 
   // Return SASL server instance for this connection.
-  SaslServer &sasl_server() { return sasl_server_; }
+  SaslServer& sasl_server() { return sasl_server_; }
 
   // Initialize underlying SSLSocket if SSL is enabled.
   Status InitSSLIfNecessary();
@@ -169,6 +167,15 @@ class Connection : public RefCountedThreadSafe<Connection> {
 
   ReactorThread *reactor_thread() const { return reactor_thread_; }
 
+  // The set of supported RPC features for the connection. Filled in during negotiation.
+  std::set<RpcFeatureFlag>* supported_features() { return &supported_features_; }
+
+  std::set<std::string>* supported_sasl_mechanisms() {
+
+  }
+
+  bool IsTlsCapable() const;
+
  private:
   friend struct CallAwaitingResponse;
   friend class QueueTransferTask;
@@ -182,7 +189,7 @@ class Connection : public RefCountedThreadSafe<Connection> {
     // Notification from libev that the call has timed out.
     void HandleTimeout(ev::timer &watcher, int revents);
 
-    Connection *conn;
+    Connection* conn;
     std::shared_ptr<OutboundCall> call;
     ev::timer timeout_timer;
 
@@ -226,7 +233,7 @@ class Connection : public RefCountedThreadSafe<Connection> {
   void QueueOutbound(gscoped_ptr<OutboundTransfer> transfer);
 
   // The reactor thread that created this connection.
-  ReactorThread * const reactor_thread_;
+  ReactorThread* const reactor_thread_;
 
   // The remote address we're talking to.
   const Sockaddr remote_;
@@ -287,6 +294,9 @@ class Connection : public RefCountedThreadSafe<Connection> {
 
   // SASL server instance used for connection negotiation when Direction == SERVER.
   SaslServer sasl_server_;
+
+  // The set of supported RPC features for the connection. Filled in during negotiation.
+  std::set<RpcFeatureFlag> supported_features_;
 
   // Whether we completed connection negotiation.
   bool negotiation_complete_;

@@ -168,9 +168,6 @@ Status SaslServer::Negotiate() {
 
   faststring recv_buf;
 
-  // Read connection header
-  RETURN_NOT_OK(ValidateConnectionHeader(&recv_buf));
-
   nego_ok_ = false;
   while (!nego_ok_) {
     TRACE("Waiting for next SASL message...");
@@ -221,22 +218,10 @@ Status SaslServer::Negotiate() {
   return Status::OK();
 }
 
-Status SaslServer::ValidateConnectionHeader(faststring* recv_buf) {
-  TRACE("Waiting for connection header");
-  size_t num_read;
-  const size_t conn_header_len = kMagicNumberLength + kHeaderFlagsLength;
-  recv_buf->resize(conn_header_len);
-  RETURN_NOT_OK(sock_->BlockingRecv(recv_buf->data(), conn_header_len, &num_read, deadline_));
-  DCHECK_EQ(conn_header_len, num_read);
-
-  RETURN_NOT_OK(serialization::ValidateConnHeader(*recv_buf));
-  TRACE("Connection header received");
-  return Status::OK();
-}
-
-Status SaslServer::ParseSaslMsgRequest(const RequestHeader& header, const Slice& param_buf,
-    NegotiatePB* request) {
-  Status s = helper_.SanityCheckSaslCallId(header.call_id());
+Status SaslServer::ParseSaslMsgRequest(const RequestHeader& header,
+                                       const Slice& param_buf,
+                                       NegotiatePB* request) {
+  Status s = helper_.SanityCheckNegotiationCallId(header.call_id());
   if (!s.ok()) {
     RETURN_NOT_OK(SendSaslError(ErrorStatusPB::FATAL_INVALID_RPC_HEADER, s));
   }
@@ -258,7 +243,7 @@ Status SaslServer::SendSaslMessage(const NegotiatePB& msg) {
 
   // Create header with SASL-specific callId
   ResponseHeader header;
-  header.set_call_id(kSaslCallId);
+  header.set_call_id(kNegotiationCallId);
   return helper_.SendSaslMessage(sock_, header, msg, deadline_);
 }
 
@@ -273,7 +258,7 @@ Status SaslServer::SendSaslError(ErrorStatusPB::RpcErrorCodePB code, const Statu
 
   // Create header with SASL-specific callId
   ResponseHeader header;
-  header.set_call_id(kSaslCallId);
+  header.set_call_id(kNegotiationCallId);
   header.set_is_error(true);
 
   // Get RPC error code from Status object

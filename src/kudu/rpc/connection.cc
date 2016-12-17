@@ -634,6 +634,10 @@ Status Connection::InitSSLIfNecessary() {
   return Status::OK();
 }
 
+bool Connection::IsTlsCapable() const {
+  return reactor_thread_->reactor()->messenger()->ssl_enabled();
+}
+
 Status Connection::InitSaslClient() {
   // Note that remote_.host() is an IP address here: we've already lost
   // whatever DNS name the client was attempting to use. Unless krb5

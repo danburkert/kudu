@@ -29,6 +29,7 @@ class Negotiation {
  public:
   static void RunNegotiation(const scoped_refptr<Connection>& conn,
                              const MonoTime &deadline);
+
  private:
   DISALLOW_IMPLICIT_CONSTRUCTORS(Negotiation);
 };

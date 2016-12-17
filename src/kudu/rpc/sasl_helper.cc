@@ -45,7 +45,6 @@ using google::protobuf::MessageLite;
 
 SaslHelper::SaslHelper(PeerType peer_type)
   : peer_type_(peer_type),
-    conn_header_exchanged_(false),
     plain_enabled_(false),
     gssapi_enabled_(false) {
   tag_ = (peer_type_ == SERVER) ? "Sasl Server" : "Sasl Client";
@@ -147,10 +146,10 @@ bool SaslHelper::IsPlainEnabled() const {
   return plain_enabled_;
 }
 
-Status SaslHelper::SanityCheckSaslCallId(int32_t call_id) const {
-  if (call_id != kSaslCallId) {
-    Status s = Status::IllegalState(StringPrintf("Non-SASL request during negotiation. "
-          "Expected callId: %d, received callId: %d", kSaslCallId, call_id));
+Status SaslHelper::SanityCheckNegotiationCallId(int32_t call_id) const {
+  if (call_id != kNegotiationCallId) {
+    Status s = Status::IllegalState(StringPrintf("Invalid negotiation message. "
+          "Expected callId: %d, received callId: %d", kNegotiationCallId, call_id));
     LOG(DFATAL) << tag_ << ": " << s.ToString();
     return s;
   }
@@ -159,27 +158,18 @@ Status SaslHelper::SanityCheckSaslCallId(int32_t call_id) const {
 
 Status SaslHelper::ParseSaslMessage(const Slice& param_buf, NegotiatePB* msg) {
   if (!msg->ParseFromArray(param_buf.data(), param_buf.size())) {
-    return Status::IOError(tag_ + ": Invalid SASL message, missing fields",
-        msg->InitializationErrorString());
+    return Status::IOError(tag_ + ": Invalid SASL message, missing fields", msg->InitializationErrorString());
   }
   return Status::OK();
 }
 
-Status SaslHelper::SendSaslMessage(Socket* sock, const MessageLite& header, const MessageLite& msg,
-      const MonoTime& deadline) {
+Status SaslHelper::SendSaslMessage(Socket* sock,
+                                   const MessageLite& header,
+                                   const MessageLite& msg,
+                                   const MonoTime& deadline) {
   DCHECK(sock != nullptr);
   DCHECK(header.IsInitialized()) << tag_ << ": Header must be initialized";
   DCHECK(msg.IsInitialized()) << tag_ << ": Message must be initialized";
-
-  // Write connection header, if needed
-  if (PREDICT_FALSE(peer_type_ == CLIENT && !conn_header_exchanged_)) {
-    const uint8_t buflen = kMagicNumberLength + kHeaderFlagsLength;
-    uint8_t buf[buflen];
-    serialization::SerializeConnHeader(buf);
-    size_t nsent;
-    RETURN_NOT_OK(sock->BlockingWrite(buf, buflen, &nsent, deadline));
-    conn_header_exchanged_ = true;
-  }
 
   RETURN_NOT_OK(SendFramedMessageBlocking(sock, header, msg, deadline));
   return Status::OK();

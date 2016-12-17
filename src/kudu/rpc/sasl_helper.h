@@ -93,9 +93,9 @@ class SaslHelper {
   // Check for the PLAIN SASL mechanism.
   bool IsPlainEnabled() const;
 
-  // Sanity check that the call ID is the SASL call ID.
+  // Sanity check that the call ID is the negotiation call ID.
   // Logs DFATAL if call_id does not match.
-  Status SanityCheckSaslCallId(int32_t call_id) const;
+  Status SanityCheckNegotiationCallId(int32_t call_id) const;
 
   // Parse msg from the given Slice.
   Status ParseSaslMessage(const Slice& param_buf, NegotiatePB* msg);
@@ -113,7 +113,6 @@ class SaslHelper {
 
   // Authentication types and data.
   const PeerType peer_type_;
-  bool conn_header_exchanged_;
   string tag_;
   mutable gscoped_ptr< std::set<string> > global_mechs_;  // Cache of global mechanisms.
   std::set<string> mechs_;    // Active mechanisms.

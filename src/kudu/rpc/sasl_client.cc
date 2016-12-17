@@ -246,15 +246,15 @@ Status SaslClient::SendNegotiateMessage(const NegotiatePB& msg) {
   DCHECK_NE(client_state_, SaslNegotiationState::NEGOTIATED)
       << "Must not send SASL messages after Negotiate() succeeds";
 
-  // Create header with SASL-specific callId
+  // Create header with Negotiation-specific callId
   RequestHeader header;
-  header.set_call_id(kSaslCallId);
+  header.set_call_id(kNegotiationCallId);
   return helper_.SendSaslMessage(sock_, header, msg, deadline_);
 }
 
 Status SaslClient::ParseNegotiateResponse(const ResponseHeader& header, const Slice& param_buf,
     NegotiatePB* response) {
-  RETURN_NOT_OK(helper_.SanityCheckSaslCallId(header.call_id()));
+  RETURN_NOT_OK(helper_.SanityCheckNegotiationCallId(header.call_id()));
 
   if (header.is_error()) {
     return ParseError(param_buf);
