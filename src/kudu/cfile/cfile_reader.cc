@@ -35,6 +35,7 @@
 #include "kudu/util/coding.h"
 #include "kudu/util/debug/trace_event.h"
 #include "kudu/util/flag_tags.h"
+#include "kudu/util/logging.h"
 #include "kudu/util/malloc.h"
 #include "kudu/util/memory/overwrite.h"
 #include "kudu/util/object_pool.h"
@@ -492,7 +493,8 @@ Status DefaultColumnValueIterator::Scan(ColumnMaterializationContext* ctx) {
       const Slice *src_slice = reinterpret_cast<const Slice *>(value_);
       Slice dst_slice;
       if (PREDICT_FALSE(!dst->arena()->RelocateSlice(*src_slice, &dst_slice))) {
-        return Status::IOError("out of memory copying slice", src_slice->ToString());
+        return Status::IOError("out of memory copying slice",
+                               KUDU_REDACT(src_slice->ToDebugString()));
       }
       for (size_t i = 0; i < dst->nrows(); ++i) {
         dst->SetCellValue(i, &dst_slice);
@@ -662,7 +664,7 @@ Status CFileIterator::SeekAtOrAfter(const EncodedKey &key,
     *exact_match = false;
     if (PREDICT_FALSE(!validx_iter_->HasNext())) {
       return Status::NotFound("key after last block in file",
-                              key.encoded_key().ToDebugString());
+                              KUDU_REDACT(key.encoded_key().ToDebugString()));
     }
     RETURN_NOT_OK(validx_iter_->Next());
     RETURN_NOT_OK(ReadCurrentDataBlock(*validx_iter_, b.get()));

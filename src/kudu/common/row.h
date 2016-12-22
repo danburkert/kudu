@@ -22,12 +22,13 @@
 #include <utility>
 #include <vector>
 
-#include "kudu/common/types.h"
 #include "kudu/common/schema.h"
+#include "kudu/common/types.h"
 #include "kudu/gutil/macros.h"
 #include "kudu/gutil/map-util.h"
-#include "kudu/util/memory/arena.h"
 #include "kudu/util/bitmap.h"
+#include "kudu/util/logging.h"
+#include "kudu/util/memory/arena.h"
 
 namespace kudu {
 
@@ -70,7 +71,8 @@ Status CopyCellData(const SrcCellType &src, DstCellType* dst, ArenaType *dst_are
     Slice *dst_slice = reinterpret_cast<Slice *>(dst->mutable_ptr());
     if (dst_arena != NULL) {
       if (PREDICT_FALSE(!dst_arena->RelocateSlice(*src_slice, dst_slice))) {
-        return Status::IOError("out of memory copying slice", src_slice->ToString());
+        return Status::IOError("out of memory copying slice",
+                               KUDU_REDACT(src_slice->ToDebugString()));
       }
     } else {
       // Just copy the slice without relocating.
