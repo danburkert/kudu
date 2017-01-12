@@ -22,11 +22,9 @@
 #include <string>
 
 #include "kudu/gutil/macros.h"
+#include "kudu/security/tls_common.h"
 #include "kudu/util/net/socket.h"
 #include "kudu/util/status.h"
-
-struct ssl_st;
-typedef ssl_st SSL;
 
 namespace kudu {
 

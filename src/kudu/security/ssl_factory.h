@@ -21,11 +21,9 @@
 
 #include "kudu/gutil/macros.h"
 #include "kudu/gutil/strings/substitute.h"
+#include "kudu/security/tls_common.h"
 #include "kudu/util/errno.h"
 #include "kudu/util/status.h"
-
-struct ssl_ctx_st;
-typedef ssl_ctx_st SSL_CTX;
 
 namespace kudu {
 

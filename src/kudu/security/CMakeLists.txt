@@ -24,12 +24,24 @@ if(NOT APPLE)
   target_link_libraries(krb5_realm_override dl)
 endif()
 
+# Fall back to using the ported functionality if we're using an older version of
+# OpenSSL
+if (${OPENSSL_VERSION} VERSION_LESS "1.0.2")
+  set(PORTED_X509_CHECK_HOST_CC "x509_check_host.cc")
+endif()
+
 add_library(security
-  init.cc)
+  ${PORTED_X509_CHECK_HOST_CC}
+  init.cc
+  ssl_factory.cc
+  ssl_socket.cc
+  tls_common.cc)
 target_link_libraries(security
   gutil
+  krb5
   kudu_util
-  krb5)
+  openssl_crypto
+  openssl_ssl)
 
 set(SECURITY_TEST_SRCS
   test/mini_kdc.cc
@@ -40,7 +52,6 @@ target_link_libraries(security-test
   gutil
   kudu_test_util
   kudu_util)
-
 
 # Tests
 set(KUDU_TEST_LINK_LIBS
