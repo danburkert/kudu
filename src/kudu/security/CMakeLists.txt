@@ -25,7 +25,8 @@ if(NOT APPLE)
 endif()
 
 add_library(security
-  init.cc)
+  init.cc
+  tls_handshake)
 target_link_libraries(security
   gutil
   kudu_util
@@ -49,3 +50,4 @@ set(KUDU_TEST_LINK_LIBS
   ${KUDU_MIN_TEST_LIBS})
 
 ADD_KUDU_TEST(test/mini_kdc-test)
+ADD_KUDU_TEST(tls_handshake-test)

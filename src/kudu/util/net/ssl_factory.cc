@@ -138,6 +138,27 @@ Status SSLFactory::LoadCertificateAuthority(const std::string& certificate_path)
   return Status::OK();
 }
 
+Status SSLFactory::InitiateHandshake(bool is_server, TlsHandshake* handshake) {
+  CHECK(ctx_);
+  // Create SSL object and transfer ownership to the SSLSocket object created.
+  handshake->ssl_ = SSL_new(ctx_.get());
+  if (handshake->ssl_ == nullptr) {
+    return Status::RuntimeError("Failed to create SSL handle", GetLastError(errno));
+  }
+
+  handshake->rbio_ = BIO_new(BIO_s_mem());
+  handshake->wbio_ = BIO_new(BIO_s_mem());
+  SSL_set_bio(handshake->ssl_, handshake->rbio_, handshake->wbio_);
+
+  if (is_server) {
+    SSL_set_accept_state(handshake->ssl_);
+  } else {
+    SSL_set_connect_state(handshake->ssl_);
+  }
+
+  return Status::OK();
+}
+
 std::unique_ptr<SSLSocket> SSLFactory::CreateSocket(int socket_fd, bool is_server) {
   CHECK(ctx_);
   // Create SSL object and transfer ownership to the SSLSocket object created.

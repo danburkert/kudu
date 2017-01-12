@@ -21,6 +21,7 @@
 
 #include "kudu/gutil/macros.h"
 #include "kudu/gutil/strings/substitute.h"
+#include "kudu/security/tls_handshake.h"
 #include "kudu/util/errno.h"
 #include "kudu/util/status.h"
 
@@ -49,6 +50,8 @@ class SSLFactory {
 
   // Load the certificate authority.
   Status LoadCertificateAuthority(const std::string& certificate_path);
+
+  Status InitiateHandshake(bool is_server, TlsHandshake* handshake);
 
   // Create an SSLSocket wrapped around the file descriptor 'socket_fd'. 'is_server' denotes if it's
   // a server socket. The 'socket_fd' is closed when this object is destroyed.
