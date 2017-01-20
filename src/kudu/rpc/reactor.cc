@@ -18,16 +18,18 @@
 #include "kudu/rpc/reactor.h"
 
 #include <arpa/inet.h>
-#include <boost/intrusive/list.hpp>
-#include <ev++.h>
-#include <glog/logging.h>
-#include <mutex>
 #include <netinet/in.h>
 #include <stdlib.h>
-#include <string>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#include <mutex>
+#include <string>
+
+#include <boost/intrusive/list.hpp>
+#include <ev++.h>
+#include <glog/logging.h>
 
 #include "kudu/gutil/ref_counted.h"
 #include "kudu/gutil/stringprintf.h"
@@ -210,7 +212,7 @@ void ReactorThread::AsyncHandler(ev::async &watcher, int revents) {
   }
 }
 
-void ReactorThread::RegisterConnection(const scoped_refptr<Connection>& conn) {
+void ReactorThread::RegisterConnection(scoped_refptr<Connection> conn) {
   DCHECK(IsCurrentThread());
 
   Status s = StartConnectionNegotiation(conn);
@@ -219,7 +221,7 @@ void ReactorThread::RegisterConnection(const scoped_refptr<Connection>& conn) {
     DestroyConnection(conn.get(), s);
     return;
   }
-  server_conns_.push_back(conn);
+  server_conns_.emplace_back(std::move(conn));
 }
 
 void ReactorThread::AssignOutboundCall(const shared_ptr<OutboundCall> &call) {
@@ -348,7 +350,7 @@ Status ReactorThread::FindOrStartConnection(const ConnectionId &conn_id,
   }
 
   // Register the new connection in our map.
-  *conn = new Connection(this, conn_id.remote(), new_socket.release(), Connection::CLIENT);
+  *conn = new Connection(this, conn_id.remote(), std::move(new_socket), Connection::CLIENT);
   (*conn)->set_user_credentials(conn_id.user_credentials());
 
   // Kick off blocking client connection negotiation.
@@ -377,12 +379,12 @@ Status ReactorThread::StartConnectionNegotiation(const scoped_refptr<Connection>
   ADOPT_TRACE(trace.get());
   TRACE("Submitting negotiation task for $0", conn->ToString());
   RETURN_NOT_OK(reactor()->messenger()->negotiation_pool()->SubmitClosure(
-      Bind(&Negotiation::RunNegotiation, conn, deadline)));
+        Bind(&Negotiation::RunNegotiation, conn, deadline)));
   return Status::OK();
 }
 
 void ReactorThread::CompleteConnectionNegotiation(const scoped_refptr<Connection>& conn,
-      const Status &status) {
+                                                  const Status& status) {
   DCHECK(IsCurrentThread());
   if (PREDICT_FALSE(!status.ok())) {
     DestroyConnection(conn.get(), status);
@@ -396,6 +398,7 @@ void ReactorThread::CompleteConnectionNegotiation(const scoped_refptr<Connection
     DestroyConnection(conn.get(), s);
     return;
   }
+
   conn->MarkNegotiationComplete();
   conn->EpollRegister(loop_);
 }
@@ -405,9 +408,9 @@ Status ReactorThread::CreateClientSocket(Socket *sock) {
   if (ret.ok()) {
     ret = sock->SetNoDelay(true);
   }
-  LOG_IF(WARNING, !ret.ok()) << "failed to create an "
-    "outbound connection because a new socket could not "
-    "be created: " << ret.ToString();
+  LOG_IF(WARNING, !ret.ok())
+      << "failed to create an outbound connection because a new socket could not be created: "
+      << ret.ToString();
   return ret;
 }
 
@@ -584,16 +587,16 @@ Status Reactor::DumpRunningRpcs(const DumpRunningRpcsRequestPB& req,
 
 class RegisterConnectionTask : public ReactorTask {
  public:
-  explicit RegisterConnectionTask(const scoped_refptr<Connection>& conn) :
-    conn_(conn)
-  {}
+  explicit RegisterConnectionTask(scoped_refptr<Connection> conn)
+      : conn_(std::move(conn)) {
+  }
 
-  virtual void Run(ReactorThread *thread) OVERRIDE {
-    thread->RegisterConnection(conn_);
+  void Run(ReactorThread *thread) override {
+    thread->RegisterConnection(std::move(conn_));
     delete this;
   }
 
-  virtual void Abort(const Status &status) OVERRIDE {
+  void Abort(const Status &status) override {
     // We don't need to Shutdown the connection since it was never registered.
     // This is only used for inbound connections, and inbound connections will
     // never have any calls added to them until they've been registered.
@@ -612,9 +615,8 @@ void Reactor::RegisterInboundSocket(Socket *socket, const Sockaddr &remote) {
   } else {
     new_socket.reset(new Socket(socket->Release()));
   }
-  scoped_refptr<Connection> conn(
-    new Connection(&thread_, remote, new_socket.release(), Connection::SERVER));
-  auto task = new RegisterConnectionTask(conn);
+  auto task = new RegisterConnectionTask(
+      new Connection(&thread_, remote, std::move(new_socket), Connection::SERVER));
   ScheduleReactorTask(task);
 }
 

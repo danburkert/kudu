@@ -21,14 +21,18 @@
 #include "kudu/util/monotime.h"
 
 namespace kudu {
+
+class Socket;
+
 namespace rpc {
 
 class Connection;
 
 class Negotiation {
  public:
-  static void RunNegotiation(const scoped_refptr<Connection>& conn,
-                             const MonoTime &deadline);
+  // Runs RPC negotiation on the provided connection. The caller maintains
+  // ownership of the connection.
+  static void RunNegotiation(const scoped_refptr<Connection>& conn, MonoTime deadline);
  private:
   DISALLOW_IMPLICIT_CONSTRUCTORS(Negotiation);
 };
