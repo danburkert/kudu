@@ -29,8 +29,8 @@
 #include "kudu/rpc/sasl_common.h"
 #include "kudu/rpc/sasl_helper.h"
 #include "kudu/util/monotime.h"
-#include "kudu/util/status.h"
 #include "kudu/util/net/socket.h"
+#include "kudu/util/status.h"
 
 namespace kudu {
 namespace rpc {

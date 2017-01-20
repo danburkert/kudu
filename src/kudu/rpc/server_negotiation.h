@@ -27,8 +27,8 @@
 #include "kudu/rpc/rpc_header.pb.h"
 #include "kudu/rpc/sasl_common.h"
 #include "kudu/rpc/sasl_helper.h"
-#include "kudu/util/net/socket.h"
 #include "kudu/util/monotime.h"
+#include "kudu/util/net/socket.h"
 #include "kudu/util/status.h"
 
 namespace kudu {
