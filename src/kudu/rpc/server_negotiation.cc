@@ -33,6 +33,8 @@
 #include "kudu/rpc/blocking_ops.h"
 #include "kudu/rpc/constants.h"
 #include "kudu/rpc/serialization.h"
+#include "kudu/security/tls_context.h"
+#include "kudu/security/tls_handshake.h"
 #include "kudu/util/net/sockaddr.h"
 #include "kudu/util/net/socket.h"
 #include "kudu/util/scoped_cleanup.h"
@@ -65,6 +67,7 @@ static int ServerNegotiationPlainAuthCb(sasl_conn_t *conn,
 ServerNegotiation::ServerNegotiation(unique_ptr<Socket> socket)
     : socket_(std::move(socket)),
       helper_(SaslHelper::SERVER),
+      tls_context_(nullptr),
       negotiated_mech_(SaslMechanism::INVALID),
       deadline_(MonoTime::Max()) {
   callbacks_.push_back(SaslBuildCallback(SASL_CB_GETOPT,
@@ -103,6 +106,10 @@ void ServerNegotiation::set_server_fqdn(const string& domain_name) {
   helper_.set_server_fqdn(domain_name);
 }
 
+void ServerNegotiation::EnableTls(const security::TlsContext* tls_context) {
+  tls_context_ = DCHECK_NOTNULL(tls_context);
+}
+
 void ServerNegotiation::set_deadline(const MonoTime& deadline) {
   deadline_ = deadline;
 }
@@ -124,7 +131,20 @@ Status ServerNegotiation::Negotiate() {
     RETURN_NOT_OK(HandleNegotiate(request));
   }
 
-  // Step 3: SASL negotiation.
+  // Step 3: if both ends support TLS, do a TLS handshake.
+  if (tls_context_ && ContainsKey(client_features_, TLS)) {
+    RETURN_NOT_OK(tls_context_->InitiateHandshake(true, &tls_handshake_));
+
+    while (true) {
+      NegotiatePB request;
+      RETURN_NOT_OK(RecvNegotiatePB(&request, &recv_buf));
+      Status s = HandleTlsHandshake(request);
+      if (s.ok()) break;
+      if (!s.IsIncomplete()) return s;
+    }
+  }
+
+  // Step 4: SASL negotiation.
   RETURN_NOT_OK(InitSaslServer());
   {
     NegotiatePB request;
@@ -144,7 +164,7 @@ Status ServerNegotiation::Negotiate() {
   CHECK(rc == SASL_OK && username != nullptr) << "No username on authenticated connection";
   authenticated_user_ = username;
 
-  // Step 4: Receive connection context.
+  // Step 5: Receive connection context.
   RETURN_NOT_OK(RecvConnectionContext(&recv_buf));
 
   TRACE("Negotiation successful");
@@ -331,9 +351,55 @@ Status ServerNegotiation::SendNegotiate(const set<string>& server_mechs) {
     response.add_supported_features(feature);
   }
 
+  if (tls_context_) {
+    response.add_supported_features(TLS);
+  }
+
   RETURN_NOT_OK(SendNegotiatePB(response));
   TRACE("Sent NEGOTIATE response");
   return Status::OK();
+}
+
+Status ServerNegotiation::HandleTlsHandshake(const NegotiatePB& request) {
+  if (PREDICT_FALSE(request.step() != NegotiatePB::TLS_HANDSHAKE)) {
+    Status s =  Status::InvalidArgument("expected TLS_HANDSHAKE step",
+                                        NegotiatePB::NegotiateStep_Name(request.step()));
+    RETURN_NOT_OK(SendError(ErrorStatusPB::FATAL_UNAUTHORIZED, s));
+    return s;
+  }
+  TRACE("Received TLS_HANDSHAKE request from client");
+
+  if (PREDICT_FALSE(!request.has_tls_handshake())) {
+    Status s = Status::InvalidArgument(
+        "No TLS handshake message in TLS_HANDSHAKE request from client");
+    RETURN_NOT_OK(SendError(ErrorStatusPB::FATAL_UNAUTHORIZED, s));
+    return s;
+  }
+
+  string token;
+  Status s = tls_handshake_.Continue(request.tls_handshake(), &token);
+
+  if (PREDICT_FALSE(!s.IsIncomplete() && !s.ok())) {
+    RETURN_NOT_OK(SendError(ErrorStatusPB::FATAL_UNAUTHORIZED, s));
+    return s;
+  }
+
+  // Regardless of whether this is the final handshake roundtrip (in which case
+  // Continue would have returned OK), we still need to return a response.
+  RETURN_NOT_OK(SendTlsHandshake(token));
+  RETURN_NOT_OK(s);
+
+  // TLS handshake is finished.
+  return tls_handshake_.Finish(&socket_);
+}
+
+Status ServerNegotiation::SendTlsHandshake(const string& tls_token) {
+  TRACE("Sending TLS_HANDSHAKE message to client");
+  NegotiatePB msg;
+  msg.set_step(NegotiatePB::TLS_HANDSHAKE);
+  // TODO(dan): should this be done without copying the response token?
+  msg.set_tls_handshake(tls_token);
+  return SendNegotiatePB(msg);
 }
 
 Status ServerNegotiation::HandleSaslInitiate(const NegotiatePB& request) {
