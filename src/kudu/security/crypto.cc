@@ -43,14 +43,8 @@ namespace {
 // signature than the rest of the write functions, so we
 // have to provide this wrapper.
 int PemWritePrivateKey(BIO* bio, EVP_PKEY* key) {
-  auto rsa = ssl_make_unique(EVP_PKEY_get1_RSA(key));
-  return PEM_write_bio_RSAPrivateKey(
-      bio, rsa.get(), nullptr, nullptr, 0, nullptr, nullptr);
-}
-
-int PemWritePublicKey(BIO* bio, EVP_PKEY* key) {
-  auto rsa = ssl_make_unique(EVP_PKEY_get1_RSA(key));
-  return PEM_write_bio_RSA_PUBKEY(bio, rsa.get());
+  return PEM_write_bio_PrivateKey(bio, key, EVP_get_cipherbynid(key->type),
+                                  nullptr, 0, nullptr, nullptr);
 }
 
 int DerWritePublicKey(BIO* bio, EVP_PKEY* key) {
@@ -75,7 +69,7 @@ struct RsaPrivateKeyTraits : public SslTypeTraits<EVP_PKEY> {
 struct RsaPublicKeyTraits : public SslTypeTraits<EVP_PKEY> {
   static constexpr auto read_pem = &PEM_read_bio_PUBKEY;
   static constexpr auto read_der = &d2i_PUBKEY_bio;
-  static constexpr auto write_pem = &PemWritePublicKey;
+  static constexpr auto write_pem = &PEM_write_bio_PUBKEY;
   static constexpr auto write_der = &DerWritePublicKey;
 };
 template<> struct SslTypeTraits<RSA> {
