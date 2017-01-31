@@ -110,7 +110,7 @@ Status TabletCopySourceSession::Init() {
         "Log reader is not available. Tablet state: $1 ($2)",
         tablet_id, tablet::TabletStatePB_Name(tablet_state), tablet_state));
   }
-  reader->GetSegmentsSnapshot(&log_segments_);
+  RETURN_NOT_OK(reader->GetSegmentsSnapshot(&log_segments_));
   for (const scoped_refptr<ReadableLogSegment>& segment : log_segments_) {
     RETURN_NOT_OK(OpenLogSegmentUnlocked(segment->header().sequence_number()));
   }

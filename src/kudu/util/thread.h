@@ -31,6 +31,7 @@
 #include <boost/function.hpp>
 
 #include "kudu/gutil/atomicops.h"
+#include "kudu/gutil/basictypes.h"
 #include "kudu/gutil/ref_counted.h"
 #include "kudu/util/async_util.h"
 #include "kudu/util/status.h"
@@ -196,7 +197,7 @@ class Thread : public RefCountedThreadSafe<Thread> {
 
   // Blocks until this thread finishes execution. Once this method returns, the thread
   // will be unregistered with the ThreadMgr and will not appear in the debug UI.
-  void Join() { ThreadJoiner(this).Join(); }
+  void Join() { ignore_result(ThreadJoiner(this).Join()); }
 
   // Call the given Closure on the thread before it exits. The closures are executed
   // in the order they are added.

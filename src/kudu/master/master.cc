@@ -215,7 +215,8 @@ Status Master::InitMasterRegistration() {
                         "Couldn't get RPC addresses");
   RETURN_NOT_OK(AddHostPortPBs(rpc_addrs, reg.mutable_rpc_addresses()));
   vector<Sockaddr> http_addrs;
-  web_server()->GetBoundAddresses(&http_addrs);
+  RETURN_NOT_OK_PREPEND(web_server()->GetBoundAddresses(&http_addrs),
+                        "Couldn't get webserver address");
   RETURN_NOT_OK(AddHostPortPBs(http_addrs, reg.mutable_http_addresses()));
   reg.set_software_version(VersionInfo::GetShortVersionString());
 

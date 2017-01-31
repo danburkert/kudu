@@ -113,7 +113,7 @@
 namespace kudu {
 
 /// @brief A representation of an operation's outcome.
-class KUDU_EXPORT Status {
+class KUDU_EXPORT [[clang::warn_unused_result]] Status {
  public:
   /// Create an object representing success status.
   Status() : state_(NULL) { }

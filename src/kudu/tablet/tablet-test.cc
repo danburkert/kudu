@@ -386,7 +386,7 @@ TYPED_TEST(TestTablet, TestReinsertDuringFlush) {
 
     Status PostWriteSnapshot() OVERRIDE {
       LocalTabletWriter writer(test_->tablet().get(), &test_->client_schema());
-      test_->InsertTestRow(&writer, 0, 1);
+      CHECK_OK(test_->InsertTestRow(&writer, 0, 1));
       CHECK_OK(test_->DeleteTestRow(&writer, 0));
       CHECK_EQ(1, writer.last_op_result().mutated_stores_size());
       CHECK_EQ(1L, writer.last_op_result().mutated_stores(0).mrs_id());
