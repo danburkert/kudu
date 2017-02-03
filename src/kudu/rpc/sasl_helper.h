@@ -78,8 +78,24 @@ class SaslHelper {
   // Enable the GSSAPI (Kerberos) mechanism.
   Status EnableGSSAPI();
 
+  // Enable authentication via client certificate. This authentication method
+  // skips SASL entirely.
+  Status EnableCertificate();
+
   // Check for the PLAIN SASL mechanism.
-  bool IsPlainEnabled() const;
+  bool IsPlainEnabled() const {
+    return plain_enabled_;
+  }
+
+  // Check for the GSSAPI (Kerberos) SASL mechanism.
+  bool IsGssapiEnabled() const {
+    return gssapi_enabled_;
+  }
+
+  // Check if client-certificate authentication is enabled.
+  bool IsCertificateEnabled() const {
+    return certificate_enabled_;
+  }
 
   // Sanity check that the call ID is the negotiation call ID.
   // Logs DFATAL if call_id does not match.
@@ -109,6 +125,7 @@ class SaslHelper {
 
   bool plain_enabled_;
   bool gssapi_enabled_;
+  bool certificate_enabled_;
 
   DISALLOW_COPY_AND_ASSIGN(SaslHelper);
 };

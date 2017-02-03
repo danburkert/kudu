@@ -113,16 +113,18 @@ Status SaslHelper::EnableGSSAPI() {
   return Status::OK();
 }
 
+Status SaslHelper::EnableCertificate() {
+  RETURN_NOT_OK(EnableMechanism(SaslMechanism::CERTIFICATE));
+  certificate_enabled_ = true;
+  return Status::OK();
+}
+
 Status SaslHelper::EnableMechanism(SaslMechanism::Type mech) {
   if (PREDICT_FALSE(!ContainsKey(global_mechs_, mech))) {
     return Status::InvalidArgument("unable to find SASL plugin", SaslMechanism::name_of(mech));
   }
   enabled_mechs_.insert(mech);
   return Status::OK();
-}
-
-bool SaslHelper::IsPlainEnabled() const {
-  return plain_enabled_;
 }
 
 Status SaslHelper::CheckNegotiateCallId(int32_t call_id) const {

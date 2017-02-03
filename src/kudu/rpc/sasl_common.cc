@@ -373,6 +373,9 @@ SaslMechanism::Type SaslMechanism::value_of(const string& mech) {
   if (boost::iequals(mech, "GSSAPI")) {
     return GSSAPI;
   }
+  if (boost::iequals(mech, "CERTIFICATE")) {
+    return CERTIFICATE;
+  }
   return INVALID;
 }
 
@@ -380,9 +383,10 @@ const char* SaslMechanism::name_of(SaslMechanism::Type val) {
   switch (val) {
     case PLAIN: return "PLAIN";
     case GSSAPI: return "GSSAPI";
-    default:
-      return "INVALID";
+    case INVALID: return "INVALID";
+    case CERTIFICATE: return "CERTIFICATE";
   }
+  LOG(FATAL) << "Unknown SASL mechanism";
 }
 
 } // namespace rpc

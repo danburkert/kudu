@@ -43,7 +43,8 @@ struct SaslMechanism {
   enum Type {
     INVALID,
     PLAIN,
-    GSSAPI
+    GSSAPI,
+    CERTIFICATE,
   };
   static Type value_of(const std::string& mech);
   static const char* name_of(Type val);

@@ -194,6 +194,9 @@ Status ClientNegotiation::Negotiate() {
   }
 
   // Step 4: SASL negotiation.
+  if (negotiated_mech_ != SaslMechanism::CERTIFICATE) {
+
+  }
   RETURN_NOT_OK(InitSaslClient());
   RETURN_NOT_OK(SendSaslInitiate());
   for (bool cont = true; cont; ) {
@@ -332,9 +335,10 @@ Status ClientNegotiation::HandleNegotiate(const NegotiatePB& response) {
     server_mechs.insert(mech);
   }
 
-  // Determine which SASL mechanism to use for authenticating the connection.
-  // We pick the most preferred mechanism which is supported by both parties.
-  // The preference list in order of most to least preferred:
+  // Determine which method to use for authenticating the connection. We pick
+  // the most preferred mechanism which is supported by both parties. The
+  // preference list in order of most to least preferred:
+  //  * CERTIFICATE
   //  * GSSAPI
   //  * PLAIN
   set<SaslMechanism::Type> common_mechs = STLSetIntersection(client_mechs, server_mechs);
@@ -362,7 +366,9 @@ Status ClientNegotiation::HandleNegotiate(const NegotiatePB& response) {
     return Status::NotAuthorized(msg);
   }
 
-  if (ContainsKey(common_mechs, SaslMechanism::GSSAPI)) {
+  if (ContainsKey(common_mechs, SaslMechanism::CERTIFICATE)) {
+    negotiated_mech_ = SaslMechanism::CERTIFICATE;
+  } else if (ContainsKey(common_mechs, SaslMechanism::GSSAPI)) {
     negotiated_mech_ = SaslMechanism::GSSAPI;
   } else {
     DCHECK(ContainsKey(common_mechs, SaslMechanism::PLAIN));
