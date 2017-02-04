@@ -20,7 +20,7 @@
         <version>1.5.0-cdh6.x-SNAPSHOT</version>
     </parent>
 
-    <artifactId>kudu-${spark.version.label}_${scala.binary.version}</artifactId>
+    <artifactId>kudu-spark2_${scala.binary.version}</artifactId>
     <name>Kudu Spark Bindings</name>
 
     <dependencies>
@@ -159,7 +159,7 @@
                         <goals><goal>add-source</goal></goals>
                         <configuration>
                             <sources>
-                                <source>${kudu-spark.compat.src}</source>
+                                <source>src/main/spark2</source>
                             </sources>
                         </configuration>
                     </execution>

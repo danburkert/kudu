@@ -362,12 +362,6 @@ if [ "$BUILD_JAVA" == "1" ]; then
   if ! mvn $MVN_FLAGS -PbuildCSD clean verify ; then
     EXIT_STATUS=1
     FAILURES="$FAILURES"$'Java build/test failed\n'
-
-  # If there are no failures, rerun the build with Spark 1.x with Scala 2.10.
-  # Note: this won't work if there are ever Spark integration tests!
-  elif ! mvn $MVN_FLAGS -Dtest="org.apache.kudu.spark.*.*" -DskipITs -Pspark_2.10 clean verify ; then
-    EXIT_STATUS=1
-    FAILURES="$FAILURES"$'Spark 1.x build/test failed\n'
   fi
 
   set +x
