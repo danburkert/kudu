@@ -19,22 +19,32 @@
 
 #include <string>
 
+#include <gflags/gflags.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
 
 #include "kudu/gutil/strings/substitute.h"
+#include "kudu/security/ca/cert_management.h"
 #include "kudu/security/cert.h"
 #include "kudu/security/crypto.h"
 #include "kudu/security/openssl_util.h"
 #include "kudu/security/tls_handshake.h"
+#include "kudu/util/flag_tags.h"
 #include "kudu/util/status.h"
 
 using strings::Substitute;
 using std::string;
 
+DEFINE_int32(server_rsa_key_length_bits, 2048,
+             "The number of bits to use for the server's private RSA key. This is used "
+             "for TLS connections to and from clients and other servers.");
+TAG_FLAG(server_rsa_key_length_bits, experimental);
+
 namespace kudu {
 namespace security {
+
+using ca::CertRequestGenerator;
 
 template<> struct SslTypeTraits<SSL> {
   static constexpr auto free = &SSL_free;
@@ -46,10 +56,9 @@ template<> struct SslTypeTraits<X509_STORE_CTX> {
   static constexpr auto free = &X509_STORE_CTX_free;
 };
 
-
 TlsContext::TlsContext()
-    : has_cert_(false),
-      trusted_cert_count_(0) {
+    : trusted_cert_count_(0),
+      has_cert_(false) {
   security::InitializeOpenSSL();
 }
 
@@ -98,43 +107,36 @@ Status TlsContext::VerifyCertChain(const Cert& cert) {
       return Status::OK();
     }
 
-    // Get the cert that failed to verify.
-    X509* cur_cert = X509_STORE_CTX_get_current_cert(store_ctx.get());
-    string cert_details;
-    if (cur_cert) {
-      cert_details = Substitute(" (error with cert: subject=$0, issuer=$1)",
-                                X509NameToString(X509_get_subject_name(cur_cert)),
-                                X509NameToString(X509_get_issuer_name(cur_cert)));
-    }
-
     return Status::RuntimeError(
-        Substitute("could not verify cert chain$0", cert_details),
+        Substitute("could not verify certificate chain (subject=$0, issuer=$1)",
+                   cert.SubjectName(), cert.IssuerName()),
         X509_verify_cert_error_string(err));
   }
   return Status::OK();
 }
 
 Status TlsContext::UseCertificateAndKey(const Cert& cert, const PrivateKey& key) {
-  ERR_clear_error();
-
-  // Verify that the cert and key match.
-  RETURN_NOT_OK(cert.CheckKeyMatch(key));
-
   // Verify that the appropriate CA certs have been loaded into the context
   // before we adopt a cert. Otherwise, client connections without the CA cert
   // available would fail.
   RETURN_NOT_OK(VerifyCertChain(cert));
 
+  // Verify that the cert and key match.
+  RETURN_NOT_OK(cert.CheckKeyMatch(key));
+
+  MutexLock lock(lock_);
+  CHECK(!has_cert_);
+
   OPENSSL_RET_NOT_OK(SSL_CTX_use_PrivateKey(ctx_.get(), key.GetRawData()),
                      "failed to use private key");
   OPENSSL_RET_NOT_OK(SSL_CTX_use_certificate(ctx_.get(), cert.GetRawData()),
                      "failed to use certificate");
-  has_cert_.Store(true);
+  has_cert_ = true;
   return Status::OK();
 }
 
 Status TlsContext::AddTrustedCertificate(const Cert& cert) {
-  VLOG(2) << "Trusting certificate " << cert.SubjectName();
+  VLOG(2) << "Trusting root certificate " << cert.SubjectName();
 
   ERR_clear_error();
   auto* cert_store = SSL_CTX_get_cert_store(ctx_.get());
@@ -146,11 +148,107 @@ Status TlsContext::AddTrustedCertificate(const Cert& cert) {
     if (ERR_GET_LIB(err) == ERR_LIB_X509 &&
         ERR_GET_REASON(err) == X509_R_CERT_ALREADY_IN_HASH_TABLE) {
       ERR_clear_error();
-      return Status::AlreadyPresent("cert already trusted");
+      return Status::AlreadyPresent("root certificate already trusted");
     }
-    OPENSSL_RET_NOT_OK(rc, "failed to add trusted certificate");
+    OPENSSL_RET_NOT_OK(rc, "failed to add trusted root certificate");
   }
   trusted_cert_count_.Increment();
+  return Status::OK();
+}
+
+Status TlsContext::GenerateSelfSignedCertAndKey(const std::string& server_uuid) {
+  // Step 1: generate the private key to be self signed.
+  PrivateKey key;
+  RETURN_NOT_OK_PREPEND(GeneratePrivateKey(FLAGS_server_rsa_key_length_bits,
+                                           &key),
+                                           "failed to generate private key");
+
+  // Step 2: generate a CSR so that the self-signed cert can eventually be
+  // replaced with a CA-signed cert.
+  // TODO(aserbin): do these fields actually have to be set?
+  const CertRequestGenerator::Config config = {
+    "US",               // country
+    "CA",               // state
+    "San Francisco",    // locality
+    "ASF",              // org
+    "The Kudu Project", // unit
+    server_uuid,        // uuid
+    "",                 // comment
+    {"localhost"},      // hostnames TODO(PKI): use real hostnames
+    {"127.0.0.1"},      // ips
+  };
+
+  CertRequestGenerator gen(config);
+  CertSignRequest csr;
+  RETURN_NOT_OK_PREPEND(gen.Init(), "could not initialize CSR generator");
+  RETURN_NOT_OK_PREPEND(gen.GenerateRequest(key, &csr), "could not generate CSR");
+
+  // Step 3: generate a self-signed cert that we can use for terminating TLS
+  // connections until we get the CA-signed cert.
+  Cert cert;
+  RETURN_NOT_OK_PREPEND(ca::CertSigner::SelfSignCert(key, config, &cert),
+                        "failed to self-sign cert");
+  if (VLOG_IS_ON(2)) {
+    string s;
+    cert.ToString(&s, DataFormat::PEM);
+    VLOG(2) << s;
+  }
+
+  // Step 2: Adopt the new key and cert.
+  MutexLock lock(lock_);
+  CHECK(!has_cert_);
+  OPENSSL_RET_NOT_OK(SSL_CTX_use_PrivateKey(ctx_.get(), key.GetRawData()),
+                     "failed to use private key");
+  OPENSSL_RET_NOT_OK(SSL_CTX_use_certificate(ctx_.get(), cert.GetRawData()),
+                     "failed to use certificate");
+  has_cert_ = true;
+  csr_ = std::move(csr);
+  return Status::OK();
+}
+
+boost::optional<CertSignRequest> TlsContext::GetCsrIfNecessary() const {
+  MutexLock lock(lock_);
+  if (csr_) {
+    return csr_->Clone();
+  }
+  return boost::none;
+}
+
+Status TlsContext::AdoptSignedCert(const Cert& cert) {
+  // Verify that the appropriate CA certs have been loaded into the context
+  // before we adopt a cert. Otherwise, client connections without the CA cert
+  // available would fail.
+  RETURN_NOT_OK(VerifyCertChain(cert));
+
+  MutexLock lock(lock_);
+
+  if (!csr_) {
+    // A signed cert has already been adopted.
+    return Status::OK();
+  }
+
+  PublicKey csr_key;
+  RETURN_NOT_OK(csr_->GetPublicKey(&csr_key));
+  PublicKey cert_key;
+  RETURN_NOT_OK(cert.GetPublicKey(&cert_key));
+  bool equals;
+  RETURN_NOT_OK(csr_key.Equals(cert_key, &equals));
+  if (!equals) {
+    return Status::RuntimeError("certificate public key does not match the CSR public key");
+  }
+
+  OPENSSL_RET_NOT_OK(SSL_CTX_use_certificate(ctx_.get(), cert.GetRawData()),
+                     "failed to use certificate");
+
+  // This should never fail since we already compared the cert's public key
+  // against the CSR, but better safe than sorry. If this *does* fail, it
+  // appears to remove the private key from the SSL_CTX, so we are left in a bad
+  // state.
+  OPENSSL_CHECK_OK(SSL_CTX_check_private_key(ctx_.get()))
+    << "certificate does not match the private key";
+
+  csr_ = boost::none;
+
   return Status::OK();
 }
 

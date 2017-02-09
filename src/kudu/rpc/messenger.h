@@ -25,6 +25,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <boost/optional.hpp>
 #include <gtest/gtest_prod.h>
 
 #include "kudu/gutil/gscoped_ptr.h"
@@ -100,6 +101,9 @@ class MessengerBuilder {
   // Set metric entity for use by RPC systems.
   MessengerBuilder &set_metric_entity(const scoped_refptr<MetricEntity>& metric_entity);
 
+  // Configure the messenger to enable TLS encryption on inbound connections.
+  MessengerBuilder& enable_inbound_tls(std::string server_uuid);
+
   Status Build(std::shared_ptr<Messenger> *msgr);
 
  private:
@@ -110,6 +114,7 @@ class MessengerBuilder {
   int max_negotiation_threads_;
   MonoDelta coarse_timer_granularity_;
   scoped_refptr<MetricEntity> metric_entity_;
+  boost::optional<string> enable_inbound_tls_server_uuid_;
 };
 
 // A Messenger is a container for the reactor threads which run event loops
