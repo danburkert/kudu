@@ -73,6 +73,7 @@ std::string GetOpenSSLErrors();
 // See man(3) SSL_get_error for more discussion.
 std::string GetSSLErrorDescription(int error_code);
 
+bool CheckOpenSslLeaks();
 
 // A generic wrapper for OpenSSL structures.
 template <typename T>

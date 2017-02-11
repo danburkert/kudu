@@ -28,6 +28,7 @@
 #include <openssl/rand.h>
 #include <openssl/ssl.h>
 
+#include "kudu/security/openssl_util_bio.h"
 #include "kudu/util/debug/leakcheck_disabler.h"
 #include "kudu/util/errno.h"
 #include "kudu/util/mutex.h"
@@ -67,6 +68,13 @@ void DoInitializeOpenSSL() {
   SSL_library_init();
   OpenSSL_add_all_algorithms();
   RAND_poll();
+
+  // Enable OpenSSL leak checking in LSAN mode.
+#if defined(__has_feature)
+#  if __has_feature(address_sanitizer)
+  CRYPTO_mem_ctrl(CRYPTO_MEM_CHECK_ON);
+#  endif
+#endif
 
   // Initialize the OpenSSL mutexes. We intentionally leak these, so ignore
   // LSAN warnings.
@@ -128,6 +136,24 @@ string GetSSLErrorDescription(int error_code) {
     };
     default: return GetOpenSSLErrors();
   }
+}
+
+bool CheckOpenSslLeaks() {
+  string leaks;
+
+  auto bio = ssl_make_unique(BIO_new(BIO_s_mem()));
+  CHECK(bio);
+  CRYPTO_mem_leaks(bio.get());
+
+  BUF_MEM* membuf;
+  OPENSSL_CHECK_OK(BIO_get_mem_ptr(bio.get(), &membuf));
+  leaks.assign(membuf->data, membuf->length);
+
+  if (!leaks.empty()) {
+    LOG(WARNING) << "OpenSSL leaks: \n" << leaks;
+    return true;
+  }
+  return false;
 }
 
 const string& DataFormatToString(DataFormat fmt) {

@@ -23,6 +23,7 @@
 
 #include "kudu/gutil/map-util.h"
 #include "kudu/rpc/rpc_context.h"
+#include "kudu/security/openssl_util.h"
 #include "kudu/server/clock.h"
 #include "kudu/server/hybrid_clock.h"
 #include "kudu/server/server_base.h"
@@ -111,6 +112,7 @@ void GenericServiceImpl::CheckLeaks(const CheckLeaksRequestPB* /*req*/,
   LOG(INFO) << "Checking for leaks (request via RPC)";
   resp->set_success(true);
   resp->set_found_leaks(__lsan_do_recoverable_leak_check());
+  security::CheckOpenSslLeaks();
 #endif
 #undef LSAN_ENABLED
   rpc->RespondSuccess();
