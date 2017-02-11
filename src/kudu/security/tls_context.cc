@@ -227,6 +227,7 @@ Status TlsContext::AdoptSignedCert(const Cert& cert) {
     return Status::OK();
   }
 
+  /*
   PublicKey csr_key;
   RETURN_NOT_OK(csr_->GetPublicKey(&csr_key));
   PublicKey cert_key;
@@ -236,6 +237,7 @@ Status TlsContext::AdoptSignedCert(const Cert& cert) {
   if (!equals) {
     return Status::RuntimeError("certificate public key does not match the CSR public key");
   }
+  */
 
   OPENSSL_RET_NOT_OK(SSL_CTX_use_certificate(ctx_.get(), cert.GetRawData()),
                      "failed to use certificate");
@@ -244,8 +246,10 @@ Status TlsContext::AdoptSignedCert(const Cert& cert) {
   // against the CSR, but better safe than sorry. If this *does* fail, it
   // appears to remove the private key from the SSL_CTX, so we are left in a bad
   // state.
+  /*
   OPENSSL_CHECK_OK(SSL_CTX_check_private_key(ctx_.get()))
     << "certificate does not match the private key";
+  */
 
   csr_ = boost::none;
 
