@@ -52,7 +52,7 @@ DEFINE_int32(rpc_negotiation_inject_delay_ms, 0,
              "the RPC negotiation process on the server side.");
 TAG_FLAG(rpc_negotiation_inject_delay_ms, unsafe);
 
-DECLARE_bool(server_require_kerberos);
+DECLARE_string(keytab);
 
 DEFINE_bool(rpc_encrypt_loopback_connections, false,
             "Whether to encrypt data transfer on RPC connections that stay within "
@@ -189,10 +189,10 @@ static Status DoServerNegotiation(Connection* conn, const MonoTime& deadline) {
   const auto* tls_context = &conn->reactor_thread()->reactor()->messenger()->tls_context();
   ServerNegotiation server_negotiation(conn->release_socket(), tls_context);
 
-  if (FLAGS_server_require_kerberos) {
-    RETURN_NOT_OK(server_negotiation.EnableGSSAPI());
-  } else {
+  if (FLAGS_keytab.empty()) {
     RETURN_NOT_OK(server_negotiation.EnablePlain());
+  } else {
+    RETURN_NOT_OK(server_negotiation.EnableGSSAPI());
   }
   server_negotiation.set_deadline(deadline);
 

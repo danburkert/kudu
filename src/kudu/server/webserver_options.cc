@@ -52,26 +52,27 @@ DEFINE_bool(webserver_enable_doc_root, true,
 TAG_FLAG(webserver_enable_doc_root, advanced);
 
 // SSL configuration.
-DEFINE_string(webserver_certificate_file, "",
-    "The location of the debug webserver's SSL certificate file, in PEM format. If "
-    "empty, webserver SSL support is not enabled");
-DEFINE_string(webserver_private_key_file, "", "The full path to the private key used as a"
-    " counterpart to the public key contained in --ssl_server_certificate. If "
-    "--ssl_server_certificate is set, this option must be set as well.");
-DEFINE_string(webserver_private_key_password_cmd, "", "A Unix command whose output "
-    "returns the password used to decrypt the Webserver's certificate private key file "
-    "specified in --webserver_private_key_file. If the PEM key file is not "
+DEFINE_string(webserver_cert, "",
+              "Path to a PEM encoded X509 certificate to use for securing HTTPS "
+              "connections to the web UI. If set, '--webserver_key' must be "
+              "set as well.");
+
+DEFINE_string(webserver_key, "",
+              "Path to a PEM encoded private key paired with the certificate "
+              "from '--webserver_cert'");
+
+DEFINE_string(webserver_key_password_cmd, "", "A Unix command whose output "
+    "returns the password used to decrypt the Webserver's private key file "
+    "specified in '--webserver_key'. If the PEM key file is not "
     "password-protected, this command will not be invoked. The output of the command "
     "will be truncated to 1024 bytes, and then all trailing whitespace will be trimmed "
     "before it is used to decrypt the private key");
-
 
 DEFINE_string(webserver_authentication_domain, "",
     "Domain used for debug webserver authentication");
 DEFINE_string(webserver_password_file, "",
     "(Optional) Location of .htpasswd file containing user names and hashed passwords for"
     " debug webserver authentication");
-
 
 DEFINE_int32(webserver_num_worker_threads, 50,
              "Maximum number of threads to start for handling web server requests");
@@ -95,9 +96,9 @@ WebserverOptions::WebserverOptions()
     port(FLAGS_webserver_port),
     doc_root(FLAGS_webserver_doc_root),
     enable_doc_root(FLAGS_webserver_enable_doc_root),
-    certificate_file(FLAGS_webserver_certificate_file),
-    private_key_file(FLAGS_webserver_private_key_file),
-    private_key_password_cmd(FLAGS_webserver_private_key_password_cmd),
+    certificate_file(FLAGS_webserver_cert),
+    private_key_file(FLAGS_webserver_key),
+    private_key_password_cmd(FLAGS_webserver_key_password_cmd),
     authentication_domain(FLAGS_webserver_authentication_domain),
     password_file(FLAGS_webserver_password_file),
     num_worker_threads(FLAGS_webserver_num_worker_threads) {

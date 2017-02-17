@@ -22,6 +22,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <boost/algorithm/string/predicate.hpp>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <list>
@@ -58,31 +59,46 @@ using std::string;
 using std::shared_ptr;
 using strings::Substitute;
 
-DEFINE_string(rpc_ssl_server_certificate, "", "Path to the SSL certificate to be used for the RPC "
-    "layer.");
-DEFINE_string(rpc_ssl_private_key, "",
-    "Path to the private key to be used to complement the public key present in "
-    "--ssl_server_certificate");
-DEFINE_string(rpc_ssl_certificate_authority, "",
-    "Path to the certificate authority to be used by the client side of the connection to verify "
-    "the validity of the certificate presented by the server.");
+DEFINE_string(rpc_authentication, "enabled",
+              "Whether to require RPC connections to authenticate. Must be one "
+              "of 'disabled', 'enabled', or 'required'. If 'enabled', "
+              "authentication will be used when the remote end supports it. If "
+              "'required', connections which are not able to authenticate "
+              "(because the remote end lacks support) are rejected. Secure "
+              "clusters should use 'required'.");
+DEFINE_string(rpc_encryption, "enabled",
+              "Whether to require RPC connections to be encrypted. Must be one "
+              "of 'disabled', 'enabled', or 'required'. If 'enabled', "
+              "encryption will be used when the remote end supports it. If "
+              "'required', connections which are not able to use encryption "
+              "(because the remote end lacks support) are rejected. Secure "
+              "clusters should use 'required'.");
+
+DEFINE_string(rpc_cert, "",
+              "Path to a PEM encoded X509 certificate to use for securing RPC "
+              "connections with SSL/TLS. If set, '--rpc_key' and "
+              "'--rpc_ca_cert' must be set as well.");
+DEFINE_string(rpc_key, "",
+              "Path to a PEM encoded private key paired with the certificate "
+              "from '--tls_cert'");
+DEFINE_string(rpc_ca_cert, "",
+              "Path to the PEM encoded X509 certificate of the trusted external "
+              "certificate authority. The provided certificate should be the root "
+              "issuer of the certificate passed in '--rpc_cert'.");
+
+// Setting TLS certs and keys via CLI flags is only necessary for external
+// PKI-based security, which is not yet production ready. Instead, see
+// internal PKI (ipki) and Kerberos-based authentication.
+TAG_FLAG(rpc_cert, experimental);
+TAG_FLAG(rpc_key, experimental);
+TAG_FLAG(rpc_ca_cert, experimental);
 
 DEFINE_int32(rpc_default_keepalive_time_ms, 65000,
              "If an RPC connection from a client is idle for this amount of time, the server "
              "will disconnect the client.");
-
-TAG_FLAG(rpc_ssl_server_certificate, experimental);
-TAG_FLAG(rpc_ssl_private_key, experimental);
-TAG_FLAG(rpc_ssl_certificate_authority, experimental);
 TAG_FLAG(rpc_default_keepalive_time_ms, advanced);
 
-DEFINE_bool(server_require_kerberos, false,
-            "Whether to force all inbound RPC connections to authenticate "
-            "with Kerberos");
-// TODO(todd): this flag is too coarse-grained, since secure servers still
-// need to allow non-kerberized connections authenticated by tokens. But
-// it's a useful stop-gap.
-TAG_FLAG(server_require_kerberos, experimental);
+DECLARE_string(keytab);
 
 namespace kudu {
 namespace rpc {
@@ -144,17 +160,41 @@ Status MessengerBuilder::Build(shared_ptr<Messenger> *msgr) {
       new_msgr->AllExternalReferencesDropped();
   });
 
+  if (boost::iequals(FLAGS_rpc_authentication, "required")) {
+    new_msgr->authentication_ = RpcAuthentication::REQUIRED;
+  } else if (boost::iequals(FLAGS_rpc_authentication, "enabled")) {
+    new_msgr->authentication_ = RpcAuthentication::ENABLED;
+  } else if (boost::iequals(FLAGS_rpc_authentication, "disabled")) {
+    new_msgr->authentication_ = RpcAuthentication::DISABLED;
+  } else {
+    return Status::InvalidArgument(
+        "--rpc_authentication flag must be one of 'required', 'enabled', or 'disabled'");
+  }
+
+  if (boost::iequals(FLAGS_rpc_encryption, "required")) {
+    new_msgr->encryption_ = RpcEncryption::REQUIRED;
+  } else if (boost::iequals(FLAGS_rpc_encryption, "enabled")) {
+    new_msgr->encryption_ = RpcEncryption::ENABLED;
+  } else if (boost::iequals(FLAGS_rpc_encryption, "disabled")) {
+    new_msgr->encryption_ = RpcEncryption::DISABLED;
+  } else {
+    return Status::InvalidArgument(
+        "--rpc_encryption flag must be one of 'required', 'enabled', or 'disabled'");
+  }
+
   RETURN_NOT_OK(new_msgr->Init());
   if (enable_inbound_tls_server_uuid_) {
     auto* tls_context = new_msgr->mutable_tls_context();
-    if (!FLAGS_rpc_ssl_server_certificate.empty() ||
-        !FLAGS_rpc_ssl_private_key.empty() ||
-        !FLAGS_rpc_ssl_certificate_authority.empty()) {
+
+    if (!FLAGS_rpc_cert.empty() && !FLAGS_rpc_key.empty() && !FLAGS_rpc_ca_cert.empty()) {
       // TODO(PKI): should we try and enforce that the server UUID and/or
       // hostname is in the subject or alt names of the cert?
-      RETURN_NOT_OK(tls_context->LoadCertificateAuthority(FLAGS_rpc_ssl_certificate_authority));
-      RETURN_NOT_OK(tls_context->LoadCertificateAndKey(FLAGS_rpc_ssl_server_certificate,
-                                                       FLAGS_rpc_ssl_private_key));
+      RETURN_NOT_OK(tls_context->LoadCertificateAuthority(FLAGS_rpc_ca_cert));
+      RETURN_NOT_OK(tls_context->LoadCertificateAndKey(FLAGS_rpc_cert,
+                                                       FLAGS_rpc_key));
+    } else if (!FLAGS_rpc_cert.empty() || !FLAGS_rpc_key.empty() || !FLAGS_rpc_ca_cert.empty()) {
+      return Status::InvalidArgument(
+          "--rpc_cert, --rpc_key, and --rpc_ca_cert flags must be set as a group");
     } else {
       RETURN_NOT_OK(tls_context->GenerateSelfSignedCertAndKey(*enable_inbound_tls_server_uuid_));
     }
@@ -212,7 +252,7 @@ Status Messenger::AddAcceptorPool(const Sockaddr &accept_addr,
   // Before listening, if we expect to require Kerberos, we want to verify
   // that everything is set up correctly. This way we'll generate errors on
   // startup rather than later on when we first receive a client connection.
-  if (FLAGS_server_require_kerberos) {
+  if (!FLAGS_keytab.empty()) {
     RETURN_NOT_OK_PREPEND(ServerNegotiation::PreflightCheckGSSAPI(),
                           "GSSAPI/Kerberos not properly configured");
   }
@@ -291,6 +331,8 @@ void Messenger::RegisterInboundSocket(Socket *new_socket, const Sockaddr &remote
 Messenger::Messenger(const MessengerBuilder &bld)
   : name_(bld.name_),
     closing_(false),
+    authentication_(RpcAuthentication::REQUIRED),
+    encryption_(RpcEncryption::REQUIRED),
     tls_context_(new security::TlsContext()),
     rpcz_store_(new RpczStore()),
     metric_entity_(bld.metric_entity_),
