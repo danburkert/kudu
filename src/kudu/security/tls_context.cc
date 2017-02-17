@@ -42,6 +42,25 @@ DEFINE_int32(server_rsa_key_length_bits, 2048,
              "for TLS connections to and from clients and other servers.");
 TAG_FLAG(server_rsa_key_length_bits, experimental);
 
+DEFINE_string(rpc_tls_ciphers,
+    // This is the "intermediate compatibility" cipher list of the Mozilla
+    // Security Server Side TLS recommendations, accessed Feb. 2017. It's not
+    // possible to use "modern compatibility" because RHEL 6.4 and below can't
+    // use ECDH ciphers.
+    "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:"
+    "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
+    "DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:"
+    "ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:"
+    "ECDHE-ECDSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:"
+    "DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES256-SHA:ECDHE-ECDSA-DES-CBC3-SHA:"
+    "ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:"
+    "AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:DES-CBC3-SHA:!DSS",
+    "The cipher suite preferences to use for TLS-secured RPC connections. Uses "
+    "the OpenSSL cipher preference list format. See man (1) ciphers for more "
+    "information.");
+
+TAG_FLAG(rpc_tls_ciphers, advanced);
+
 namespace kudu {
 namespace security {
 
@@ -85,9 +104,38 @@ Status TlsContext::Init() {
                       SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 |
                       SSL_OP_NO_COMPRESSION);
 
+  OPENSSL_RET_NOT_OK(
+      SSL_CTX_set_cipher_list(ctx_.get(), FLAGS_rpc_tls_ciphers.c_str()),
+      "failed to set TLS ciphers");
+
+  // Enable ECDH curves. For OpenSSL 1.1.0 and up, this is done automatically.
+#ifndef OPENSSL_NO_ECDH
+#if OPENSSL_VERSION_NUMBER < 0x10002000L
+  // TODO(PKI): find a platform to test this branch on. RHEL 6.4 and below
+  // define OPENSSL_NO_ECDH.
+
+  // OpenSSL 1.0.1 and below only support setting a single ECDH curve at once.
+  // We choose prime256v1 because it's the first curve listed in the "modern
+  // compatibility" section of the Mozilla Server Side TLS recommendations,
+  // accessed Feb. 2017.
+  c_unique_ptr<EC_KEY> ecdh { EC_KEY_new_by_curve_name(NID_X9_62_prime256v1), &EC_KEY_free };
+  OPENSSL_RET_IF_NULL(ecdh, "failed to create prime256v1 curve");
+  OPENSSL_RET_NOT_OK(SSL_CTX_set_tmp_ecdh(ctx_.get(), ecdh.get()),
+                     "failed to set ECDH curve");
+
+#elif  OPENSSL_VERSION_NUMBER <= 0x10100000L
+
+  // OpenSSL 1.0.2 provides the set_ecdh_auto API which internally figures out
+  // the best curve to use. Unlike most other OpenSSL APIs, set_ecdhe_auto
+  // return 0 on failure.
+  if (SSL_CTX_set_ecdh_auto(ctx_.get(), 1) == 0) {
+    return Status::RuntimeError("failed to configure ECDH support");
+  };
+#endif
+#endif
+
   // TODO(PKI): is it possible to disable client-side renegotiation? it seems there
   // have been various CVEs related to this feature that we don't need.
-  // TODO(PKI): set desired cipher suites?
   return Status::OK();
 }
 
