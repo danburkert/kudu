@@ -120,6 +120,11 @@ class MessengerBuilder {
   // Configure the messenger to enable TLS encryption on inbound connections.
   MessengerBuilder& enable_inbound_tls();
 
+  // Sets the authentication requirements for the messenger.
+  //
+  // If not set, falls back to the --rpc_authentication gflag.
+  MessengerBuilder& set_authentication(RpcAuthentication authentication);
+
   Status Build(std::shared_ptr<Messenger> *msgr);
 
  private:
@@ -131,6 +136,7 @@ class MessengerBuilder {
   MonoDelta coarse_timer_granularity_;
   scoped_refptr<MetricEntity> metric_entity_;
   bool enable_inbound_tls_;
+  boost::optional<RpcAuthentication> authentication_;
 };
 
 // A Messenger is a container for the reactor threads which run event loops
@@ -223,6 +229,8 @@ class Messenger {
     std::lock_guard<simple_spinlock> l(authn_token_lock_);
     authn_token_ = token;
   }
+
+  RpcAuthentication authentication() const { return authentication_; }
 
   ThreadPool* negotiation_pool() const { return negotiation_pool_.get(); }
 

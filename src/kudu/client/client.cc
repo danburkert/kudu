@@ -240,6 +240,11 @@ KuduClientBuilder& KuduClientBuilder::import_authentication_credentials(string a
   return *this;
 }
 
+KuduClientBuilder& KuduClientBuilder::require_authentication() {
+  data_->require_authentication_ = true;
+  return *this;
+}
+
 namespace {
 Status ImportAuthnCredsToMessenger(const string& authn_creds,
                                    Messenger* messenger) {
@@ -273,6 +278,10 @@ Status KuduClientBuilder::Build(shared_ptr<KuduClient>* client) {
   // Init messenger.
   MessengerBuilder builder("client");
   std::shared_ptr<Messenger> messenger;
+  if (data_->require_authentication_) {
+    builder.set_authentication(rpc::RpcAuthentication::REQUIRED);
+  }
+
   RETURN_NOT_OK(builder.Build(&messenger));
 
   // Parse and import the provided authn data, if any.
@@ -282,6 +291,7 @@ Status KuduClientBuilder::Build(shared_ptr<KuduClient>* client) {
 
   shared_ptr<KuduClient> c(new KuduClient());
   c->data_->messenger_ = std::move(messenger);
+
   c->data_->master_server_addrs_ = data_->master_server_addrs_;
   c->data_->default_admin_operation_timeout_ = data_->default_admin_operation_timeout_;
   c->data_->default_rpc_timeout_ = data_->default_rpc_timeout_;

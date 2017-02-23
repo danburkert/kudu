@@ -232,6 +232,16 @@ class KUDU_EXPORT KuduClientBuilder {
   ///   @c KuduClient#exportAuthenticationCredentials in the Java client.
   KuduClientBuilder& import_authentication_credentials(std::string authn_creds);
 
+  /// Require that this client only connect to clusters that can be securely
+  /// authenticated.
+  ///
+  /// This prevents active "man-in-the-middle" attacks against the client. This
+  /// option should be specified whenever the target cluster is known to have
+  /// authentication enabled.
+  ///
+  /// @return Reference to the updated object.
+  KuduClientBuilder& require_authentication();
+
   /// Create a client object.
   ///
   /// @note KuduClients objects are shared amongst multiple threads and,

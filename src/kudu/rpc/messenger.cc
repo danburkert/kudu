@@ -50,6 +50,7 @@
 #include "kudu/util/flag_tags.h"
 #include "kudu/util/metrics.h"
 #include "kudu/util/monotime.h"
+#include "kudu/util/net/net_util.h"
 #include "kudu/util/net/socket.h"
 #include "kudu/util/scoped_cleanup.h"
 #include "kudu/util/status.h"
@@ -158,6 +159,11 @@ MessengerBuilder& MessengerBuilder::enable_inbound_tls() {
   return *this;
 }
 
+MessengerBuilder& MessengerBuilder::set_authentication(RpcAuthentication authentication) {
+  authentication_ = authentication;
+  return *this;
+}
+
 Status MessengerBuilder::Build(shared_ptr<Messenger> *msgr) {
   RETURN_NOT_OK(SaslInit()); // Initialize SASL library before we start making requests
 
@@ -167,7 +173,9 @@ Status MessengerBuilder::Build(shared_ptr<Messenger> *msgr) {
       new_msgr->AllExternalReferencesDropped();
   });
 
-  if (boost::iequals(FLAGS_rpc_authentication, "required")) {
+  if (authentication_) {
+    new_msgr->authentication_ = *authentication_;
+  } else if (boost::iequals(FLAGS_rpc_authentication, "required")) {
     new_msgr->authentication_ = RpcAuthentication::REQUIRED;
   } else if (boost::iequals(FLAGS_rpc_authentication, "optional")) {
     new_msgr->authentication_ = RpcAuthentication::OPTIONAL;
@@ -213,8 +221,13 @@ Status MessengerBuilder::Build(shared_ptr<Messenger> *msgr) {
                !FLAGS_rpc_ca_certificate_file.empty()) {
       return Status::InvalidArgument("--rpc_certificate_file, --rpc_private_key_file, and "
                                      "--rpc_ca_certificate_file flags must be set as a group");
-    } else {
+    } else if (new_msgr->authentication_ == RpcAuthentication::OPTIONAL ||
+               !FLAGS_keytab_file.empty()) {
       RETURN_NOT_OK(tls_context->GenerateSelfSignedCertAndKey());
+    } else {
+      return Status::InvalidArgument("RPC authentication (--rpc_authentication) may not be "
+                                     "required unless Kerberos (--keytab_file) or external PKI "
+                                     "(--rpc_certificate_file et al) are configured");
     }
   }
 

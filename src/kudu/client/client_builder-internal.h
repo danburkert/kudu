@@ -35,6 +35,7 @@ class KuduClientBuilder::Data {
   MonoDelta default_admin_operation_timeout_;
   MonoDelta default_rpc_timeout_;
   std::string authn_creds_;
+  bool require_authentication_;
 
   DISALLOW_COPY_AND_ASSIGN(Data);
 };

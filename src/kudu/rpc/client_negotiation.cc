@@ -414,7 +414,6 @@ Status ClientNegotiation::HandleNegotiate(const NegotiatePB& response) {
     return Status::NotAuthorized(msg);
   }
 
-  // TODO(PKI): allow the client to require authentication.
   if (ContainsKey(common_mechs, SaslMechanism::GSSAPI)) {
     negotiated_mech_ = SaslMechanism::GSSAPI;
   } else {
