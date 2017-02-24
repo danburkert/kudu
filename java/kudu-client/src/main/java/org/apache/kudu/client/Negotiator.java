@@ -599,6 +599,8 @@ public class Negotiator extends SimpleChannelUpstreamHandler {
   }
 
   private void handleSuccessResponse(Channel chan, NegotiatePB response) {
+    Preconditions.checkState(saslClient.isComplete(),
+                             "server sent SASL_SUCCESS step, but SASL negotiation is not complete");
     if (peerCert != null && "GSSAPI".equals(chosenMech)) {
       verifyChannelBindings(response);
     }

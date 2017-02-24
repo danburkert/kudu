@@ -472,24 +472,23 @@ Status ClientNegotiation::HandleTlsHandshake(const NegotiatePB& response) {
 
 Status ClientNegotiation::AuthenticateBySasl(faststring* recv_buf) {
   RETURN_NOT_OK(InitSaslClient());
-  RETURN_NOT_OK(SendSaslInitiate());
-  NegotiatePB response;
-  while (true) {
-    RETURN_NOT_OK(RecvNegotiatePB(&response, recv_buf));
-    Status s;
-    switch (response.step()) {
-      // SASL_CHALLENGE: Server sent us a follow-up to a SASL_INITIATE or SASL_RESPONSE request.
-      case NegotiatePB::SASL_CHALLENGE:
-        RETURN_NOT_OK(HandleSaslChallenge(response));
-        break;
-      // SASL_SUCCESS: Server has accepted our authentication request. Negotiation successful.
-      case NegotiatePB::SASL_SUCCESS:
-        return HandleSaslSuccess(response);
-      default:
-        return Status::NotAuthorized("expected SASL_CHALLENGE or SASL_SUCCESS step",
-                                     NegotiatePB::NegotiateStep_Name(response.step()));
-    }
+  Status s = SendSaslInitiate();
+
+  // HandleSasl[Initiate, Challenge] return incomplete if an additional
+  // challenge step is required, or OK if a SASL_SUCCESS message is expected.
+  while (s.IsIncomplete()) {
+    NegotiatePB challenge;
+    RETURN_NOT_OK(RecvNegotiatePB(&challenge, recv_buf));
+    s = HandleSaslChallenge(challenge);
   }
+
+  // Propagate failure from SendSaslInitiate or HandleSaslChallenge.
+  RETURN_NOT_OK(s);
+
+  // Server challenges are over; we now expect the success message.
+  NegotiatePB success;
+  RETURN_NOT_OK(RecvNegotiatePB(&success, recv_buf));
+  return HandleSaslSuccess(success);
 }
 
 Status ClientNegotiation::AuthenticateByToken(faststring* recv_buf) {
@@ -569,7 +568,8 @@ Status ClientNegotiation::SendSaslInitiate() {
   msg.set_step(NegotiatePB::SASL_INITIATE);
   msg.mutable_token()->assign(init_msg, init_msg_len);
   msg.add_sasl_mechanisms()->set_mechanism(negotiated_mech);
-  return SendNegotiatePB(msg);
+  RETURN_NOT_OK(SendNegotiatePB(msg));
+  return s;
 }
 
 Status ClientNegotiation::SendSaslResponse(const char* resp_msg, unsigned resp_msg_len) {
@@ -580,6 +580,10 @@ Status ClientNegotiation::SendSaslResponse(const char* resp_msg, unsigned resp_m
 }
 
 Status ClientNegotiation::HandleSaslChallenge(const NegotiatePB& response) {
+  if (PREDICT_FALSE(response.step() != NegotiatePB::SASL_CHALLENGE)) {
+    return Status::NotAuthorized("expected SASL_CHALLENGE step",
+                                 NegotiatePB::NegotiateStep_Name(response.step()));
+  }
   TRACE("Received SASL_CHALLENGE response from server");
   if (PREDICT_FALSE(!response.has_token())) {
     return Status::NotAuthorized("no token in SASL_CHALLENGE response from server");
@@ -592,10 +596,15 @@ Status ClientNegotiation::HandleSaslChallenge(const NegotiatePB& response) {
     return s;
   }
 
-  return SendSaslResponse(out, out_len);
+  RETURN_NOT_OK(SendSaslResponse(out, out_len));
+  return s;
 }
 
 Status ClientNegotiation::HandleSaslSuccess(const NegotiatePB& response) {
+  if (PREDICT_FALSE(response.step() != NegotiatePB::SASL_SUCCESS)) {
+    return Status::NotAuthorized("expected SASL_SUCCESS step",
+                                 NegotiatePB::NegotiateStep_Name(response.step()));
+  }
   TRACE("Received SASL_SUCCESS response from server");
 
   if (tls_negotiated_ &&
