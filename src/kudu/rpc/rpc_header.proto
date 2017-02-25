@@ -303,6 +303,10 @@ message ErrorStatusPB {
     FATAL_VERSION_MISMATCH = 14;
     // Auth failed.
     FATAL_UNAUTHORIZED = 15;
+
+    // The authentication token is invalid or expired;
+    // the client should obtain a new one.
+    FATAL_INVALID_AUTHENTICATION_TOKEN = 16;
   }
 
   required string message = 1;
