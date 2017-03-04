@@ -83,6 +83,9 @@ class Socket {
   // Sets SO_REUSEADDR to 'flag'. Should be used prior to Bind().
   Status SetReuseAddr(bool flag);
 
+  // Sets SO_LINGER to the timeout. Should be used prior to Bind().
+  Status SetLinger(const MonoDelta& timeout);
+
   // Convenience method to invoke the common sequence:
   // 1) SetReuseAddr(true)
   // 2) Bind()

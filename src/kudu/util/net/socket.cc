@@ -254,6 +254,20 @@ Status Socket::SetReuseAddr(bool flag) {
   return Status::OK();
 }
 
+Status Socket::SetLinger(const MonoDelta& timeout) {
+  linger linger;
+  linger.l_onoff = true;
+  linger.l_linger = timeout.ToSeconds();
+
+  int err;
+  if (setsockopt(fd_, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger)) == -1) {
+    err = errno;
+    return Status::NetworkError(std::string("failed to set SO_REUSEADDR: ") +
+                                ErrnoToString(err), Slice(), err);
+  }
+  return Status::OK();
+}
+
 Status Socket::BindAndListen(const Sockaddr &sockaddr,
                              int listenQueueSize) {
   RETURN_NOT_OK(SetReuseAddr(true));

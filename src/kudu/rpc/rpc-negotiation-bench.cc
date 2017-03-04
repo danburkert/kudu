@@ -36,7 +36,6 @@
 #include "kudu/security/token_signer.h"
 #include "kudu/security/token_signing_key.h"
 #include "kudu/security/token_verifier.h"
-#include "kudu/util/status.h"
 #include "kudu/util/test_util.h"
 
 DEFINE_int32(client_threads, 1,
@@ -214,6 +213,7 @@ TEST_P(RpcNegotiationBench, BenchmarkNegotiation) {
           unique_ptr<Socket> socket(new Socket());
           CHECK_OK(socket->Init(0));
           CHECK_OK(socket->SetNoDelay(true));
+          CHECK_OK(socket->SetLinger(MonoDelta::FromSeconds(1)));
           socket->Connect(server_addr_);
           ClientNegotiation negotiation(std::move(socket), &client_tls_context, authn_token);
 
@@ -228,7 +228,7 @@ TEST_P(RpcNegotiationBench, BenchmarkNegotiation) {
             case Authentication::CERTIFICATE: break;
             case Authentication::TOKEN: break;
           }
-          WARN_NOT_OK(negotiation.Negotiate());
+          WARN_NOT_OK(negotiation.Negotiate(), "client negotiation failed");
           local_count++;
         }
         negotiation_count += local_count;
@@ -251,11 +251,11 @@ TEST_P(RpcNegotiationBench, BenchmarkNegotiation) {
 INSTANTIATE_TEST_CASE_P(Negotiations,
                         RpcNegotiationBench,
                         ::testing::Values(
-        NegotiationConfig { Tls::NONE, Authentication::KERBEROS },
-        NegotiationConfig { Tls::NONE, Authentication::PLAIN },
-        NegotiationConfig { Tls::ENABLED, Authentication::PLAIN },
-        NegotiationConfig { Tls::ENABLED, Authentication::CERTIFICATE },
-        NegotiationConfig { Tls::ENABLED, Authentication::TOKEN }
+        //NegotiationConfig { Tls::NONE, Authentication::KERBEROS },
+        NegotiationConfig { Tls::NONE, Authentication::PLAIN }
+        //NegotiationConfig { Tls::ENABLED, Authentication::PLAIN },
+        //NegotiationConfig { Tls::ENABLED, Authentication::CERTIFICATE },
+        //NegotiationConfig { Tls::ENABLED, Authentication::TOKEN }
 ));
 
 } // namespace rpc
