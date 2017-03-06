@@ -213,7 +213,7 @@ TEST_P(RpcNegotiationBench, BenchmarkNegotiation) {
           unique_ptr<Socket> socket(new Socket());
           CHECK_OK(socket->Init(0));
           CHECK_OK(socket->SetNoDelay(true));
-          CHECK_OK(socket->SetLinger(MonoDelta::FromSeconds(1)));
+          CHECK_OK(socket->SetLinger(MonoDelta::FromSeconds(0)));
           socket->Connect(server_addr_);
           ClientNegotiation negotiation(std::move(socket), &client_tls_context, authn_token);
 
