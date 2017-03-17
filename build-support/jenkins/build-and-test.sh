@@ -363,9 +363,12 @@ if [ "$BUILD_JAVA" == "1" ]; then
   # Test kudu-spark with Spark 2.x + Scala 2.11 profile
   # This won't work if there are ever Spark integration tests!
   rm -rf kudu-spark/target/
-  if ! mvn $MVN_FLAGS -Pspark2_2.11 -Dtest="org.apache.kudu.spark.kudu.*" test; then
+  if ! mvn $MVN_FLAGS -Pspark2_2.11 -Dtest="org.apache.kudu.spark.*.*" test; then
+    # org.apache.kudu.spark.*.* matches:
+    #   - org.apache.kudu.spark.kudu.* - kudu-spark tests
+    #   - org.apache.kudu.spark.tools.* - kudu-spark-tools tests
     EXIT_STATUS=1
-    FAILURES="$FAILURES"$'Java build/test failed\n'
+    FAILURES="$FAILURES"$'spark2 build/test failed\n'
   fi
   set +x
   popd
