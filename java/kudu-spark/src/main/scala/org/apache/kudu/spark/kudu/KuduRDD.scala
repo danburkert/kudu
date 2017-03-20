@@ -40,6 +40,7 @@ class KuduRDD private[kudu] (val kuduContext: KuduContext,
     val builder = kuduContext.syncClient
                              .newScanTokenBuilder(table)
                              .batchSizeBytes(batchSize)
+                             .limit(1)
                              .setProjectedColumnNames(projectedCols.toSeq.asJava)
                              .cacheBlocks(true)
 
