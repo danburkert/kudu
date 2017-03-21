@@ -39,8 +39,7 @@ class KuduRDD private[kudu] (val kuduContext: KuduContext,
   override protected def getPartitions: Array[Partition] = {
     val builder = kuduContext.syncClient
                              .newScanTokenBuilder(table)
-                             .batchSizeBytes(batchSize)
-                             .limit(1)
+                             .batchSizeBytes(1)
                              .setProjectedColumnNames(projectedCols.toSeq.asJava)
                              .cacheBlocks(true)
 

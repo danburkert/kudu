@@ -63,6 +63,8 @@ class ScannerTimeoutWorkaround extends FunSuite with BeforeAndAfterAll { self: S
                                               .numTservers(1)
                                               .addTserverFlag("--scanner-ttl-ms=1000")
                                               .addTserverFlag("--scanner-batch-size-rows=1")
+                                              .addTserverFlag("--scanner-max-batch-size-bytes=1")
+                                              .addTserverFlag("--vmodule=tserver_service=5")
                                               .build()
 
     sc = new SparkContext(conf)
@@ -102,9 +104,11 @@ class ScannerTimeoutWorkaround extends FunSuite with BeforeAndAfterAll { self: S
 
     // Do an extremely slow count operation.  This shouldn't time out, because of the snapshot.
     val sum = kuduContext.kuduRDD(sc, tableName, List("key"))
-                         .map(_.getInt(0))
-                         .fold(0)({ (acc, n) =>
+                         .map({
                            Thread.sleep(1000)
+                           _.getInt(0)
+                         })
+                         .fold(0)({ (acc, n) =>
                            acc + n
                          })
 
