@@ -72,6 +72,16 @@ DEPS_FOR_ALL = \
 
      # Tests that require tooling require this.
      "build/latest/bin/kudu",
+
+     # The HMS tests require the Hadoop and Hive libraries. These files are just
+     # symlinks, but dist-test will copy the entire directories they point to.
+     # The symlinks themselves won't be recreated, so we point to them with
+     # environment variables in run_dist_test.py.
+     "build/latest/bin/hive-home",
+     "build/latest/bin/hadoop-home",
+
+     # Add the Kudu HMS plugin.
+     "build/latest/bin/hms-plugin.jar",
      ]
 
 # The number of shards to split tests into. This is set on a per-test basis
