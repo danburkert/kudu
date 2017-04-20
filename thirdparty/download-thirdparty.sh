@@ -325,5 +325,23 @@ if [ ! -d "$SPARSEHASH_SOURCE" ]; then
   popd
 fi
 
+if [ ! -d "$THRIFT_SOURCE" ]; then
+  fetch_and_expand $THRIFT_NAME.tar.gz
+fi
+
+if [ ! -d "$BISON_SOURCE" ]; then
+  fetch_and_expand $BISON_NAME.tar.gz
+  # This would normally call autoreconf, but it does not succeed on every
+  # platform.
+fi
+
+if [ ! -d "$HIVE_SOURCE" ]; then
+  fetch_and_expand $HIVE_NAME.tar.gz
+fi
+
+if [ ! -d "$HADOOP_SOURCE" ]; then
+  fetch_and_expand $HADOOP_NAME.tar.gz
+fi
+
 echo "---------------"
 echo "Thirdparty dependencies downloaded successfully"
