@@ -47,6 +47,11 @@ DEFINE_string(rpc_bind_addresses, "0.0.0.0",
               "Currently, ephemeral ports (i.e. port 0) are not allowed.");
 TAG_FLAG(rpc_bind_addresses, stable);
 
+DEFINE_string(rpc_advertised_addresses, "",
+              "Comma-separated list of addresses to advertise externally for RPC connections. "
+              "Currently, ephemeral ports (i.e. port 0) are not allowed.");
+TAG_FLAG(rpc_advertised_addresses, advanced);
+
 DEFINE_int32(rpc_num_acceptors_per_address, 1,
              "Number of RPC acceptor threads for each bound address");
 TAG_FLAG(rpc_num_acceptors_per_address, advanced);
@@ -68,6 +73,7 @@ namespace kudu {
 
 RpcServerOptions::RpcServerOptions()
   : rpc_bind_addresses(FLAGS_rpc_bind_addresses),
+    rpc_advertised_addresses(FLAGS_rpc_advertised_addresses),
     num_acceptors_per_address(FLAGS_rpc_num_acceptors_per_address),
     num_service_threads(FLAGS_rpc_num_service_threads),
     default_port(0),
@@ -106,6 +112,12 @@ Status RpcServer::Init(const shared_ptr<Messenger>& messenger) {
       LOG(FATAL) << "Binding to ephemeral ports not supported (RPC address "
                  << "configured to " << addr.ToString() << ")";
     }
+  }
+
+  if (!options_.rpc_advertised_addresses.empty()) {
+    RETURN_NOT_OK(ParseAddressList(options_.rpc_advertised_addresses,
+                                   options_.default_port,
+                                   &rpc_advertised_addresses_));
   }
 
   server_state_ = INITIALIZED;
@@ -185,6 +197,18 @@ Status RpcServer::GetBoundAddresses(vector<Sockaddr>* addresses) const {
     RETURN_NOT_OK_PREPEND(pool->GetBoundAddress(&bound_addr),
                           "Unable to get bound address from AcceptorPool");
     addresses->push_back(bound_addr);
+  }
+  return Status::OK();
+}
+
+Status RpcServer::GetAdvertisedAddresses(vector<Sockaddr>* addresses) const {
+  CHECK(server_state_ == BOUND ||
+        server_state_ == STARTED) << "bad state: " << server_state_;
+  if (rpc_advertised_addresses_.empty()) {
+    return GetBoundAddresses(addresses);
+  }
+  for (const Sockaddr& addr : rpc_advertised_addresses_) {
+    addresses->push_back(addr);
   }
   return Status::OK();
 }

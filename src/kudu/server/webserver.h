@@ -55,6 +55,10 @@ class Webserver : public WebCallbackRegistry {
   // bound to. Requires that the server has been Start()ed.
   Status GetBoundAddresses(std::vector<Sockaddr>* addrs) const;
 
+  // Return the addresses that this server is advertising externally
+  // to the world. Requires that the server has been Start()ed.
+  Status GetAdvertisedAddresses(std::vector<Sockaddr>* addresses) const;
+
   virtual void RegisterPathHandler(const std::string& path, const std::string& alias,
                                    const PathHandlerCallback& callback,
                                    bool is_styled = true, bool is_on_nav_bar = true) OVERRIDE;
@@ -147,6 +151,8 @@ class Webserver : public WebCallbackRegistry {
 
   // The address of the interface on which to run this webserver.
   std::string http_address_;
+
+  std::vector<Sockaddr> webserver_advertised_addresses_;
 
   // Handle to Mongoose context; owned and freed by Mongoose internally
   struct sq_context* context_;

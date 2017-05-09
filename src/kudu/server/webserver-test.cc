@@ -235,6 +235,104 @@ TEST_F(WebserverTest, TestStaticFiles) {
   ASSERT_EQ("Remote error: HTTP 403", s.ToString());
 }
 
+class WebserverAdvertisedAddressesTest : public KuduTest {
+ public:
+  WebserverAdvertisedAddressesTest() {
+    static_dir_ = GetTestPath("webserver-docroot");
+    CHECK_OK(env_->CreateDir(static_dir_));
+  }
+
+  virtual void SetUp() OVERRIDE {
+    KuduTest::SetUp();
+
+    WebserverOptions opts;
+    opts.port = 0;
+    opts.doc_root = static_dir_;
+    string iface = use_webserver_interface();
+    int32 port = use_webserver_port();
+    string advertised = use_advertised_addresses();
+    if (!iface.empty()) {
+      opts.bind_interface = iface;
+    }
+    if (port != 0) {
+      opts.port = port;
+    }
+    if (!advertised.empty()) {
+      opts.webserver_advertised_addresses = advertised;
+    }
+    server_.reset(new Webserver(opts));
+
+    AddDefaultPathHandlers(server_.get());
+    ASSERT_OK(server_->Start());
+  }
+
+ protected:
+  // Overridden by subclasses.
+  virtual const string use_webserver_interface() const { return ""; }
+  virtual int32 use_webserver_port() const { return 0; }
+  virtual const string use_advertised_addresses() const { return ""; }
+
+  gscoped_ptr<Webserver> server_;
+  string static_dir_;
+};
+
+class AdvertisedOnlyWebserverTest : public WebserverAdvertisedAddressesTest {
+ protected:
+  const string use_advertised_addresses() const override { return "127.0.0.1:9999"; }
+};
+
+class BoundOnlyWebserverTest : public WebserverAdvertisedAddressesTest {
+ protected:
+  const string use_webserver_interface() const override { return "127.0.0.1"; }
+  int32 use_webserver_port() const override { return 9999; }
+};
+
+class BothBoundAndAdvertisedWebserverTest : public WebserverAdvertisedAddressesTest {
+ protected:
+  const string use_advertised_addresses() const override { return "127.0.0.1:9999"; }
+  const string use_webserver_interface() const override { return "127.0.0.1"; }
+  int32 use_webserver_port() const override { return 9998; }
+};
+
+TEST_F(AdvertisedOnlyWebserverTest, OnlyAdvertisedAddresses) {
+  vector<Sockaddr> advertised_addrs;
+  ASSERT_OK(server_->GetAdvertisedAddresses(&advertised_addrs));
+  ASSERT_EQ(advertised_addrs.size(), 1);
+  vector<Sockaddr> bound_addrs;
+  ASSERT_OK(server_->GetBoundAddresses(&bound_addrs));
+  ASSERT_EQ(advertised_addrs[0].host(), "127.0.0.1");
+  ASSERT_EQ(advertised_addrs[0].port(), 9999);
+  ASSERT_NE(bound_addrs[0].port(), 9999);
+}
+
+TEST_F(BoundOnlyWebserverTest, OnlyBoundAddresses) {
+  vector<Sockaddr> advertised_addrs;
+  ASSERT_OK(server_->GetAdvertisedAddresses(&advertised_addrs));
+  ASSERT_EQ(advertised_addrs.size(), 1);
+  vector<Sockaddr> bound_addrs;
+  ASSERT_OK(server_->GetBoundAddresses(&bound_addrs));
+  ASSERT_EQ(bound_addrs.size(), 1);
+
+  ASSERT_EQ(advertised_addrs[0].host(), "127.0.0.1");
+  ASSERT_EQ(advertised_addrs[0].port(), 9999);
+  ASSERT_EQ(bound_addrs[0].host(), "127.0.0.1");
+  ASSERT_EQ(bound_addrs[0].port(), 9999);
+}
+
+TEST_F(BothBoundAndAdvertisedWebserverTest, BothBoundAndAdvertisedAddresses) {
+  vector<Sockaddr> advertised_addrs;
+  ASSERT_OK(server_->GetAdvertisedAddresses(&advertised_addrs));
+  ASSERT_EQ(advertised_addrs.size(), 1);
+  vector<Sockaddr> bound_addrs;
+  ASSERT_OK(server_->GetBoundAddresses(&bound_addrs));
+  ASSERT_EQ(bound_addrs.size(), 1);
+
+  ASSERT_EQ(advertised_addrs[0].host(), "127.0.0.1");
+  ASSERT_EQ(advertised_addrs[0].port(), 9999);
+  ASSERT_EQ(bound_addrs[0].host(), "127.0.0.1");
+  ASSERT_EQ(bound_addrs[0].port(), 9998);
+}
+
 // Various tests for failed webserver startup cases.
 class WebserverNegativeTests : public KuduTest {
  protected:
@@ -277,6 +375,12 @@ TEST_F(WebserverNegativeTests, BadPasswordCommand) {
   ExpectFailedStartup([this](WebserverOptions* opts) {
       SetSslOptions(opts);
       opts->private_key_password_cmd = "/bin/false";
+    });
+}
+
+TEST_F(WebserverNegativeTests, BadAdvertisedAddresses) {
+  ExpectFailedStartup([this](WebserverOptions* opts) {
+      opts->webserver_advertised_addresses = ";;;;;";
     });
 }
 

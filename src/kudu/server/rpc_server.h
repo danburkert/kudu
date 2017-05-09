@@ -39,6 +39,7 @@ struct RpcServerOptions {
   RpcServerOptions();
 
   std::string rpc_bind_addresses;
+  std::string rpc_advertised_addresses;
   uint32_t num_acceptors_per_address;
   uint32_t num_service_threads;
   uint16_t default_port;
@@ -64,6 +65,10 @@ class RpcServer {
   // bound to. Requires that the server has been Start()ed.
   Status GetBoundAddresses(std::vector<Sockaddr>* addresses) const WARN_UNUSED_RESULT;
 
+  // Return the addresses that this server is advertising externally
+  // to the world. Requires that the server has been Start()ed.
+  Status GetAdvertisedAddresses(std::vector<Sockaddr>* addresses) const WARN_UNUSED_RESULT;
+
   const rpc::ServicePool* service_pool(const std::string& service_name) const;
 
  private:
@@ -84,6 +89,8 @@ class RpcServer {
 
   // Parsed addresses to bind RPC to. Set by Init()
   std::vector<Sockaddr> rpc_bind_addresses_;
+
+  std::vector<Sockaddr> rpc_advertised_addresses_;
 
   std::vector<std::shared_ptr<rpc::AcceptorPool> > acceptor_pools_;
 

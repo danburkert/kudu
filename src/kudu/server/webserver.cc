@@ -210,6 +210,13 @@ Status Webserver::Start() {
   RETURN_NOT_OK(BuildListenSpec(&listening_str));
   options.push_back(listening_str);
 
+  // initialize the advertised addresses
+  if (!opts_.webserver_advertised_addresses.empty()) {
+    RETURN_NOT_OK(ParseAddressList(opts_.webserver_advertised_addresses,
+                                   opts_.port,
+                                   &webserver_advertised_addresses_));
+  }
+
   // Num threads
   options.push_back("num_threads");
   options.push_back(std::to_string(opts_.num_worker_threads));
@@ -298,6 +305,19 @@ Status Webserver::GetBoundAddresses(std::vector<Sockaddr>* addrs) const {
   }
   free(sockaddrs);
 
+  return Status::OK();
+}
+
+Status Webserver::GetAdvertisedAddresses(vector<Sockaddr>* addresses) const {
+  if (!context_) {
+    return Status::IllegalState("Not started");
+  }
+  if (webserver_advertised_addresses_.empty()) {
+    return GetBoundAddresses(addresses);
+  }
+  for (const Sockaddr& addr : webserver_advertised_addresses_) {
+    addresses->push_back(addr);
+  }
   return Status::OK();
 }
 
