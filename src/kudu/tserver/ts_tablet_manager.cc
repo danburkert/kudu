@@ -381,6 +381,7 @@ class TabletCopyRunnable : public Runnable {
 void TSTabletManager::StartTabletCopy(
     const StartTabletCopyRequestPB* req,
     std::function<void(const Status&, TabletServerErrorPB::Code)> cb) {
+  string tablet_id = req->tablet_id();
   shared_ptr<TabletCopyRunnable> runnable(new TabletCopyRunnable(this, req, cb));
   Status s = tablet_copy_pool_->Submit(runnable);
   if (PREDICT_TRUE(s.ok())) {
@@ -391,7 +392,26 @@ void TSTabletManager::StartTabletCopy(
   // invoke the callback ourselves, so disable the automatic callback mechanism.
   runnable->DisableCallback();
 
-  // Thread pool is at capacity.
+  // The thread pool is at capacity. Check if the tablet is already in
+  // transition (i.e. being copied).
+  boost::optional<string> transition;
+  {
+    std::lock_guard<rw_spinlock> lock(lock_);
+    auto* t = FindOrNull(transition_in_progress_, tablet_id);
+    if (t) {
+      transition = *t;
+    }
+  }
+  if (transition) {
+    cb(Status::IllegalState(
+          strings::Substitute("State transition of tablet $0 already in progress: $1",
+                              tablet_id, *transition)),
+          TabletServerErrorPB::ALREADY_INPROGRESS);
+    return;
+  }
+
+  // The tablet is not already being copied, but there are no remaining slots in
+  // the threadpool.
   if (s.IsServiceUnavailable()) {
     cb(s, TabletServerErrorPB::THROTTLED);
     return;
@@ -409,6 +429,15 @@ void TSTabletManager::StartTabletCopy(
   do { \
     Status _s = (expr); \
     if (PREDICT_FALSE(!_s.ok())) { \
+      CALLBACK_AND_RETURN(_s); \
+    } \
+  } while (0)
+
+#define CALLBACK_RETURN_NOT_OK_WITH_ERROR(expr, error) \
+  do { \
+    Status _s = (expr); \
+    if (PREDICT_FALSE(!_s.ok())) { \
+      error_code = (error); \
       CALLBACK_AND_RETURN(_s); \
     } \
   } while (0)
@@ -454,7 +483,9 @@ void TSTabletManager::RunTabletCopy(
                    << "Found tablet in TABLET_DATA_COPYING state during StartTabletCopy()";
       case TABLET_DATA_TOMBSTONED: {
         int64_t last_logged_term = meta->tombstone_last_logged_opid().term();
-        CALLBACK_RETURN_NOT_OK(CheckLeaderTermNotLower(tablet_id, leader_term, last_logged_term));
+        CALLBACK_RETURN_NOT_OK_WITH_ERROR(
+            CheckLeaderTermNotLower(tablet_id, leader_term, last_logged_term),
+            TabletServerErrorPB::INVALID_CONFIG);
         break;
       }
       case TABLET_DATA_READY: {
@@ -466,7 +497,9 @@ void TSTabletManager::RunTabletCopy(
         OpId last_logged_opid;
         log->GetLatestEntryOpId(&last_logged_opid);
         int64_t last_logged_term = last_logged_opid.term();
-        CALLBACK_RETURN_NOT_OK(CheckLeaderTermNotLower(tablet_id, leader_term, last_logged_term));
+        CALLBACK_RETURN_NOT_OK_WITH_ERROR(
+            CheckLeaderTermNotLower(tablet_id, leader_term, last_logged_term),
+            TabletServerErrorPB::INVALID_CONFIG);
 
         // Tombstone the tablet and store the last-logged OpId.
         old_replica->Shutdown();

@@ -229,7 +229,7 @@ class PeerMessageQueue {
   // to the current time. This should be called when a non-network related
   // error is received from the peer, indicating that it is alive, even if it
   // may not be fully up and running or able to accept updates.
-  void NotifyPeerIsResponsiveDespiteError(const std::string& peer_uuid);
+  void NotifyPeerIsResponsive(const std::string& peer_uuid);
 
   // Updates the request queue with the latest response of a peer, returns
   // whether this peer has more requests pending.
