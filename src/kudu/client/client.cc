@@ -406,7 +406,7 @@ Status KuduClient::ListTables(vector<string>* tables,
   ListTablesResponsePB resp;
 
   if (!filter.empty()) {
-    req.set_name_filter(filter);
+    req.set_table_name_filter(filter);
   }
   MonoTime deadline = MonoTime::Now() + default_admin_operation_timeout();
   Status s =
@@ -423,7 +423,7 @@ Status KuduClient::ListTables(vector<string>* tables,
     return StatusFromPB(resp.error().status());
   }
   for (int i = 0; i < resp.tables_size(); i++) {
-    tables->push_back(resp.tables(i).name());
+    tables->push_back(resp.tables(i).table_name());
   }
   return Status::OK();
 }
@@ -681,7 +681,7 @@ Status KuduTableCreator::Create() {
 
   // Build request.
   CreateTableRequestPB req;
-  req.set_name(data_->table_name_);
+  req.set_table_name(data_->table_name_);
   if (data_->num_replicas_ != boost::none) {
     req.set_num_replicas(data_->num_replicas_.get());
   }

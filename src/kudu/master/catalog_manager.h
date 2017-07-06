@@ -175,8 +175,8 @@ struct PersistentTableInfo {
   }
 
   // Return the table's name.
-  const std::string& name() const {
-    return pb.name();
+  const std::string& table_name() const {
+    return pb.table_name();
   }
 
   // Helper to set the state of the tablet with a custom message.

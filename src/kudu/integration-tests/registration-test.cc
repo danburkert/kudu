@@ -81,7 +81,7 @@ void CreateTableForTesting(MiniMaster* mini_master,
     CreateTableRequestPB req;
     CreateTableResponsePB resp;
 
-    req.set_name(table_name);
+    req.set_table_name(table_name);
     req.set_num_replicas(1);
     ASSERT_OK(SchemaToPB(schema, req.mutable_schema()));
     CatalogManager* catalog = mini_master->master()->catalog_manager();

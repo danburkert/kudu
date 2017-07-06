@@ -359,7 +359,7 @@ Status MasterTest::CreateTable(const string& table_name,
   CreateTableResponsePB resp;
   RpcController controller;
 
-  req.set_name(table_name);
+  req.set_table_name(table_name);
   RETURN_NOT_OK(SchemaToPB(schema, req.mutable_schema()));
   RowOperationsPBEncoder encoder(req.mutable_split_rows_range_bounds());
   for (const KuduPartialRow& row : split_rows) {
@@ -406,7 +406,7 @@ TEST_F(MasterTest, TestCatalog) {
   ListTablesResponsePB tables;
   ASSERT_NO_FATAL_FAILURE(DoListAllTables(&tables));
   ASSERT_EQ(1, tables.tables_size());
-  ASSERT_EQ(kTableName, tables.tables(0).name());
+  ASSERT_EQ(kTableName, tables.tables(0).table_name());
 
   // Delete the table
   {
@@ -434,44 +434,44 @@ TEST_F(MasterTest, TestCatalog) {
 
   ASSERT_NO_FATAL_FAILURE(DoListAllTables(&tables));
   ASSERT_EQ(1, tables.tables_size());
-  ASSERT_EQ(kTableName, tables.tables(0).name());
+  ASSERT_EQ(kTableName, tables.tables(0).table_name());
 
   // Test listing tables with a filter.
   ASSERT_OK(CreateTable(kOtherTableName, kTableSchema));
 
   {
     ListTablesRequestPB req;
-    req.set_name_filter("test");
+    req.set_table_name_filter("test");
     DoListTables(req, &tables);
     ASSERT_EQ(2, tables.tables_size());
   }
 
   {
     ListTablesRequestPB req;
-    req.set_name_filter("tb");
+    req.set_table_name_filter("tb");
     DoListTables(req, &tables);
     ASSERT_EQ(2, tables.tables_size());
   }
 
   {
     ListTablesRequestPB req;
-    req.set_name_filter(kTableName);
+    req.set_table_name_filter(kTableName);
     DoListTables(req, &tables);
     ASSERT_EQ(1, tables.tables_size());
-    ASSERT_EQ(kTableName, tables.tables(0).name());
+    ASSERT_EQ(kTableName, tables.tables(0).table_name());
   }
 
   {
     ListTablesRequestPB req;
-    req.set_name_filter("btes");
+    req.set_table_name_filter("btes");
     DoListTables(req, &tables);
     ASSERT_EQ(1, tables.tables_size());
-    ASSERT_EQ(kOtherTableName, tables.tables(0).name());
+    ASSERT_EQ(kOtherTableName, tables.tables(0).table_name());
   }
 
   {
     ListTablesRequestPB req;
-    req.set_name_filter("randomname");
+    req.set_table_name_filter("randomname");
     DoListTables(req, &tables);
     ASSERT_EQ(0, tables.tables_size());
   }
@@ -630,7 +630,7 @@ TEST_F(MasterTest, TestCreateTableInvalidSchema) {
   CreateTableResponsePB resp;
   RpcController controller;
 
-  req.set_name("table");
+  req.set_table_name("table");
   for (int i = 0; i < 2; i++) {
     ColumnSchemaPB* col = req.mutable_schema()->add_columns();
     col->set_name("col");
@@ -652,7 +652,7 @@ TEST_F(MasterTest, TestCreateTableMismatchedDefaults) {
   CreateTableResponsePB resp;
   RpcController controller;
 
-  req.set_name("table");
+  req.set_table_name("table");
 
   ColumnSchemaPB* col = req.mutable_schema()->add_columns();
   col->set_name("key");
@@ -816,7 +816,7 @@ class MasterMetadataVerifier : public TableVisitor,
   virtual Status VisitTable(const std::string& table_id,
                              const SysTablesEntryPB& metadata) OVERRIDE {
      InsertOrDie(&visited_tables_by_id_, table_id,
-                 { table_id, metadata.name(), metadata.state() });
+                 { table_id, metadata.table_name(), metadata.state() });
      return Status::OK();
    }
 
@@ -994,7 +994,7 @@ TEST_F(MasterTest, TestMasterMetadataConsistentDespiteFailures) {
         CreateTableResponsePB resp;
         RpcController controller;
 
-        req.set_name(Substitute("table-$0", r.Uniform(kUniformBound)));
+        req.set_table_name(Substitute("table-$0", r.Uniform(kUniformBound)));
         ASSERT_OK(SchemaToPB(kTableSchema, req.mutable_schema()));
         RowOperationsPBEncoder encoder(req.mutable_split_rows_range_bounds());
         KuduPartialRow row(&kTableSchema);
@@ -1013,7 +1013,7 @@ TEST_F(MasterTest, TestMasterMetadataConsistentDespiteFailures) {
             num_injected_failures++;
           }
         } else {
-          table_names.push_back(req.name());
+          table_names.push_back(req.table_name());
         }
         break;
       }
@@ -1114,7 +1114,7 @@ TEST_F(MasterTest, TestConcurrentCreateOfSameTable) {
       CreateTableResponsePB resp;
       RpcController controller;
 
-      req.set_name(kTableName);
+      req.set_table_name(kTableName);
       CHECK_OK(SchemaToPB(kTableSchema, req.mutable_schema()));
       CHECK_OK(proxy_->CreateTable(req, &resp, &controller));
       SCOPED_TRACE(SecureDebugString(resp));
@@ -1210,7 +1210,7 @@ TEST_F(MasterTest, TestConcurrentCreateAndRenameOfSameTable) {
         CreateTableResponsePB resp;
         RpcController controller;
 
-        req.set_name(kNewName);
+        req.set_table_name(kNewName);
         RowOperationsPBEncoder encoder(req.mutable_split_rows_range_bounds());
 
         KuduPartialRow split1(&kTableSchema);

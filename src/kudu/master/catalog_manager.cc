@@ -268,7 +268,7 @@ class TableLoader : public TableVisitor {
     // Add the tablet to the IDs map and to the name map (if the table is not deleted).
     catalog_manager_->table_ids_map_[table->id()] = table;
     if (!l.data().is_deleted()) {
-      catalog_manager_->table_names_map_[l.data().name()] = table;
+      catalog_manager_->table_names_map_[l.data().table_name()] = table;
     }
     l.Commit();
 
@@ -1294,7 +1294,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
   // a. Validate the user request.
   Schema client_schema;
   RETURN_NOT_OK(SchemaFromPB(req.schema(), &client_schema));
-  s = ValidateClientSchema(req.name(), client_schema);
+  s = ValidateClientSchema(req.table_name(), client_schema);
   if (s.ok() && client_schema.has_column_ids()) {
     s = Status::InvalidArgument("User requests should not have Column IDs");
   }
@@ -1419,17 +1419,17 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
     TRACE("Acquired catalog manager lock");
 
     // b. Verify that the table does not exist.
-    table = FindPtrOrNull(table_names_map_, req.name());
+    table = FindPtrOrNull(table_names_map_, req.table_name());
     if (table != nullptr) {
       s = Status::AlreadyPresent(Substitute("Table $0 already exists with id $1",
-                                 req.name(), table->id()));
+                                 req.table_name(), table->id()));
       return SetError(MasterErrorPB::TABLE_ALREADY_PRESENT, s);
     }
 
     // c. Reserve the table name if possible.
-    if (!InsertIfNotPresent(&reserved_table_names_, req.name())) {
+    if (!InsertIfNotPresent(&reserved_table_names_, req.table_name())) {
       s = Status::ServiceUnavailable(Substitute(
-          "New table name $0 is already reserved", req.name()));
+          "New table name $0 is already reserved", req.table_name()));
       return SetError(MasterErrorPB::TABLE_NOT_FOUND, s);
     }
   }
@@ -1437,7 +1437,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
   // Ensure that we drop the name reservation upon return.
   auto cleanup = MakeScopedCleanup([&] () {
     std::lock_guard<LockType> l(lock_);
-    CHECK_EQ(1, reserved_table_names_.erase(req.name()));
+    CHECK_EQ(1, reserved_table_names_.erase(req.table_name()));
   });
 
   // d. Create the in-memory representation of the new table and its tablets.
@@ -1491,7 +1491,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
     std::lock_guard<LockType> l(lock_);
 
     table_ids_map_[table->id()] = table;
-    table_names_map_[req.name()] = table;
+    table_names_map_[req.table_name()] = table;
     for (const auto& tablet : tablet_refs) {
       InsertOrDie(&tablet_map_, tablet->tablet_id(), tablet);
     }
@@ -1539,7 +1539,7 @@ TableInfo *CatalogManager::CreateTableInfo(const CreateTableRequestPB& req,
   table->mutable_metadata()->StartMutation();
   SysTablesEntryPB *metadata = &table->mutable_metadata()->mutable_dirty()->pb;
   metadata->set_state(SysTablesEntryPB::PREPARING);
-  metadata->set_name(req.name());
+  metadata->set_table_name(req.table_name());
   metadata->set_version(0);
   metadata->set_next_column_id(ColumnId(schema.max_col_id() + 1));
   metadata->set_num_replicas(req.num_replicas());
@@ -1643,8 +1643,8 @@ Status CatalogManager::DeleteTable(const DeleteTableRequestPB* req,
     {
       TRACE("Removing table from by-name map");
       std::lock_guard<LockType> l_map(lock_);
-      if (table_names_map_.erase(l.data().name()) != 1) {
-        PANIC_RPC(rpc, "Could not remove table from map, name=" + l.data().name());
+      if (table_names_map_.erase(l.data().table_name()) != 1) {
+        PANIC_RPC(rpc, "Could not remove table from map, name=" + l.data().table_name());
       }
     }
 
@@ -1976,7 +1976,7 @@ Status CatalogManager::AlterTable(const AlterTableRequestPB* req,
     }
   }
 
-  string table_name = l.data().name();
+  string table_name = l.data().table_name();
   *resp->mutable_table_id() = table->id();
 
   // 4. Calculate and validate new schema for the on-disk state, not persisted yet.
@@ -2030,7 +2030,7 @@ Status CatalogManager::AlterTable(const AlterTableRequestPB* req,
       return s;
     }
 
-    l.mutable_data()->pb.set_name(req->new_table_name());
+    l.mutable_data()->pb.set_table_name(req->new_table_name());
   }
 
   // Ensure that we drop our reservation upon return.
@@ -2246,7 +2246,7 @@ Status CatalogManager::GetTableSchema(const GetTableSchemaRequestPB* req,
   resp->set_table_id(table->id());
   resp->mutable_partition_schema()->CopyFrom(l.data().pb.partition_schema());
   resp->set_create_table_done(!table->IsCreateInProgress());
-  resp->set_table_name(l.data().pb.name());
+  resp->set_table_name(l.data().pb.table_name());
 
   return Status::OK();
 }
@@ -2262,8 +2262,8 @@ Status CatalogManager::ListTables(const ListTablesRequestPB* req,
     TableMetadataLock ltm(entry.second.get(), TableMetadataLock::READ);
     if (!ltm.data().is_running()) continue; // implies !is_deleted() too
 
-    if (req->has_name_filter()) {
-      size_t found = ltm.data().name().find(req->name_filter());
+    if (req->has_table_name_filter()) {
+      size_t found = ltm.data().table_name().find(req->table_name_filter());
       if (found == string::npos) {
         continue;
       }
@@ -2271,7 +2271,7 @@ Status CatalogManager::ListTables(const ListTablesRequestPB* req,
 
     ListTablesResponsePB::TableInfo *table = resp->add_tables();
     table->set_id(entry.second->id());
-    table->set_name(ltm.data().name());
+    table->set_table_name(ltm.data().table_name());
   }
 
   return Status::OK();
@@ -3026,7 +3026,7 @@ class AsyncCreateReplica : public RetrySpecificTSRpcTask {
     req_.set_table_id(tablet->table()->id());
     req_.set_tablet_id(tablet->tablet_id());
     req_.mutable_partition()->CopyFrom(tablet_lock.data().pb.partition());
-    req_.set_table_name(table_lock.data().pb.name());
+    req_.set_table_name(table_lock.data().pb.table_name());
     req_.mutable_schema()->CopyFrom(table_lock.data().pb.schema());
     req_.mutable_partition_schema()->CopyFrom(
         table_lock.data().pb.partition_schema());
@@ -3320,7 +3320,7 @@ class AsyncAlterTable : public RetryingTSRpcTask {
     tserver::AlterSchemaRequestPB req;
     req.set_dest_uuid(target_ts_desc_->permanent_uuid());
     req.set_tablet_id(tablet_->tablet_id());
-    req.set_new_table_name(l.data().pb.name());
+    req.set_new_table_name(l.data().pb.table_name());
     req.set_schema_version(l.data().pb.version());
     req.mutable_schema()->CopyFrom(l.data().pb.schema());
 
@@ -3859,7 +3859,7 @@ Status CatalogManager::SelectReplicasForTablet(const TSDescriptorVector& ts_desc
     return Status::InvalidArgument(
         Substitute("Not enough tablet servers are online for table '$0'. Need at least $1 "
                    "replicas, but only $2 tablet servers are available",
-                   table_guard.data().name(), nreplicas, ts_descs.size()));
+                   table_guard.data().table_name(), nreplicas, ts_descs.size()));
   }
 
   // Select the set of replicas for the tablet.
@@ -4070,7 +4070,7 @@ void CatalogManager::DumpState(std::ostream* out) const {
   for (const TableInfoMap::value_type& e : ids_copy) {
     TableInfo* t = e.second.get();
     TableMetadataLock l(t, TableMetadataLock::READ);
-    const string& name = l.data().name();
+    const string& name = l.data().table_name();
 
     *out << t->id() << ":\n";
     *out << "  name: \"" << strings::CHexEscape(name) << "\"\n";
@@ -4292,7 +4292,7 @@ TableInfo::~TableInfo() {
 
 std::string TableInfo::ToString() const {
   TableMetadataLock l(this, TableMetadataLock::READ);
-  return Substitute("$0 [id=$1]", l.data().pb.name(), table_id_);
+  return Substitute("$0 [id=$1]", l.data().pb.table_name(), table_id_);
 }
 
 bool TableInfo::RemoveTablet(const std::string& partition_key_start) {

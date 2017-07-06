@@ -98,7 +98,7 @@ Status TableLocationsTest::CreateTable(const string& table_name,
   CreateTableResponsePB resp;
   RpcController controller;
 
-  req.set_name(table_name);
+  req.set_table_name(table_name);
   RETURN_NOT_OK(SchemaToPB(schema, req.mutable_schema()));
   RowOperationsPBEncoder encoder(req.mutable_split_rows_range_bounds());
   for (const KuduPartialRow& row : split_rows) {

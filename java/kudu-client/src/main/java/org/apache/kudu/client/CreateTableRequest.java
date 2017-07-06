@@ -36,22 +36,24 @@ class CreateTableRequest extends KuduRpc<CreateTableResponse> {
   static final String CREATE_TABLE = "CreateTable";
 
   private final Schema schema;
-  private final String name;
+  private final String tableName;
   private final Master.CreateTableRequestPB.Builder builder;
   private final List<Integer> featureFlags;
 
-  CreateTableRequest(KuduTable masterTable, String name, Schema schema,
+  CreateTableRequest(KuduTable masterTable,
+                     String tableName,
+                     Schema schema,
                      CreateTableOptions builder) {
     super(masterTable);
     this.schema = schema;
-    this.name = name;
+    this.tableName = tableName;
     this.builder = builder.getBuilder();
     featureFlags = builder.getRequiredFeatureFlags();
   }
 
   @Override
   Message createRequestPB() {
-    this.builder.setName(this.name);
+    this.builder.setTableName(this.tableName);
     this.builder.setSchema(ProtobufHelper.schemaToPb(this.schema));
     return this.builder.build();
   }

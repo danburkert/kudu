@@ -29,19 +29,19 @@ import org.apache.kudu.util.Pair;
 @InterfaceAudience.Private
 class ListTablesRequest extends KuduRpc<ListTablesResponse> {
 
-  private final String nameFilter;
+  private final String tableNameFilter;
 
-  ListTablesRequest(KuduTable masterTable, String nameFilter) {
+  ListTablesRequest(KuduTable masterTable, String tableNameFilter) {
     super(masterTable);
-    this.nameFilter = nameFilter;
+    this.tableNameFilter = tableNameFilter;
   }
 
   @Override
   Message createRequestPB() {
     final Master.ListTablesRequestPB.Builder builder =
         Master.ListTablesRequestPB.newBuilder();
-    if (nameFilter != null) {
-      builder.setNameFilter(nameFilter);
+    if (tableNameFilter != null) {
+      builder.setTableNameFilter(tableNameFilter);
     }
     return builder.build();
   }
@@ -65,7 +65,7 @@ class ListTablesRequest extends KuduRpc<ListTablesResponse> {
     int serversCount = respBuilder.getTablesCount();
     List<String> tables = new ArrayList<String>(serversCount);
     for (Master.ListTablesResponsePB.TableInfo info : respBuilder.getTablesList()) {
-      tables.add(info.getName());
+      tables.add(info.getTableName());
     }
     ListTablesResponse response = new ListTablesResponse(deadlineTracker.getElapsedMillis(),
                                                          tsUUID, tables);

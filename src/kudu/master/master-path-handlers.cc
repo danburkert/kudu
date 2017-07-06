@@ -151,10 +151,10 @@ void MasterPathHandlers::HandleCatalogManager(const Webserver::WebRequest& req,
     }
     string state = SysTablesEntryPB_State_Name(l.data().pb.state());
     Capitalize(&state);
-    ordered_tables[l.data().name()] = Substitute(
+    ordered_tables[l.data().table_name()] = Substitute(
         "<tr><th>$0</th><td><a href=\"/table?id=$1\">$1</a></td>"
             "<td>$2</td><td>$3</td></tr>\n",
-        EscapeForHtmlToString(l.data().name()),
+        EscapeForHtmlToString(l.data().table_name()),
         EscapeForHtmlToString(table->id()),
         state,
         EscapeForHtmlToString(l.data().pb.state_msg()));
@@ -217,7 +217,7 @@ void MasterPathHandlers::HandleTablePage(const Webserver::WebRequest& req,
   vector<scoped_refptr<TabletInfo> > tablets;
   {
     TableMetadataLock l(table.get(), TableMetadataLock::READ);
-    table_name = l.data().name();
+    table_name = l.data().table_name();
     *output << "<h1>Table: " << EscapeForHtmlToString(table_name)
             << " (" << EscapeForHtmlToString(table_id) << ")</h1>\n";
 
@@ -440,7 +440,7 @@ class JsonDumper : public TableVisitor, public TabletVisitor {
     jw_->String(table_id);
 
     jw_->String("table_name");
-    jw_->String(metadata.name());
+    jw_->String(metadata.table_name());
 
     jw_->String("state");
     jw_->String(SysTablesEntryPB::State_Name(metadata.state()));

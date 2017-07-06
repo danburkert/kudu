@@ -128,7 +128,7 @@ TEST_F(SysCatalogTest, TestSysCatalogTablesOperations) {
   scoped_refptr<TableInfo> table(new TableInfo("abc"));
   {
     TableMetadataLock l(table.get(), TableMetadataLock::WRITE);
-    l.mutable_data()->pb.set_name("testtb");
+    l.mutable_data()->pb.set_table_name("testtb");
     l.mutable_data()->pb.set_version(0);
     l.mutable_data()->pb.set_num_replicas(1);
     l.mutable_data()->pb.set_state(SysTablesEntryPB::PREPARING);
@@ -177,21 +177,21 @@ TEST_F(SysCatalogTest, TestTableInfoCommit) {
 
   // Mutate the table, under the write lock.
   TableMetadataLock writer_lock(table.get(), TableMetadataLock::WRITE);
-  writer_lock.mutable_data()->pb.set_name("foo");
+  writer_lock.mutable_data()->pb.set_table_name("foo");
 
   // Changes should not be visible to a reader.
   // The reader can still lock for read, since readers don't block
   // writers in the RWC lock.
   {
     TableMetadataLock reader_lock(table.get(), TableMetadataLock::READ);
-    ASSERT_NE("foo", reader_lock.data().name());
+    ASSERT_NE("foo", reader_lock.data().table_name());
   }
   writer_lock.mutable_data()->set_state(SysTablesEntryPB::RUNNING, "running");
 
 
   {
     TableMetadataLock reader_lock(table.get(), TableMetadataLock::READ);
-    ASSERT_NE("foo", reader_lock.data().pb.name());
+    ASSERT_NE("foo", reader_lock.data().pb.table_name());
     ASSERT_NE("running", reader_lock.data().pb.state_msg());
     ASSERT_NE(SysTablesEntryPB::RUNNING, reader_lock.data().pb.state());
   }
@@ -202,7 +202,7 @@ TEST_F(SysCatalogTest, TestTableInfoCommit) {
   // Verify that the data is visible
   {
     TableMetadataLock reader_lock(table.get(), TableMetadataLock::READ);
-    ASSERT_EQ("foo", reader_lock.data().pb.name());
+    ASSERT_EQ("foo", reader_lock.data().pb.table_name());
     ASSERT_EQ("running", reader_lock.data().pb.state_msg());
     ASSERT_EQ(SysTablesEntryPB::RUNNING, reader_lock.data().pb.state());
   }
