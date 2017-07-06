@@ -95,6 +95,9 @@ message TableIdentifierPB {
   // The table ID to fetch info.
   optional bytes table_id = 1;
 
+  // The database name. Must be paired with 'table_name'.
+  optional string database_name = 3 [default = "default"];
+
   // The table name to fetch info.
   optional string table_name = 2;
 }
@@ -143,6 +146,9 @@ message SysTablesEntryPB {
     ALTERING = 3;
     REMOVED = 4;
   }
+
+  // The database name.
+  optional string database_name = 10 [default = "default"];
 
   // The table name.
   required bytes table_name = 1;
@@ -382,6 +388,7 @@ message GetTabletLocationsResponsePB {
 //  Catalog
 // ============================================================================
 message CreateTableRequestPB {
+  optional string database_name = 8 [default = "default"];
   required string table_name = 1;
   required SchemaPB schema = 2;
   // repeated bytes pre_split_keys = 3;
@@ -431,6 +438,7 @@ message ListTablesResponsePB {
 
   message TableInfo {
     required bytes id = 1;
+    optional string database_name = 3 [default = "default"];
     required string table_name = 2;
   }
 
@@ -582,6 +590,9 @@ message GetTableSchemaResponsePB {
 
   // True if the create operation is completed, false otherwise.
   optional bool create_table_done = 6;
+
+  // The database name.
+  optional string database_name = 8 [default = "default"];
 
   // The table name.
   optional string table_name = 7;
