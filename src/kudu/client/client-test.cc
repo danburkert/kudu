@@ -222,7 +222,8 @@ class ClientTest : public KuduTest {
 
  protected:
 
-  static const char *kTableName;
+  static const char* kDatabaseName;
+  static const char* kTableName;
   static const int32_t kNoBound;
 
   string GetFirstTabletId(KuduTable* table) {
@@ -680,7 +681,8 @@ class ClientTest : public KuduTest {
   shared_ptr<KuduTable> client_table_;
 };
 
-const char *ClientTest::kTableName = "client-testtb";
+const char* ClientTest::kDatabaseName = "default";
+const char* ClientTest::kTableName = "client-testtb";
 const int32_t ClientTest::kNoBound = kint32max;
 
 TEST_F(ClientTest, TestListTables) {
@@ -3539,9 +3541,9 @@ TEST_F(ClientTest, TestBasicAlterOperations) {
     CatalogManager::ScopedLeaderSharedLock l(catalog_manager);
     ASSERT_OK(l.first_failed_status());
     bool exists;
-    ASSERT_OK(catalog_manager->TableNameExists(kRenamedTableName, &exists));
+    ASSERT_OK(catalog_manager->TableNameExists(kDatabaseName, kRenamedTableName, &exists));
     ASSERT_TRUE(exists);
-    ASSERT_OK(catalog_manager->TableNameExists(kTableName, &exists));
+    ASSERT_OK(catalog_manager->TableNameExists(kDatabaseName, kTableName, &exists));
     ASSERT_FALSE(exists);
   }
 }
@@ -3565,7 +3567,7 @@ TEST_F(ClientTest, TestDeleteTable) {
     CatalogManager::ScopedLeaderSharedLock l(catalog_manager);
     ASSERT_OK(l.first_failed_status());
     bool exists;
-    ASSERT_OK(catalog_manager->TableNameExists(kTableName, &exists));
+    ASSERT_OK(catalog_manager->TableNameExists(kDatabaseName, kTableName, &exists));
     ASSERT_FALSE(exists);
   }
 

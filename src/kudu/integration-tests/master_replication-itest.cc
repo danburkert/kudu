@@ -48,8 +48,9 @@ using client::KuduTable;
 using client::KuduTableCreator;
 using client::sp::shared_ptr;
 
-const char * const kTableId1 = "testMasterReplication-1";
-const char * const kTableId2 = "testMasterReplication-2";
+const char* const kDatabaseName = "default";
+const char* const kTableName1 = "testMasterReplication-1";
+const char* const kTableName2 = "testMasterReplication-2";
 
 const int kNumTabletServerReplicas = 3;
 
@@ -137,10 +138,10 @@ TEST_F(MasterReplicationTest, TestSysTablesReplication) {
 
   // Create the first table.
   ASSERT_OK(CreateClient(&client));
-  ASSERT_OK(CreateTable(client, kTableId1));
+  ASSERT_OK(CreateTable(client, kTableName1));
 
   // Repeat the same for the second table.
-  ASSERT_OK(CreateTable(client, kTableId2));
+  ASSERT_OK(CreateTable(client, kTableName2));
 
   // Verify that both tables exist. There can be a leader election at any time
   // so we need to loop and try all masters.
@@ -151,9 +152,9 @@ TEST_F(MasterReplicationTest, TestSysTablesReplication) {
       CatalogManager::ScopedLeaderSharedLock l(catalog);
       if (l.first_failed_status().ok()) {
         bool exists;
-        ASSERT_OK(catalog->TableNameExists(kTableId1, &exists));
+        ASSERT_OK(catalog->TableNameExists(kDatabaseName, kTableName1, &exists));
         ASSERT_TRUE(exists);
-        ASSERT_OK(catalog->TableNameExists(kTableId2, &exists));
+        ASSERT_OK(catalog->TableNameExists(kDatabaseName, kTableName2, &exists));
         ASSERT_TRUE(exists);
         return;
       }

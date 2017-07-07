@@ -174,7 +174,12 @@ struct PersistentTableInfo {
            pb.state() == SysTablesEntryPB::ALTERING;
   }
 
-  // Return the table's name.
+  // Returns the database name.
+  const std::string& database_name() const {
+    return pb.database_name();
+  }
+
+  // Returns the table name.
   const std::string& table_name() const {
     return pb.table_name();
   }
@@ -213,8 +218,8 @@ class TableInfo : public RefCountedThreadSafe<TableInfo> {
   void AddRemoveTablets(const vector<scoped_refptr<TabletInfo>>& tablets_to_add,
                         const vector<scoped_refptr<TabletInfo>>& tablets_to_drop);
 
-  // Return true if tablet with 'partition_key_start' has been
-  // removed from 'tablet_map_' below.
+  // Return true if tablet with 'partition_key_start' has been removed from
+  // 'tablets_' below.
   bool RemoveTablet(const std::string& partition_key_start);
 
   // This only returns tablets which are in RUNNING state.
@@ -244,15 +249,15 @@ class TableInfo : public RefCountedThreadSafe<TableInfo> {
   void GetTaskList(std::vector<scoped_refptr<MonitoredTask> > *tasks);
 
   // Returns a snapshot copy of the table info's tablet map.
-  TabletInfoMap tablet_map() const {
+  TabletInfoMap tablets() const {
     shared_lock<rw_spinlock> l(lock_);
-    return tablet_map_;
+    return tablets_;
   }
 
   // Returns the number of tablets.
   int num_tablets() const {
     shared_lock<rw_spinlock> l(lock_);
-    return tablet_map_.size();
+    return tablets_.size();
   }
 
  private:
@@ -265,9 +270,9 @@ class TableInfo : public RefCountedThreadSafe<TableInfo> {
 
   // Sorted index of tablet start partition-keys to TabletInfo.
   // The TabletInfo objects are owned by the CatalogManager.
-  TabletInfoMap tablet_map_;
+  TabletInfoMap tablets_;
 
-  // Protects tablet_map_ and pending_tasks_
+  // Protects tablets_ and pending_tasks_
   mutable rw_spinlock lock_;
 
   CowObject<PersistentTableInfo> metadata_;
@@ -505,7 +510,9 @@ class CatalogManager : public tserver::TabletReplicaLookupIf {
   // if the catalog manager is not yet running. Caller must hold leader_lock_.
   //
   // NOTE: This should only be used by tests
-  Status TableNameExists(const std::string& table_name, bool* exists);
+  Status TableNameExists(const std::string& database_name,
+                         const std::string& table_name,
+                         bool* exists);
 
   // Let the catalog manager know that the the given tablet server successfully
   // deleted the specified tablet.
@@ -548,6 +555,7 @@ class CatalogManager : public tserver::TabletReplicaLookupIf {
   friend class TabletLoader;
 
   typedef std::unordered_map<std::string, scoped_refptr<TableInfo>> TableInfoMap;
+  typedef std::unordered_map<std::string, TableInfoMap> DatabaseInfoMap;
   typedef std::unordered_map<std::string, scoped_refptr<TabletInfo>> TabletInfoMap;
 
   // Called by SysCatalog::SysCatalogStateChanged when this node
@@ -572,9 +580,9 @@ class CatalogManager : public tserver::TabletReplicaLookupIf {
   // internal state of this object upon becoming the leader.
   void PrepareForLeadershipTask();
 
-  // Clears out the existing metadata ('table_names_map_', 'table_ids_map_',
-  // and 'tablet_map_'), loads tables metadata into memory and if successful
-  // loads the tablets metadata.
+  // Clears out the existing metadata ('databases_', 'tables_', and 'tablets_'),
+  // loads tables metadata into memory and if successful loads the tablets
+  // metadata.
   Status VisitTablesAndTabletsUnlocked();
   // This is called by tests only.
   Status VisitTablesAndTablets();
@@ -636,6 +644,7 @@ class CatalogManager : public tserver::TabletReplicaLookupIf {
   Status BuildLocationsForTablet(const scoped_refptr<TabletInfo>& tablet,
                                  TabletLocationsPB* locs_pb);
 
+  // Retrieves the table info for the specified table, if it exists.
   Status FindTable(const TableIdentifierPB& table_identifier,
                    scoped_refptr<TableInfo>* table_info);
 
@@ -776,26 +785,28 @@ class CatalogManager : public tserver::TabletReplicaLookupIf {
   typedef rw_spinlock LockType;
   mutable LockType lock_;
 
-  // Table maps: table-id -> TableInfo and table-name -> TableInfo
-  TableInfoMap table_ids_map_;
-  TableInfoMap table_names_map_;
+  // Table map: table-id -> TableInfo.
+  TableInfoMap tables_;
 
-  // Tablet maps: tablet-id -> TabletInfo
-  TabletInfoMap tablet_map_;
+  // Database map: database-name -> table-name -> TableInfo.
+  DatabaseInfoMap databases_;
+
+  // Tablet map: tablet-id -> TabletInfo.
+  TabletInfoMap tablets_;
 
   // Names of tables that are currently reserved by CreateTable() or
   // AlterTable().
   //
   // As a rule, operations that add new table names should do so as follows:
   // 1. Acquire lock_.
-  // 2. Ensure table_names_map_ does not contain the new name.
-  // 3. Ensure reserved_table_names_ does not contain the new name.
-  // 4. Add the new name to reserved_table_names_.
+  // 2. Ensure databases_ does not contain the new name.
+  // 3. Ensure reserved_tables_ does not contain the new name.
+  // 4. Add the new name to reserved_tables_.
   // 5. Release lock_.
   // 6. Perform the operation.
-  // 7. If it succeeded, add the name to table_names_map_ with lock_ held.
-  // 8. Remove the new name from reserved_table_names_ with lock_ held.
-  std::unordered_set<std::string> reserved_table_names_;
+  // 7. If it succeeded, add the name to databases_ with lock_ held.
+  // 8. Remove the new name from reserved_tables_ with lock_ held.
+  std::unordered_map<std::string, std::unordered_set<std::string>> reserved_tables_;
 
   Master *master_;
   ObjectIdGenerator oid_generator_;
