@@ -71,6 +71,7 @@ class TskEntryVisitor {
 
 // SysCatalogTable is a Kudu table that keeps track of the following
 // system information:
+//   * database metadata
 //   * table metadata
 //   * tablet metadata
 //   * root CA (certificate authority) certificate of the Kudu IPKI
