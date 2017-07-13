@@ -142,6 +142,7 @@ target_link_libraries(ir_fake_target kudu_common_proto kudu_util ${KUDU_BASE_LIB
 add_custom_command(
   OUTPUT ${IR_OUTPUT}
   COMMAND ${CLANG_EXEC}
+    -gcc-toolchain /opt/rh/devtoolset-6/root/usr
     ${IR_FLAGS}
     ${IR_SOURCE}
     -o ${IR_OUTPUT}
