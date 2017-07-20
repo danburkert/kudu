@@ -708,3 +708,18 @@ build_sparsehash() {
   rsync -av --delete sparsehash/ $PREFIX/include/sparsehash/
   popd
 }
+
+build_arrow() {
+  ARROW_BDIR=$TP_BUILD_DIR/$ARROW_NAME$MODE_SUFFIX
+  mkdir -p $ARROW_BDIR
+  pushd $ARROW_BDIR
+  rm -rf CMakeCache.txt CMakeFiles/
+  CXXFLAGS="$EXTRA_CFLAGS $EXTRA_CXXFLAGS $EXTRA_LDFLAGS $EXTRA_LIBS" \
+    cmake \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=On \
+    -DCMAKE_INSTALL_PREFIX=$PREFIX \
+    $ARROW_SOURCE/cpp
+  make -j$PARALLEL $EXTRA_MAKEFLAGS install
+  popd
+}

@@ -857,6 +857,13 @@ include_directories(SYSTEM ${MUSTACHE_INCLUDE_DIR})
 ADD_THIRDPARTY_LIB(mustache
   STATIC_LIB "${MUSTACHE_STATIC_LIB}")
 
+## Arrow
+find_package(Arrow REQUIRED)
+include_directories(SYSTEM ${MUSTACHE_INCLUDE_DIR})
+ADD_THIRDPARTY_LIB(arrow
+  STATIC_LIB "${ARROW_STATIC_LIB}"
+  SHARED_LIB "${ARROW_SHARED_LIB}")
+
 ## OpenSSL
 ##
 ## Version 1.0.0 or higher is required because we are using the following

@@ -322,5 +322,9 @@ if [ ! -d "$SPARSEHASH_SOURCE" ]; then
   popd
 fi
 
+if [ ! -d "$ARROW_SOURCE" ]; then
+  fetch_and_expand apache-arrow-${ARROW_VERSION}.tar.gz
+fi
+
 echo "---------------"
 echo "Thirdparty dependencies downloaded successfully"
