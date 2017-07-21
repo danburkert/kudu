@@ -861,10 +861,10 @@ static void CopyNumericArrowColumn(const RowBlock& block,
 }
 
 template<bool IS_NULLABLE>
-void SerializeArrowColumn(const ColumnSchema& col,
-                          int col_idx,
-                          const RowBlock& block,
-                          shared_ptr<arrow::Array>* array) {
+static void SerializeArrowColumn(const ColumnSchema& col,
+                                 int col_idx,
+                                 const RowBlock& block,
+                                 shared_ptr<arrow::Array>* array) {
     DCHECK_NE(col_idx, -1);
     switch (col.type_info()->type()) {
       case DataType::INT8: {
@@ -895,9 +895,10 @@ void SerializeArrowColumn(const ColumnSchema& col,
     }
 }
 
-void SerializeArrow(const RowBlock& block, RowwiseRowBlockPB* rowblock_pb,
+void SerializeArrow(const RowBlock& block,
+                    RowwiseRowBlockPB* rowblock_pb,
                     const Schema* projection_schema,
-                    faststring* buf) {
+                    vector<shared_ptr<arrow::Buffer>>* buffers) {
   DCHECK_GT(block.nrows(), 0);
   const Schema& tablet_schema = block.schema();
 
@@ -916,7 +917,10 @@ void SerializeArrow(const RowBlock& block, RowwiseRowBlockPB* rowblock_pb,
       SerializeArrowColumn<true>(col, t_schema_idx, block, &array);
     } else {
       SerializeArrowColumn<false>(col, t_schema_idx, block, &array);
+    }
 
+    for (const auto& buffer : array->data()->buffers) {
+      buffers->emplace_back(buffer);
     }
   }
   rowblock_pb->set_num_rows(rowblock_pb->num_rows() + num_rows);
