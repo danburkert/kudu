@@ -177,7 +177,7 @@ Status ExtractRowsFromRowBlockPB(const Schema& schema,
 void SerializeArrow(const RowBlock& block,
                     RowwiseRowBlockPB* rowblock_pb,
                     const Schema* projection_schema,
-                    std::vector<std::shared_ptr<arrow::Buffer>>* buf);
+                    std::vector<std::unique_ptr<faststring>>* buffers);
 
 // Set 'leader_hostport' to the host/port of the leader server if one
 // can be found in 'entries'.

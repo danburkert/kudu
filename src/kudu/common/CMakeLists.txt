@@ -66,7 +66,6 @@ if ("${COMPILER_FAMILY}" STREQUAL "clang")
 endif()
 
 set(COMMON_LIBS
-  arrow
   consensus_metadata_proto
   gutil
   kudu_common_proto
