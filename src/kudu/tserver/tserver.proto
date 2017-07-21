@@ -211,6 +211,7 @@ message ColumnRangePredicateListPB {
 enum RowFormatFlags {
   NO_FLAGS = 0;
   PAD_UNIX_TIME_MICROS_TO_16_BYTES = 1;
+  ARROW = 2;
 }
 
 message NewScanRequestPB {

@@ -17,6 +17,7 @@
 
 #include "kudu/common/wire_protocol.h"
 
+#include <arrow/api.h>
 #include <boost/optional.hpp>
 #include <string>
 #include <vector>
@@ -37,6 +38,7 @@
 #include "kudu/util/slice.h"
 
 using google::protobuf::RepeatedPtrField;
+using std::shared_ptr;
 using std::vector;
 
 namespace kudu {
@@ -811,6 +813,110 @@ void SerializeRowBlock(const RowBlock& block,
 
     if (col.type_info()->type() == UNIXTIME_MICROS && pad_unixtime_micros_to_16_bytes) {
       padding_so_far += 8;
+    }
+  }
+  rowblock_pb->set_num_rows(rowblock_pb->num_rows() + num_rows);
+}
+
+template<bool IS_NULLABLE, typename ArrowType, typename CppType>
+static void CopyNumericArrowColumn(const RowBlock& block,
+                                   int col_idx,
+                                   std::shared_ptr<arrow::Array>* array) {
+  ColumnBlock cblock = block.column_block(col_idx);
+  BitmapIterator selected_row_iter(block.selection_vector()->bitmap(), block.nrows());
+  int select_runsize;
+  bool selected;
+  int row_idx = 0;
+
+  arrow::NumericBuilder<ArrowType> bldr(arrow::default_memory_pool());
+  while ((select_runsize = selected_row_iter.Next(&selected))) {
+    int row_idx_copy = row_idx;
+    if (!selected) {
+      row_idx += select_runsize;
+      continue;
+    }
+
+    if (IS_NULLABLE) {
+      bool is_null;
+      int null_run_size;
+      BitmapIterator null_row_iter(cblock.null_bitmap(), row_idx + select_runsize);
+      null_row_iter.SeekTo(row_idx);
+
+      while ((null_run_size = null_row_iter.Next(&is_null))) {
+        if (is_null) {
+          bldr.AppendNulls(nullptr, null_run_size);
+        } else {
+          bldr.Append(reinterpret_cast<CppType*>(cblock.data()) + row_idx, null_run_size, nullptr);
+        }
+        row_idx += null_run_size;
+      }
+    } else {
+      bldr.Append(reinterpret_cast<CppType*>(cblock.data()) + row_idx, select_runsize, nullptr);
+      row_idx += select_runsize;
+    }
+    CHECK_EQ(row_idx_copy + select_runsize, row_idx);
+  }
+  CHECK_EQ(cblock.nrows(), row_idx);
+  KUDU_CHECK(bldr.Finish(array).ok());
+}
+
+template<bool IS_NULLABLE>
+void SerializeArrowColumn(const ColumnSchema& col,
+                          int col_idx,
+                          const RowBlock& block,
+                          shared_ptr<arrow::Array>* array) {
+    DCHECK_NE(col_idx, -1);
+    switch (col.type_info()->type()) {
+      case DataType::INT8: {
+        CopyNumericArrowColumn<IS_NULLABLE, arrow::Int8Type, int8_t>(block, col_idx, array);
+        break;
+      }
+      case DataType::INT16: {
+        CopyNumericArrowColumn<IS_NULLABLE, arrow::Int16Type, int16_t>(block, col_idx, array);
+        break;
+      }
+      case DataType::INT32: {
+        CopyNumericArrowColumn<IS_NULLABLE, arrow::Int32Type, int32_t>(block, col_idx, array);
+        break;
+      }
+      case DataType::INT64: {
+        CopyNumericArrowColumn<IS_NULLABLE, arrow::Int64Type, int64_t>(block, col_idx, array);
+        break;
+      }
+      case DataType::FLOAT: {
+        CopyNumericArrowColumn<IS_NULLABLE, arrow::FloatType, float>(block, col_idx, array);
+        break;
+      }
+      case DataType::DOUBLE: {
+        CopyNumericArrowColumn<IS_NULLABLE, arrow::DoubleType, double>(block, col_idx, array);
+        break;
+      }
+      default: CHECK(false);
+    }
+}
+
+void SerializeArrow(const RowBlock& block, RowwiseRowBlockPB* rowblock_pb,
+                    const Schema* projection_schema,
+                    faststring* buf) {
+  DCHECK_GT(block.nrows(), 0);
+  const Schema& tablet_schema = block.schema();
+
+  if (projection_schema == nullptr) {
+    projection_schema = &tablet_schema;
+  }
+
+  size_t num_rows = block.selection_vector()->CountSelected();
+  int t_schema_idx = 0;
+
+  for (int p_schema_idx = 0; p_schema_idx < projection_schema->num_columns(); p_schema_idx++) {
+    const ColumnSchema& col = projection_schema->column(p_schema_idx);
+    t_schema_idx = tablet_schema.find_column(col.name());
+    std::shared_ptr<arrow::Array> array;
+    if (col.is_nullable()) {
+      SerializeArrowColumn<true>(col, t_schema_idx, block, &array);
+    } else {
+      SerializeArrowColumn<false>(col, t_schema_idx, block, &array);
+
     }
   }
   rowblock_pb->set_num_rows(rowblock_pb->num_rows() + num_rows);

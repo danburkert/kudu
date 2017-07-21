@@ -66,11 +66,12 @@ if ("${COMPILER_FAMILY}" STREQUAL "clang")
 endif()
 
 set(COMMON_LIBS
-  kudu_common_proto
+  arrow
   consensus_metadata_proto
-  wire_protocol_proto
+  gutil
+  kudu_common_proto
   kudu_util
-  gutil)
+  wire_protocol_proto)
 
 ADD_EXPORTABLE_LIBRARY(kudu_common
   SRCS ${COMMON_SRCS}

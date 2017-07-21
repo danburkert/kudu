@@ -387,14 +387,19 @@ class ScanResultCopier : public ScanResultCollector {
         indirect_data_(DCHECK_NOTNULL(indirect_data)),
         blocks_processed_(0),
         num_rows_returned_(0),
-        pad_unixtime_micros_to_16_bytes_(false) {}
+        pad_unixtime_micros_to_16_bytes_(false),
+        arrow_(false) {}
 
   void HandleRowBlock(const Schema* client_projection_schema,
-                              const RowBlock& row_block) override {
+                      const RowBlock& row_block) override {
     blocks_processed_++;
     num_rows_returned_ += row_block.selection_vector()->CountSelected();
-    SerializeRowBlock(row_block, rowblock_pb_, client_projection_schema,
-                      rows_data_, indirect_data_, pad_unixtime_micros_to_16_bytes_);
+    if (arrow_) {
+      SerializeArrow(row_block, rowblock_pb_, client_projection_schema, rows_data_);
+    } else {
+      SerializeRowBlock(row_block, rowblock_pb_, client_projection_schema,
+                        rows_data_, indirect_data_, pad_unixtime_micros_to_16_bytes_);
+    }
     SetLastRow(row_block, &last_primary_key_);
   }
 
@@ -427,6 +432,7 @@ class ScanResultCopier : public ScanResultCollector {
   int64_t num_rows_returned_;
   faststring last_primary_key_;
   bool pad_unixtime_micros_to_16_bytes_;
+  bool arrow_;
 
   DISALLOW_COPY_AND_ASSIGN(ScanResultCopier);
 };
