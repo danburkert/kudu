@@ -1584,10 +1584,22 @@ Status CatalogManager::FindTable(const TableIdentifierPB& table_identifier,
   if (table_identifier.has_table_id()) {
     *table_info = FindPtrOrNull(tables_, table_identifier.table_id());
   } else if (table_identifier.has_table_name()) {
+    TableInfoMap* database;
+    if (!table_identifier.has_database()) {
+      // Use the default database.
+    } else if (table_identifier.database().has_database_id()) {
+      // Get database by ID.
+    } else if (table_identifier.database().has_database_name()) {
+
+    } else {
+      return Status::InvalidArgument("missing database ID or database name");
+    }
+
+
     TableInfoMap* database = FindOrNull(databases_, table_identifier.database_name());
     *table_info = database ? FindPtrOrNull(*database, table_identifier.table_name()) : nullptr;
   } else {
-    return Status::InvalidArgument("Missing Table ID or Table Name");
+    return Status::InvalidArgument("missing table ID or table name");
   }
   return Status::OK();
 }

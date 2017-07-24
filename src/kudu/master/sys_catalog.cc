@@ -91,12 +91,11 @@ static const char* const kSysCatalogTableColType = "entry_type";
 static const char* const kSysCatalogTableColId = "entry_id";
 static const char* const kSysCatalogTableColMetadata = "metadata";
 
-const char* const SysCatalogTable::kSysCatalogTabletId =
-    "00000000000000000000000000000000";
-const char* const SysCatalogTable::kSysCertAuthorityEntryId =
-    "root-ca-info";
-const char* const SysCatalogTable::kInjectedFailureStatusMsg =
-    "INJECTED FAILURE";
+const char* const SysCatalogTable::kSysCatalogTabletId = "00000000000000000000000000000000";
+const char* const SysCatalogTable::kSysCatalogDatabaseId = "00000000000000000000000000000000";
+
+const char* const SysCatalogTable::kSysCertAuthorityEntryId = "root-ca-info";
+const char* const SysCatalogTable::kInjectedFailureStatusMsg = "INJECTED FAILURE";
 
 namespace {
 

@@ -109,7 +109,7 @@ message TableIdentifierPB {
 }
 
 message DatabaseIdentifierPB {
-  // The database name to fetch .
+  // The database name.
   optional bytes database_id = 1;
   // The database ID.
   optional string database_name = 2;
@@ -161,7 +161,7 @@ message SysTablesEntryPB {
   }
 
   // The database.
-  optional bytes database_id;
+  optional bytes database_id = 10;
 
   // The table name.
   required bytes table_name = 1;

@@ -87,6 +87,9 @@ class SysCatalogTable {
   // Magic ID of the system tablet.
   static const char* const kSysCatalogTabletId;
 
+  // Magic ID of the default database.
+  static const char* const kSysCatalogDatabaseId;
+
   // Root certificate authority (CA) entry identifier in the system table.
   // There should be no more than one entry of this type in the system table.
   static const char* const kSysCertAuthorityEntryId;
