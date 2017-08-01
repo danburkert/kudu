@@ -176,6 +176,10 @@ struct OpInstance {
 // manager will periodically poll it for statistics.  The registrant is
 // responsible for managing the memory associated with the MaintenanceOp object.
 // Op objects should be unregistered before being de-allocated.
+//
+// Note: When creating a new subclass of MaintenanceOp, add the name of the
+// subclass to the list found in $KUDU_HOME/www/maintenance-manager.mustache,
+// to keep the web UI updated.
 class MaintenanceOp {
  public:
   friend class MaintenanceManager;

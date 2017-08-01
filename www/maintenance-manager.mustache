@@ -19,43 +19,8 @@ under the License.
 
 <h1>Maintenance Manager state</h1>
 
-<h3>Running operations</h3>
-<table class="table table-striped">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Instances running</th>
-    </tr>
-  </thead>
-  <tbody>
-   {{#running_operations}}
-    <tr>
-      <td>{{name}}</td>
-      <td>{{instances_running}}</td>
-    </tr>
-   {{/running_operations}}
-  </tbody>
-</table>
-
-<h3>Recent completed operations</h3>
-<table class="table table-striped">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Duration</th>
-      <th>Time since op started</th>
-    </tr>
-  </thead>
-  <tbody>
-   {{#completed_operations}}
-    <tr>
-      <td>{{name}}</td>
-      <td>{{duration}}</td>
-      <td>{{time_since_start}}</td>
-    </tr>
-   {{/completed_operations}}
-  </tbody>
-</table>
+<div id="popup"></div>
+<svg id="chart" width="800"></svg>
 
 <h3>Non-running operations</h3>
 <table class="table table-striped">
@@ -80,5 +45,338 @@ under the License.
    {{/registered_operations}}
   </tbody>
 </table>
+
+<style type="text/css">
+
+svg {
+  border: 1px solid #ccc;
+  width: 800px;
+  display: block;
+  margin: auto;
+  margin-top: 50px;
+  margin-bottom: 50px;
+}
+
+.title {
+  font-size: 24px;
+}
+
+.axis-title {
+  font-size: 16px;
+}
+
+path {
+  stroke: #ccc;
+}
+
+.border {
+  fill: #ccc;
+}
+
+.key {
+  stroke: #ccc;
+  fill: rgba(255, 255, 255, 0);
+}
+
+.key-title {
+  font-size: 20px;
+}
+
+.key-item text {
+  fill: #fff;
+}
+
+.now-line {
+  fill: #688cea;
+}
+
+.lane {
+  background-color: #eee;
+}
+
+.lane-text {
+  font-size: 10px;
+}
+
+.op {
+  fill: #444;
+  cursor: pointer;
+}
+
+.CompactRowSetsOp {
+  fill: #095;
+}
+
+.FlushDeltaMemStoresOp {
+  fill: #ec1;
+}
+
+.FlushMRSOp {
+  fill: #16a;
+}
+
+.LogGCOp {
+  fill: #2ae;
+}
+
+.MajorDeltaCompactionOp {
+  fill: #c23;
+}
+
+.MinorDeltaCompactionOp {
+  fill: #92c;
+}
+
+.UndoDeltaBlockGCOp {
+  fill: #9c2;
+}
+
+#popup {
+  position: absolute;
+  display: none;
+  z-index: 5;
+  padding: 20px;
+  background: #e8e8e8;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+}
+
+</style>
+
+<script type="text/javascript" src="/d3.v2.js"></script>
+
+<script type="text/javascript">
+  var op_instances = [
+   {{#running_operations}}
+    {
+      name: "{{name}}",
+      thread_id: "{{thread_id}}",
+      completed: false,
+      time_since_start: {{time_since_start}}
+    },
+   {{/running_operations}}
+   {{#completed_operations}}
+    {
+      name: "{{name}}",
+      thread_id: "{{thread_id}}",
+      completed: true,
+      duration: {{duration}},
+      time_since_start: {{time_since_start}}
+    },
+   {{/completed_operations}}
+  ];
+
+  // Returns a formatted time string.
+  function timeString(millis) {
+    if (millis < 1000) {
+      return "" + millis + " milliseconds";
+    } else if (millis < 1000 * 60) {
+      return "" + Math.round(millis / 1000) + " seconds";
+    } else {
+      return "" + Math.round(millis / (1000 * 60)) + " minutes";
+    }
+  }
+
+  // Translates a thread id hex string into a counting-number identifier.
+  function threadString(thread_id) {
+    return "Thread " + (threads.indexOf(thread_id) + 1);
+  }
+
+  // Shows a popup box displaying op's detail info.
+  function inspectOp(op, event) {
+    var popup = document.getElementById("popup");
+    popup.style.left = "" + (event.pageX - 20) + "px";
+    popup.style.top = "" + (event.pageY + 20) + "px";
+    popup.style.display = "inline";
+    jQuery(popup)
+      .append($("<h5/>").html(op.name))
+      .append(op.completed ? "Duration: " + timeString(op.duration)
+                           : "Still running").append("<br/>")
+      .append("Started " + timeString(op.time_since_start) + " ago").append("<br/>")
+      .append("On " + threadString(op.thread_id) + " (" + op.thread_id + ")");
+  }
+
+  // Hides the op-inspection box.
+  function endInspectOp() {
+    var popup = document.getElementById("popup");
+    popup.innerHTML = "";
+    popup.style.display = "none";
+  }
+
+
+  // Returns the type of Op represented by 'op'.
+  //
+  // For example:
+  //  className({ "name": "LogGCOp(1c89d908fd474b13addc636da90b9401)" ... }) == "LogGCOp"
+  function className(op) {
+    return op.name.indexOf("(") >= 0 ? op.name.substring(0, op.name.indexOf("(")) : "";
+  }
+
+  // Group ops by thread.
+  var ops = {};
+  for (i = 0; i < op_instances.length; i++) {
+    if (!ops[op_instances[i].thread_id]) {
+      ops[op_instances[i].thread_id] = [];
+    }
+    ops[op_instances[i].thread_id].push(op_instances[i]);
+  }
+  var threads = Object.keys(ops);
+
+  // Build the swimlane chart.
+
+  var svg = d3.select("#chart");
+  var laneHeight = 30;
+  var margin = { top: 50, right: 50, bottom: 360, left: 80 };
+  var width = parseInt(svg.style("width")) - margin.left - margin.right;
+  var height = laneHeight * threads.length;
+  var fullHeight =  height + margin.top + margin.bottom;
+  svg.attr("height", fullHeight);
+  var chart = svg.append("g")
+                 .attr("transform", "translate(" + margin.left + ", " + margin.top + ")");
+
+  // Configure chart scaling.
+  var maxTimeSinceStart = d3.max(op_instances, function(op) { return op.time_since_start; });
+  var start = d3.scale.linear()
+                .domain([0, maxTimeSinceStart])
+                .range([width, 0]);
+  var xAxisScale = d3.scale.linear()
+                .domain([0, maxTimeSinceStart / 1000])
+                .range([width, 0]);
+  var duration = d3.scale.linear()
+                  .domain([0, maxTimeSinceStart])
+                  .range([0, width]);
+
+  chart.append("text")
+    .attr("class", "title")
+    .text("Operations running/completed")
+    .attr("x", width / 2)
+    .attr("y", -20)
+    .attr("text-anchor", "middle");
+
+  chart.append("text")
+    .attr("class", "axis-title")
+    .text("Thread ID")
+    .style("text-anchor", "end")
+    .attr("x", -5);
+
+  chart.append("text")
+    .attr("class", "axis-title")
+    .text("Time (seconds ago)")
+    .style("text-anchor", "middle")
+    .attr("x", width / 2)
+    .attr("y", height + 50)
+
+  chart.append("rect")
+    .attr("height", height)
+    .attr("width", 1)
+    .attr("class", "border");
+
+  chart.append("rect")
+    .attr("height", height)
+    .attr("width", 1)
+    .attr("class", "now-line")
+    .attr("transform", "translate(" + width + ", 0)");
+
+  var xAxis = d3.svg.axis()
+    .scale(xAxisScale)
+    .orient("bottom")
+    .tickSize(6, 0, 0);
+  chart.append("g")
+    .attr("transform", "translate(0, " + height + ")")
+    .attr("class", "x-axis")
+    .call(xAxis);
+
+  var lanes = chart.selectAll(".lane")
+    .data(threads)
+    .enter()
+    .append("g")
+      .attr("height", laneHeight)
+      .attr("width", width)
+      .attr("transform", function(d, i) { return "translate(5, " + (i * laneHeight)  + ")"; })
+      .attr("class", "lane");
+
+  lanes.selectAll("op")
+    .data(function(thread) { return ops[thread]; })
+    .enter()
+    .append("rect")
+    .attr("height", laneHeight - 10)
+    .attr("width", function(op) {
+                     return Math.max(2,
+                         duration(op.completed ? op.duration : op.time_since_start));
+                   })
+    .attr("transform", function(op) {
+                         return "translate(" + start(op.time_since_start) + ", 5)";
+                       })
+    .attr("class", function(op) { return "op " + className(op); })
+    .on("mouseover", function(op) {
+        inspectOp(op, d3.event);
+    })
+    .on("mouseout", function() {
+      endInspectOp();
+    });
+
+  lanes.append("text")
+    .style("text-anchor", "end")
+    .text(threadString)
+    .attr("class", "lane-text")
+    .attr("x", -10)
+    .attr("dy", laneHeight / 2 + 2);
+
+  // Build the key.
+
+  // If new operation is added, its name should be added to this list,
+  // and a corresponding css class (as above) should be added.
+  var opNames = [
+    "CompactRowSetsOp",
+    "FlushDeltaMemStoresOp",
+    "FlushMRSOp",
+    "LogGCOp",
+    "MajorDeltaCompactionOp",
+    "MinorDeltaCompactionOp",
+    "UndoDeltaBlockGCOp"
+  ];
+
+  var keyElementWidth = 180;
+  var keyElementHeight = 27;
+  var keyTitleHeight = 35;
+  var keyWidth = keyElementWidth + 20;
+  var keyHeight = (opNames.length * keyElementHeight) + keyTitleHeight + 10;
+  var keyX = (width - keyWidth) / 2;
+  var keyY = height + 100;
+
+  var key = chart.append("g")
+    .attr("transform", "translate(" + keyX + ", " + keyY + ")");
+
+  key.append("rect")
+    .attr("width", keyWidth)
+    .attr("height", keyHeight)
+    .attr("class", "key");
+
+  key.append("text")
+    .attr("class", "key-title")
+    .text("Key")
+    .attr("text-anchor", "middle")
+    .attr("transform", "translate(" + (keyWidth / 2) + ", 25)");
+
+  var keyItems = key.selectAll(".key-item")
+    .data(opNames)
+    .enter()
+    .append("g")
+    .attr("class", "key-item")
+    .attr("transform", function(d, i) {
+        return "translate(10, " + (i * keyElementHeight + keyTitleHeight) + ")"; });
+
+  keyItems.append("rect")
+    .attr("class", function(opName) { return opName; })
+    .attr("width", keyElementWidth)
+    .attr("height", keyElementHeight - 2);
+
+  keyItems.append("text")
+    .attr("text-anchor", "middle")
+    .attr("x", (keyElementWidth / 2))
+    .attr("y", keyElementHeight - 10)
+    .text(function(opName) { return opName; });
+
+</script>
 
 {{/raw}}

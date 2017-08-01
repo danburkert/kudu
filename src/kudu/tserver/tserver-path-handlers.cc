@@ -601,22 +601,21 @@ void TabletServerPathHandlers::HandleMaintenanceManagerPage(const Webserver::Web
   }
 
   EasyJson running_ops = output->Set("running_operations", EasyJson::kArray);
-  for (const auto& op_pb : pb.registered_operations()) {
-    if (op_pb.running() > 0) {
-      EasyJson running_op = running_ops.PushBack(EasyJson::kObject);
-      running_op["name"] = op_pb.name();
-      running_op["instances_running"] = op_pb.running();
-    }
+  for (const auto& op_pb : pb.running_operations()) {
+    EasyJson running_op = running_ops.PushBack(EasyJson::kObject);
+    running_op["thread_id"] = op_pb.thread_id();
+    running_op["name"] = op_pb.name();
+    running_op["time_since_start"] = op_pb.millis_since_start();
   }
 
   EasyJson completed_ops = output->Set("completed_operations", EasyJson::kArray);
   for (const auto& op_pb : pb.completed_operations()) {
     EasyJson completed_op = completed_ops.PushBack(EasyJson::kObject);
     completed_op["name"] = op_pb.name();
-    completed_op["duration"] =
-      HumanReadableElapsedTime::ToShortString(op_pb.duration_millis() / 1000.0);
-    completed_op["time_since_start"] =
-      HumanReadableElapsedTime::ToShortString(op_pb.millis_since_start() / 1000.0);
+    completed_op["thread_id"] = op_pb.thread_id();
+    completed_op["name"] = op_pb.name();
+    completed_op["duration"] = op_pb.duration_millis();
+    completed_op["time_since_start"] = op_pb.millis_since_start();
   }
 
   EasyJson registered_ops = output->Set("registered_operations", EasyJson::kArray);
