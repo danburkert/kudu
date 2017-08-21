@@ -116,6 +116,12 @@ target_link_libraries(rtest_krpc
   rpc_header_proto
   rtest_diff_package_proto)
 
+### calculator-server binary
+add_executable(calculator-server calculator-server.cc)
+target_link_libraries(calculator-server
+  krpc
+  rtest_krpc)
+
 # Tests
 set(KUDU_TEST_LINK_LIBS rtest_krpc krpc rpc_header_proto security-test ${KUDU_MIN_TEST_LIBS})
 ADD_KUDU_TEST(exactly_once_rpc-test)
