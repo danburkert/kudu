@@ -133,31 +133,31 @@ Status MiniHms::Start() {
 
 Status MiniHms::CreateHiveSite(const string& tmp_dir) const {
   static const string kFileTemplate = R"(
-<properties>
-  <property>
-    <name>hive.metastore.transactional.event.listeners</name>
-    <value>
-      org.apache.hive.hcatalog.listener.DbNotificationListener,
-      org.apache.kudu.hive.metastore.KuduMetastorePlugin
-    </value>
-  </property>
-  <property>
-    <name>hive.metastore.event.db.listener.timetolive</name>
-    <value>$0s</value>
-  </property>
-  <property>
-    <name>javax.jdo.option.ConnectionURL</name>
-    <value>jdbc:derby:;databaseName=$1/metastore_db;create=true</value>
-  </property>
-  <property>
-    <name>fs.default.name</name>
-    <value>file://$1/fs/</value>
-  </property>
-  <property>
-    <name>hive.metastore.warehouse.dir</name>
-    <value>file://$1/fs/warehouse/</value>
-  </property>
-</properties>
+    <properties>
+      <property>
+        <name>hive.metastore.transactional.event.listeners</name>
+        <value>
+          org.apache.hive.hcatalog.listener.DbNotificationListener,
+          org.apache.kudu.hive.metastore.KuduMetastorePlugin
+        </value>
+      </property>
+      <property>
+        <name>hive.metastore.event.db.listener.timetolive</name>
+        <value>$0s</value>
+      </property>
+      <property>
+        <name>javax.jdo.option.ConnectionURL</name>
+        <value>jdbc:derby:;databaseName=$1/metastore_db;create=true</value>
+      </property>
+      <property>
+        <name>fs.default.name</name>
+        <value>file://$1/fs/</value>
+      </property>
+      <property>
+        <name>hive.metastore.warehouse.dir</name>
+        <value>file://$1/fs/warehouse/</value>
+      </property>
+    </properties>
   )";
 
   string file_contents = strings::Substitute(kFileTemplate,
