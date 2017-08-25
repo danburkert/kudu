@@ -128,17 +128,13 @@ Status TlsContext::Init() {
 
   if (boost::iequals(FLAGS_rpc_tls_min_protocol, "TLSv1.2")) {
 #if OPENSSL_VERSION_NUMBER < 0x10001000L
-    return Status::InvalidArgument(
-        "--rpc_tls_min_protocol=TLSv1.2 is not be supported on this platform. "
-        "TLSv1 is the latest supported TLS protocol.");
+    options |= 0x04000000U | 0x10000000U;
 #else
     options |= SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1;
 #endif
   } else if (boost::iequals(FLAGS_rpc_tls_min_protocol, "TLSv1.1")) {
 #if OPENSSL_VERSION_NUMBER < 0x10001000L
-    return Status::InvalidArgument(
-        "--rpc_tls_min_protocol=TLSv1.1 is not be supported on this platform. "
-        "TLSv1 is the latest supported TLS protocol.");
+    options |= 0x04000000U;
 #else
     options |= SSL_OP_NO_TLSv1;
 #endif
