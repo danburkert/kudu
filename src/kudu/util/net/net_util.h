@@ -130,6 +130,8 @@ Status ParseAddressList(const std::string& addr_list,
                         uint16_t default_port,
                         std::vector<Sockaddr>* addresses);
 
+bool ValidateAddressListFlag(const char* flag_name, const std::string& addr_list);
+
 // Return true if the given port is likely to need root privileges to bind to.
 bool IsPrivilegedPort(uint16_t port);
 

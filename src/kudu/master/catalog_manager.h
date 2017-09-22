@@ -30,6 +30,7 @@
 #include <utility>
 #include <vector>
 
+#include <boost/optional/optional.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest_prod.h>
 
@@ -38,6 +39,7 @@
 #include "kudu/gutil/macros.h"
 #include "kudu/gutil/port.h"
 #include "kudu/gutil/ref_counted.h"
+#include "kudu/master/hms_catalog.h"
 #include "kudu/master/master.pb.h"
 #include "kudu/master/ts_manager.h"
 #include "kudu/tserver/tablet_replica_lookup.h"
@@ -876,6 +878,8 @@ class CatalogManager : public tserver::TabletReplicaLookupIf {
   // like the assignment and cleaner
   friend class CatalogManagerBgTasks;
   gscoped_ptr<CatalogManagerBgTasks> background_tasks_;
+
+  std::unique_ptr<HmsCatalog> hms_catalog_;
 
   enum State {
     kConstructed,

@@ -273,6 +273,13 @@ Status ParseAddressList(const std::string& addr_list,
   return Status::OK();
 }
 
+bool ValidateAddressListFlag(const char* flag_name, const string& addr_list) {
+  vector<HostPort> host_ports;
+  Status s = HostPort::ParseStrings(addr_list, 1, &host_ports);
+  WARN_NOT_OK(s, Substitute("invalid flag $0", flag_name));
+  return s.ok();
+}
+
 Status GetHostname(string* hostname) {
   TRACE_EVENT0("net", "GetHostname");
   char name[HOST_NAME_MAX];

@@ -116,9 +116,11 @@
 #include "kudu/util/debug/trace_event.h"
 #include "kudu/util/fault_injection.h"
 #include "kudu/util/flag_tags.h"
+#include "kudu/util/flag_validators.h"
 #include "kudu/util/logging.h"
 #include "kudu/util/monotime.h"
 #include "kudu/util/mutex.h"
+#include "kudu/util/net/net_util.h"
 #include "kudu/util/pb_util.h"
 #include "kudu/util/random_util.h"
 #include "kudu/util/scoped_cleanup.h"
@@ -224,6 +226,10 @@ DEFINE_int32(catalog_manager_inject_latency_prior_tsk_write_ms, 0,
              "This is a test-only flag, do not use in production.");
 TAG_FLAG(catalog_manager_inject_latency_prior_tsk_write_ms, hidden);
 TAG_FLAG(catalog_manager_inject_latency_prior_tsk_write_ms, unsafe);
+
+DEFINE_string(hive_metastore_addresses, "",
+              "Addresses of Hive Metastore");
+DEFINE_validator(hive_metastore_addresses, &kudu::ValidateAddressListFlag);
 
 using std::pair;
 using std::set;
@@ -622,6 +628,12 @@ CatalogManager::CatalogManager(Master *master)
            // closely timed consecutive elections).
            .set_max_threads(1)
            .Build(&leader_election_pool_));
+
+  if (!FLAGS_hive_metastore_addresses.empty()) {
+    vector<HostPort> addresses;
+    CHECK_OK(HostPort::ParseStrings(FLAGS_hive_metastore_addresses, 9083, &addresses));
+    hms_catalog_.reset(new HmsCatalog(std::move(addresses)));
+  }
 }
 
 CatalogManager::~CatalogManager() {
@@ -645,6 +657,11 @@ Status CatalogManager::Init(bool is_first_run) {
 
   RETURN_NOT_OK_PREPEND(sys_catalog_->WaitUntilRunning(),
                         "Failed waiting for the catalog tablet to run");
+
+  if (hms_catalog_) {
+    RETURN_NOT_OK_PREPEND(hms_catalog_->Start(),
+                          "failed to start Hive Metastore catalog");
+  }
 
   std::lock_guard<LockType> l(lock_);
   background_tasks_.reset(new CatalogManagerBgTasks(this));
@@ -1046,6 +1063,10 @@ void CatalogManager::Shutdown() {
     background_tasks_->Shutdown();
   }
 
+  if (hms_catalog_) {
+    hms_catalog_->Stop();
+  }
+
   // Mark all outstanding table tasks as aborted and wait for them to fail.
   //
   // There may be an outstanding table visitor thread modifying the table map,
@@ -1391,6 +1412,15 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
   }
   table->mutable_metadata()->mutable_dirty()->pb.set_state(SysTablesEntryPB::RUNNING);
 
+  // Create the table in the HMS.
+  if (hms_catalog_) {
+    s = hms_catalog_->CreateTable(table->id(), req.name(), schema);
+    if (!s.ok()) {
+      SetupError(resp->mutable_error(), MasterErrorPB::HIVE_METASTORE_ERROR, s);
+      return s;
+    }
+  }
+
   // e. Write table and tablets to sys-catalog.
   SysCatalogTable::Actions actions;
   actions.table_to_add = table;
@@ -1563,6 +1593,14 @@ Status CatalogManager::DeleteTable(const DeleteTableRequestPB* req,
     Status s = Status::NotFound("The table was deleted", l.data().pb.state_msg());
     SetupError(resp->mutable_error(), MasterErrorPB::TABLE_NOT_FOUND, s);
     return s;
+  }
+
+  if (hms_catalog_) {
+    Status s = hms_catalog_->DropTable(table->id(), l.data().name());
+    if (!s.ok() || !s.IsNotFound()) {
+      SetupError(resp->mutable_error(), MasterErrorPB::HIVE_METASTORE_ERROR, s);
+      return s;
+    }
   }
 
   TRACE("Modifying in-memory table state")
@@ -2047,6 +2085,16 @@ Status CatalogManager::AlterTable(const AlterTableRequestPB* req,
                                 Substitute("Alter Table version=$0 ts=$1",
                                            l.mutable_data()->pb.version(),
                                            LocalTimeAsString()));
+  }
+
+  if (hms_catalog_) {
+    const string& new_name = req->has_new_table_name() ? req->new_table_name() : table_name;
+    Status s = hms_catalog_->AlterTable(table->id(), table_name, new_name, new_schema);
+
+    if (!s.ok()) {
+      SetupError(resp->mutable_error(), MasterErrorPB::HIVE_METASTORE_ERROR, s);
+      return s;
+    }
   }
 
   // 7. Update sys-catalog with the new table schema and tablets to add/drop.

@@ -73,6 +73,9 @@ message MasterErrorPB {
 
     // The number of replicas requested is illegal (eg non-positive).
     ILLEGAL_REPLICATION_FACTOR = 11;
+
+    // An operation involving the Hive Metastore failed.
+    HIVE_METASTORE_ERROR = 12;
   }
 
   // The error code.

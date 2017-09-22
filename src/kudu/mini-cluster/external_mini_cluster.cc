@@ -328,6 +328,10 @@ Status ExternalMiniCluster::StartSingleMaster() {
   opts.logtostderr = opts_.logtostderr;
 
   opts.rpc_bind_address = HostPort(GetBindIpForMaster(0), 0);
+  if (opts_.enable_hive_metastore) {
+    opts.extra_flags.emplace_back(Substitute("--hive_metastore_addresses=$0",
+                                             hms_->address().ToString()));
+  }
   scoped_refptr<ExternalMaster> master = new ExternalMaster(opts);
   if (opts_.enable_kerberos) {
     // The bind host here is the hostname that will be used to generate the

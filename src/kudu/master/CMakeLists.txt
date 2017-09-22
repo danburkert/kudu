@@ -34,6 +34,7 @@ ADD_EXPORTABLE_LIBRARY(master_proto
 
 set(MASTER_SRCS
   catalog_manager.cc
+  hms_catalog.cc
   master.cc
   master_cert_authority.cc
   master_options.cc
@@ -51,6 +52,7 @@ target_link_libraries(master
   krpc
   kserver
   kudu_common
+  kudu_hms
   kudu_util
   master_proto
   rpc_header_proto
