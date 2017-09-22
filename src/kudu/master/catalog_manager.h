@@ -523,7 +523,8 @@ class CatalogManager : public tserver::TabletReplicaLookupIf {
   // but this function does not itself respond to the RPC.
   Status DeleteTable(const DeleteTableRequestPB* req,
                      DeleteTableResponsePB* resp,
-                     rpc::RpcContext* rpc);
+                     rpc::RpcContext* rpc,
+                     boost::optional<int64_t> notification_log_event_id = boost::none);
 
   // Alter the specified table
   //
@@ -531,7 +532,8 @@ class CatalogManager : public tserver::TabletReplicaLookupIf {
   // but this function does not itself respond to the RPC.
   Status AlterTable(const AlterTableRequestPB* req,
                     AlterTableResponsePB* resp,
-                    rpc::RpcContext* rpc);
+                    rpc::RpcContext* rpc,
+                    boost::optional<int64_t> notification_log_event_id = boost::none);
 
   // Get the information about an in-progress alter operation
   //

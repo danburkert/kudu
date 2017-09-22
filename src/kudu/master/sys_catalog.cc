@@ -33,6 +33,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <google/protobuf/util/message_differencer.h>
+#include <google/protobuf/wrappers.pb.h>
 
 #include "kudu/clock/clock.h"
 #include "kudu/common/column_predicate.h"
@@ -500,6 +501,10 @@ Status SysCatalogTable::Write(const Actions& actions) {
   ReqUpdateTablets(&req, actions.tablets_to_update);
   ReqDeleteTablets(&req, actions.tablets_to_delete);
 
+  if (actions.hms_notification_log_event_id) {
+    ReqSetNotificationLogEventId(&req, *actions.hms_notification_log_event_id);
+  }
+
   if (req.row_operations().rows().empty()) {
     // No actual changes were written (i.e the data to be updated matched the
     // previous version of the data).
@@ -642,6 +647,19 @@ Status SysCatalogTable::VisitTskEntries(TskEntryVisitor* visitor) {
   return ProcessRows<SysTskEntryPB, TSK_ENTRY>(processor);
 }
 
+Status SysCatalogTable::GetNotificationLogEventId(int64_t* event_id) {
+  TRACE_EVENT0("master", "SysCatalogTable::GetNotificationLogEventId");
+
+  *event_id = -1;
+  auto processor = [&](const string& entry_id, const google::protobuf::Int64Value& entry_data) {
+    DCHECK(entry_id.empty());
+    *event_id = entry_data.value();
+    return Status::OK();
+  };
+
+  return ProcessRows<google::protobuf::Int64Value, HMS_NOTIFICATION_LOG>(processor);
+}
+
 Status SysCatalogTable::GetCertAuthorityEntry(SysCertAuthorityEntryPB* entry) {
   CHECK(entry);
   vector<SysCertAuthorityEntryPB> entries;
@@ -781,6 +799,24 @@ void SysCatalogTable::ReqDeleteTablets(WriteRequestPB* req,
     CHECK_OK(row.SetStringNoCopy(kSysCatalogTableColId, tablet->id()));
     enc.Add(RowOperationsPB::DELETE, row);
   }
+}
+
+void SysCatalogTable::ReqSetNotificationLogEventId(WriteRequestPB* req, int64_t event_id) {
+
+  // The notification event log ID is just an integer. We use a Protobuf message
+  // to allow for forwards compatibility if we need to add additional fields
+  // later.
+  google::protobuf::Int64Value pb;
+  pb.set_value(event_id);
+  faststring metadata_buf;
+  pb_util::SerializeToString(pb, &metadata_buf);
+
+  KuduPartialRow row(&schema_);
+  RowOperationsPBEncoder enc(req->mutable_row_operations());
+  CHECK_OK(row.SetInt8(kSysCatalogTableColType, HMS_NOTIFICATION_LOG));
+  CHECK_OK(row.SetStringNoCopy(kSysCatalogTableColId, ""));
+  CHECK_OK(row.SetStringNoCopy(kSysCatalogTableColMetadata, metadata_buf));
+  enc.Add(RowOperationsPB::UPSERT, row);
 }
 
 Status SysCatalogTable::VisitTablets(TabletVisitor* visitor) {

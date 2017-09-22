@@ -50,6 +50,7 @@ using client::KuduClientBuilder;
 using client::KuduColumnSchema;
 using client::KuduSchema;
 using client::KuduSchemaBuilder;
+using client::KuduTable;
 using client::KuduTableAlterer;
 using client::KuduTableCreator;
 using client::sp::shared_ptr;
@@ -106,6 +107,19 @@ class MasterHmsTest : public KuduTest {
                          .Create();
   }
 
+  Status HmsRenameTable(const std::string& database_name,
+                        const std::string& old_table_name,
+                        const std::string& new_table_name) {
+    // The HMS doesn't have a rename table API. Instead it offers the more
+    // general AlterTable API, which requires the entire set of table fields to be
+    // set. Since we don't know these fields during a simple rename operation, we
+    // have to look them up.
+    hive::Table table;
+    RETURN_NOT_OK(hms_client_->GetTable(database_name, old_table_name, &table));
+    table.tableName = new_table_name;
+    return hms_client_->AlterTable(database_name, old_table_name, table);
+  }
+
  protected:
 
   unique_ptr<HmsClient> hms_client_;
@@ -150,6 +164,43 @@ TEST_F(MasterHmsTest, TestTableLifecycle) {
   tables.clear();
   ASSERT_OK(hms_client_->GetAllTables(hms_database_name, &tables));
   ASSERT_EQ(0, tables.size()) << "tables: '" << tables << "'";
+}
+
+TEST_F(MasterHmsTest, TestHmsNotificationLogFollower) {
+  const char* table_name = "default.notification_log_follower";
+  const char* hms_database_name = "default";
+  const char* hms_table_name = "notification_log_follower";
+
+  ASSERT_OK(CreateTable(table_name));
+
+  vector<string> tables;
+  ASSERT_OK(hms_client_->GetAllTables(hms_database_name, &tables));
+  ASSERT_TRUE(find(tables.begin(), tables.end(), hms_table_name) != tables.end())
+      << "tables: '" << tables << "'";
+
+  shared_ptr<KuduTable> table;
+  ASSERT_OK(client_->OpenTable(table_name, &table));
+  ASSERT_EQ(0, CountTableRows(table.get()));
+
+  ASSERT_OK(HmsRenameTable(hms_database_name, hms_table_name, "new_table_name"));
+
+  ASSERT_EVENTUALLY([&] {
+      bool exists;
+      ASSERT_OK(client_->TableExists(table_name, &exists));
+      ASSERT_FALSE(exists);
+      ASSERT_OK(client_->TableExists("default.new_table_name", &exists));
+      ASSERT_TRUE(exists);
+  });
+
+  hive::EnvironmentContext env_ctx;
+  env_ctx.__set_properties({ make_pair(hms::HmsClient::kKuduTableIdKey, table->id()) });
+  ASSERT_OK(hms_client_->DropTableWithContext(hms_database_name, "new_table_name", env_ctx));
+
+  ASSERT_EVENTUALLY([&] {
+      bool exists;
+      ASSERT_OK(client_->TableExists(table_name, &exists));
+      ASSERT_FALSE(exists);
+  });
 }
 
 } // namespace kudu

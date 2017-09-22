@@ -118,6 +118,7 @@ class SysCatalogTable {
     TABLETS_ENTRY = 2,
     CERT_AUTHORITY_INFO = 3,  // Kudu's root certificate authority entry.
     TSK_ENTRY = 4,            // Token Signing Key entry.
+    HMS_NOTIFICATION_LOG = 5, // HMS notification log latest event ID.
   };
 
   // 'leader_cb_' is invoked whenever this node is elected as a leader
@@ -152,6 +153,7 @@ class SysCatalogTable {
     std::vector<scoped_refptr<TabletInfo>> tablets_to_add;
     std::vector<scoped_refptr<TabletInfo>> tablets_to_update;
     std::vector<scoped_refptr<TabletInfo>> tablets_to_delete;
+    boost::optional<int64_t> hms_notification_log_event_id;
   };
   Status Write(const Actions& actions);
 
@@ -163,6 +165,9 @@ class SysCatalogTable {
 
   // Scan for TSK-related entries in the system table.
   Status VisitTskEntries(TskEntryVisitor* visitor);
+
+  // Get the latest processed HMS notification log event ID.
+  Status GetNotificationLogEventId(int64_t* event_id) WARN_UNUSED_RESULT;
 
   // Retrive the CA entry (private key and certificate) from the system table.
   Status GetCertAuthorityEntry(SysCertAuthorityEntryPB* entry);
@@ -252,6 +257,7 @@ class SysCatalogTable {
                         const std::vector<scoped_refptr<TabletInfo>>& tablets);
   void ReqDeleteTablets(tserver::WriteRequestPB* req,
                         const std::vector<scoped_refptr<TabletInfo>>& tablets);
+  void ReqSetNotificationLogEventId(tserver::WriteRequestPB* req, int64_t event_id);
 
   static std::string TskSeqNumberToEntryId(int64_t seq_number);
 

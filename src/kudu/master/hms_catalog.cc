@@ -26,6 +26,7 @@
 #include <rapidjson/document.h>
 
 #include "kudu/gutil/strings/charset.h"
+#include "kudu/gutil/strings/substitute.h"
 #include "kudu/hms/hive_metastore_constants.h"
 #include "kudu/hms/hms_client.h"
 #include "kudu/master/catalog_manager.h"
@@ -34,6 +35,12 @@
 #include "kudu/util/flag_tags.h"
 #include "kudu/util/net/net_util.h"
 
+DEFINE_int32(hms_poll_period_ms, 1000,
+             "Amount of time the HMS catalog background task thread waits "
+             "between polling the Hive Metastore for catalog updates.");
+TAG_FLAG(hms_poll_period_ms, evolving);
+TAG_FLAG(hms_poll_period_ms, advanced);
+
 using boost::optional;
 using rapidjson::Document;
 using rapidjson::Value;
@@ -41,12 +48,14 @@ using std::deque;
 using std::string;
 using std::vector;
 using strings::CharSet;
+using strings::Substitute;
 
 namespace kudu {
 namespace master {
 
-HmsCatalog::HmsCatalog(vector<HostPort> addresses)
+HmsCatalog::HmsCatalog(vector<HostPort> addresses, CatalogManager* catalog_manager)
     : addresses_(std::move(addresses)),
+      catalog_manager_(catalog_manager),
       cond_(&lock_),
       running_(false) {
   CHECK(!addresses_.empty());
@@ -255,14 +264,32 @@ void HmsCatalog::Reset(const Status& s) {
 }
 
 void HmsCatalog::Run() {
+
+  int64_t last_event_id;
+  {
+    Status s = catalog_manager_->sys_catalog()->GetNotificationLogEventId(&last_event_id);
+    WARN_NOT_OK(s, "failed to get current notification log event ID");
+    if (!s.ok()) {
+      Reset(s);
+    }
+  }
+
+  // Set the initial poll time in the past so that the initial turn of the loop
+  // below does not wait.
+  MonoTime last_poll = MonoTime::Min();
+
   int consecutive_errors = 0;
+outer_loop:
   while (running_) {
 
-    // Wait for RPCs to be ready to send.
-    {
+    // If there are no queued RPCs, and we are not ready to poll the
+    // HMS again, wait until the next poll time.
+    MonoTime now = MonoTime::Now();
+    MonoTime next_poll = last_poll + MonoDelta::FromMilliseconds(FLAGS_hms_poll_period_ms);
+    if (now.ComesBefore(next_poll)) {
       MutexLock lock(lock_);
       if (rpc_queue_.empty()) {
-        cond_.Wait();
+        cond_.TimedWait(next_poll - now);
       }
     }
 
@@ -276,16 +303,16 @@ void HmsCatalog::Run() {
         Reset(s);
 
         MutexLock lock(lock_);
-        if (!rpc_queue_.empty()) {
+        if (rpc_queue_.empty()) {
           // More RPCs have been queued since we reset the queue. Immediately
           // reenter the loop in order to service them.
           continue;
         }
 
-        // Backoff so that we don't attempt to connect to the HMS in a hot loop
-        // when it's unreachable. We'll automatically be woken up if an RPC is
-        // enqueued, so we can afford long backoffs.
-        int wait = 1000 * std::min(consecutive_errors, 60);
+        // Backoff so that we don't attempt to connect to the HMS with every
+        // single poll period when it's unreachable. We'll automatically be
+        // woken up if an RPC is enqueued, so we can afford long backoffs.
+        int wait = FLAGS_hms_poll_period_ms * std::min(consecutive_errors, 60);
         cond_.TimedWait(MonoDelta::FromMilliseconds(wait));
       }
     }
@@ -309,9 +336,196 @@ void HmsCatalog::Run() {
         break;
       }
     }
+
+    if (next_poll.ComesBefore(MonoTime::Now())) {
+      last_poll = MonoTime::Now();
+
+      CatalogManager::ScopedLeaderSharedLock l(catalog_manager_);
+      if (!l.first_failed_status().ok()) {
+        VLOG(1) << "Catalog manager not leader; skipping notification log retrieval: "
+                << l.first_failed_status().ToString();
+        continue;
+      }
+
+      const int kEventBatchSize = 100;
+      vector<hive::NotificationEvent> events;
+      while (true) {
+        events.clear();
+        Status s = client_->GetNotificationEvents(last_event_id, kEventBatchSize, &events);
+
+        WARN_NOT_OK(s, "failed to retrieve notification log events");
+        if (!s.ok()) {
+          // If it's an IO error, assume the connection is toast.
+          if (s.IsIOError()) client_ = boost::none;
+          LOG(WARNING) << "Failed to retrieve notification log events: " << s.ToString();
+          continue;
+        }
+
+        for (const auto& event : events) {
+          VLOG(2) << "Received notification log event: " << event;
+
+          if (event.eventId <= last_event_id) {
+            LOG(DFATAL) << "Received notification log event with invalid event ID: " << event;
+            continue;
+          }
+
+          Status s;
+          if (event.eventType == "ALTER_TABLE") {
+            s = HandleAlterTableEvent(event);
+          } else if (event.eventType == "DROP_TABLE") {
+            s = HandleDropTableEvent(event);
+          }
+
+          if (!s.ok()) {
+            if (l.has_term_changed()) {
+              LOG(INFO) << "Term changed while processing notification log; "
+                           "skipping remaining entries: "
+                        << s.ToString();
+              goto outer_loop;
+            }
+
+            string table_name = Substitute("$0.$1", event.dbName, event.tableName);
+            if (s.IsNotFound()) {
+              // This happens for every rename/drop table event that originates
+              // in Kudu, so it's too noisy to log at INFO level.
+              VLOG(1) << "Ignoring " << event.eventType
+                      << " notification log event for unknown table: " << table_name;
+            } else {
+              LOG(DFATAL) << "Failed to handle " << event.eventType
+                          << " event for " << table_name << ": " << s.ToString();
+            }
+          }
+
+          last_event_id = event.eventId;
+        }
+
+        // If the last set of events was smaller than the batch size then we can
+        // assume that we've read all of the available events.
+        if (events.size() < kEventBatchSize) break;
+      }
+    }
   }
 
   Reset(Status::ServiceUnavailable("HMS Catalog shutting down"));
+}
+
+Status HmsCatalog::HandleAlterTableEvent(const hive::NotificationEvent& event) {
+  Document document;
+
+  const char* kBeforeTableJsonKey = "tableObjBeforeJson";
+  const char* kAfterTableJsonKey = "tableObjAfterJson";
+
+  // Note: if the table name is being altered, this will be the new table name.
+  string table_name = Substitute("$0.$1", event.dbName, event.tableName);
+
+  Document doc;
+
+  if (event.messageFormat != "json-0.2" ||
+      document.Parse<0>(event.message.c_str()).HasParseError() ||
+      !document.HasMember(kBeforeTableJsonKey) ||
+      !document[kBeforeTableJsonKey].IsString() ||
+      !document.HasMember(kAfterTableJsonKey) ||
+      !document[kAfterTableJsonKey].IsString()) {
+    return Status::Corruption("invalid Hive Metastore event", table_name);
+  }
+
+  hive::Table before_table;
+  const Value& beforeTableObjJson = document[kBeforeTableJsonKey];
+  RETURN_NOT_OK(hms::HmsClient::DeserializeJsonTable(Slice(beforeTableObjJson.GetString(),
+                                                           beforeTableObjJson.GetStringLength()),
+                                                     &before_table));
+
+  const string* storage_handler =
+      FindOrNull(before_table.parameters, hive::g_hive_metastore_constants.META_TABLE_STORAGE);
+  if (!storage_handler || *storage_handler != hms::HmsClient::kKuduStorageHandler) {
+    // Not a Kudu table; skip it.
+    return Status::OK();
+  }
+
+  hive::Table after_table;
+  const Value& afterTableObjJson = document[kAfterTableJsonKey];
+  RETURN_NOT_OK(hms::HmsClient::DeserializeJsonTable(Slice(afterTableObjJson.GetString(),
+                                                           afterTableObjJson.GetStringLength()),
+                                                     &after_table));
+
+  // Double check that the Kudu HMS plugin is enforcing storage handler and
+  // table ID constraints correctly.
+  const string* after_storage_handler =
+      FindOrNull(before_table.parameters, hive::g_hive_metastore_constants.META_TABLE_STORAGE);
+  if (!after_storage_handler || *after_storage_handler != *storage_handler) {
+    return Status::IllegalState("Hive Metastore storage handler property altered", table_name);
+  }
+  const string* table_id = FindOrNull(before_table.parameters, hms::HmsClient::kKuduTableIdKey);
+  if (!table_id) {
+    return Status::Corruption("invalid Hive Metastore table: missing Kudu table ID", table_name);
+  }
+  const string* after_table_id = FindOrNull(after_table.parameters,
+                                            hms::HmsClient::kKuduTableIdKey);
+  if (!after_table_id || *after_table_id != *table_id) {
+    return Status::Corruption("Hive Metastore table ID property altered", table_name);
+  }
+
+  // Check if the table has been renamed, and if so, attempt to rename it in Kudu.
+  if (before_table.dbName != after_table.dbName ||
+      before_table.tableName != after_table.tableName) {
+    string before_table_name = Substitute("$0.$1", before_table.dbName, before_table.tableName);
+    string after_table_name = Substitute("$0.$1", after_table.dbName, after_table.tableName);
+
+    AlterTableRequestPB req;
+    AlterTableResponsePB resp;
+    req.mutable_table()->set_table_id(*table_id);
+    req.mutable_table()->set_table_name(before_table_name);
+    *req.mutable_new_table_name() = after_table_name;
+
+    return catalog_manager_->AlterTable(&req, &resp, nullptr, event.eventId);
+  }
+
+  return Status::OK();
+}
+
+Status HmsCatalog::HandleDropTableEvent(const hive::NotificationEvent& event) {
+  Document document;
+  const char* kTableJsonKey = "tableObjJson";
+
+  string table_name = Substitute("$0.$1", event.dbName, event.tableName);
+
+  Document doc;
+  CHECK_EQ(event.messageFormat, "json-0.2");
+  CHECK(!doc.Parse<0>(event.message.c_str()).HasParseError());
+  CHECK(doc.HasMember(kTableJsonKey)) << event;
+  CHECK(doc[kTableJsonKey].IsString());
+
+  if (event.messageFormat != "json-0.2" ||
+      document.Parse<0>(event.message.c_str()).HasParseError() ||
+      !document.HasMember(kTableJsonKey) ||
+      !document[kTableJsonKey].IsString()) {
+    return Status::Corruption("invalid Hive Metastore event", table_name);
+  }
+
+  hive::Table table;
+  const Value& tableObjJson = document[kTableJsonKey];
+  RETURN_NOT_OK(hms::HmsClient::DeserializeJsonTable(Slice(tableObjJson.GetString(),
+                                                           tableObjJson.GetStringLength()),
+                                                     &table));
+
+  const string* storage_handler =
+      FindOrNull(table.parameters, hive::g_hive_metastore_constants.META_TABLE_STORAGE);
+  if (!storage_handler || *storage_handler != hms::HmsClient::kKuduStorageHandler) {
+    // Not a Kudu table; skip it.
+    return Status::OK();
+  }
+
+  const string* table_id = FindOrNull(table.parameters, hms::HmsClient::kKuduTableIdKey);
+  if (!table_id) {
+    return Status::Corruption("invalid Hive Metastore table: missing Kudu table ID", table_name);
+  }
+
+  DeleteTableRequestPB req;
+  DeleteTableResponsePB resp;
+  req.mutable_table()->set_table_id(*table_id);
+  req.mutable_table()->set_table_name(table_name);
+
+  return catalog_manager_->DeleteTable(&req, &resp, nullptr, event.eventId);
 }
 
 } // namespace master

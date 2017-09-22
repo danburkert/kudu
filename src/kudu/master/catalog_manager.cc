@@ -632,7 +632,7 @@ CatalogManager::CatalogManager(Master *master)
   if (!FLAGS_hive_metastore_addresses.empty()) {
     vector<HostPort> addresses;
     CHECK_OK(HostPort::ParseStrings(FLAGS_hive_metastore_addresses, 9083, &addresses));
-    hms_catalog_.reset(new HmsCatalog(std::move(addresses)));
+    hms_catalog_.reset(new HmsCatalog(std::move(addresses), this));
   }
 }
 
@@ -1572,7 +1572,8 @@ Status CatalogManager::FindAndLockTable(const TableIdentifierPB& table_identifie
 
 Status CatalogManager::DeleteTable(const DeleteTableRequestPB* req,
                                    DeleteTableResponsePB* resp,
-                                   rpc::RpcContext* rpc) {
+                                   rpc::RpcContext* rpc,
+                                   boost::optional<int64_t> notification_log_event_id) {
   leader_lock_.AssertAcquiredForReading();
   RETURN_NOT_OK(CheckOnline());
 
@@ -1595,7 +1596,10 @@ Status CatalogManager::DeleteTable(const DeleteTableRequestPB* req,
     return s;
   }
 
-  if (hms_catalog_) {
+  SysCatalogTable::Actions actions;
+  if (notification_log_event_id) {
+    actions.hms_notification_log_event_id = notification_log_event_id;
+  } else if (hms_catalog_) {
     Status s = hms_catalog_->DropTable(table->id(), l.data().name());
     if (!s.ok() || !s.IsNotFound()) {
       SetupError(resp->mutable_error(), MasterErrorPB::HIVE_METASTORE_ERROR, s);
@@ -1623,7 +1627,6 @@ Status CatalogManager::DeleteTable(const DeleteTableRequestPB* req,
 
     // 3. Update sys-catalog with the removed table and tablet state.
     TRACE("Removing table and tablets from system table");
-    SysCatalogTable::Actions actions;
     actions.table_to_update = table;
     actions.tablets_to_update.assign(tablets.begin(), tablets.end());
     Status s = sys_catalog_->Write(actions);
@@ -1920,7 +1923,8 @@ Status CatalogManager::ApplyAlterPartitioningSteps(
 
 Status CatalogManager::AlterTable(const AlterTableRequestPB* req,
                                   AlterTableResponsePB* resp,
-                                  rpc::RpcContext* rpc) {
+                                  rpc::RpcContext* rpc,
+                                  boost::optional<int64_t> notification_log_event_id) {
   leader_lock_.AssertAcquiredForReading();
   RETURN_NOT_OK(CheckOnline());
 
@@ -2087,7 +2091,10 @@ Status CatalogManager::AlterTable(const AlterTableRequestPB* req,
                                            LocalTimeAsString()));
   }
 
-  if (hms_catalog_) {
+  SysCatalogTable::Actions actions;
+  if (notification_log_event_id) {
+    actions.hms_notification_log_event_id = notification_log_event_id;
+  } else if (hms_catalog_) {
     const string& new_name = req->has_new_table_name() ? req->new_table_name() : table_name;
     Status s = hms_catalog_->AlterTable(table->id(), table_name, new_name, new_schema);
 
@@ -2100,7 +2107,6 @@ Status CatalogManager::AlterTable(const AlterTableRequestPB* req,
   // 7. Update sys-catalog with the new table schema and tablets to add/drop.
   TRACE("Updating metadata on disk");
   string deletion_msg = "Partition dropped at " + LocalTimeAsString();
-  SysCatalogTable::Actions actions;
   if (!tablets_to_add.empty() || has_metadata_changes) {
     // If anything modified the table's persistent metadata, then sync it to the sys catalog.
     actions.table_to_update = table;

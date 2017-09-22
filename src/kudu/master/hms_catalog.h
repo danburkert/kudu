@@ -51,7 +51,7 @@ struct Rpc {
 class HmsCatalog {
  public:
 
-  explicit HmsCatalog(std::vector<HostPort> addresses);
+  HmsCatalog(std::vector<HostPort> addresses, CatalogManager* catalog_manager);
   ~HmsCatalog();
 
   Status Start();
@@ -85,7 +85,11 @@ class HmsCatalog {
 
   void Run();
 
+  Status HandleAlterTableEvent(const hive::NotificationEvent& event) WARN_UNUSED_RESULT;
+  Status HandleDropTableEvent(const hive::NotificationEvent& event) WARN_UNUSED_RESULT;
+
   const std::vector<HostPort> addresses_;
+  CatalogManager* const catalog_manager_;
 
   // Only mutated by the worker thread.
   boost::optional<hms::HmsClient> client_;
