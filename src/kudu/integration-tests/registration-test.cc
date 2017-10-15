@@ -268,12 +268,19 @@ TEST_F(RegistrationTest, TestTabletReports) {
         sys_catalog()->tablet_replica()->tablet()->GetMetricEntity();
     return prototype.Instantiate(metrics)->value();
   };
+
+  ASSERT_OK(cluster_->mini_master()
+                    ->master()
+                    ->WaitUntilCatalogManagerIsLeaderAndReadyForTests(MonoDelta::FromSeconds(10)));
+
   const int startup_rows_inserted = GetCatalogMetric(METRIC_rows_inserted);
 
   // Add a table, make sure it reports itself.
   string tablet_id_1;
-  NO_FATALS(CreateTableForTesting(
-      cluster_->mini_master(), "tablet-reports-1", schema_, &tablet_id_1));
+  NO_FATALS(CreateTableForTesting(cluster_->mini_master(),
+                                  "tablet-reports-1",
+                                  schema_,
+                                  &tablet_id_1));
   TabletLocationsPB locs_1;
   ASSERT_OK(WaitForReplicaCount(tablet_id_1, 1, &locs_1));
   ASSERT_EQ(1, locs_1.replicas_size());
