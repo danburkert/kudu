@@ -246,6 +246,11 @@ Status ServerBase::Init() {
          .set_max_negotiation_threads(FLAGS_max_negotiation_threads)
          .set_metric_entity(metric_entity())
          .enable_inbound_tls();
+
+  if (options_.rpc_opts.rpc_reuseport) {
+    builder.set_reuseport();
+  }
+
   RETURN_NOT_OK(builder.Build(&messenger_));
 
   RETURN_NOT_OK(rpc_server_->Init(messenger_));

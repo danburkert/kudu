@@ -277,6 +277,11 @@ MessengerBuilder& MessengerBuilder::enable_inbound_tls() {
   return *this;
 }
 
+MessengerBuilder& MessengerBuilder::set_reuseport() {
+  reuseport_ = true;
+  return *this;
+}
+
 Status MessengerBuilder::Build(shared_ptr<Messenger> *msgr) {
   RETURN_NOT_OK(SaslInit()); // Initialize SASL library before we start making requests
 
@@ -409,6 +414,9 @@ Status Messenger::AddAcceptorPool(const Sockaddr &accept_addr,
   Socket sock;
   RETURN_NOT_OK(sock.Init(0));
   RETURN_NOT_OK(sock.SetReuseAddr(true));
+  if (reuseport_) {
+    RETURN_NOT_OK(sock.SetReusePort(true));
+  }
   RETURN_NOT_OK(sock.Bind(accept_addr));
   Sockaddr remote;
   RETURN_NOT_OK(sock.GetSocketAddress(&remote));
@@ -498,6 +506,7 @@ Messenger::Messenger(const MessengerBuilder &bld)
     rpcz_store_(new RpczStore()),
     metric_entity_(bld.metric_entity_),
     sasl_proto_name_(bld.sasl_proto_name_),
+    reuseport_(bld.reuseport_),
     retain_self_(this) {
   for (int i = 0; i < bld.num_reactors_; i++) {
     reactors_.push_back(new Reactor(retain_self_, i, bld));

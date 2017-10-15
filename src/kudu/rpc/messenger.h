@@ -127,6 +127,9 @@ class MessengerBuilder {
   // Configure the messenger to enable TLS encryption on inbound connections.
   MessengerBuilder& enable_inbound_tls();
 
+  // Configure the messenger to set the SO_REUSEADDR socket option.
+  MessengerBuilder& set_reuseport();
+
   Status Build(std::shared_ptr<Messenger> *msgr);
 
  private:
@@ -139,6 +142,7 @@ class MessengerBuilder {
   scoped_refptr<MetricEntity> metric_entity_;
   std::string sasl_proto_name_;
   bool enable_inbound_tls_;
+  bool reuseport_;
 };
 
 // A Messenger is a container for the reactor threads which run event loops
@@ -340,6 +344,9 @@ class Messenger {
 
   // The SASL protocol name that is used for the SASL negotiation.
   const std::string sasl_proto_name_;
+
+  // Whether to set SO_REUSEPORT on the listening sockets.
+  bool reuseport_;
 
   // The ownership of the Messenger object is somewhat subtle. The pointer graph
   // looks like this:

@@ -259,6 +259,17 @@ Status Socket::SetReuseAddr(bool flag) {
   return Status::OK();
 }
 
+Status Socket::SetReusePort(bool flag) {
+  int err;
+  int int_flag = flag ? 1 : 0;
+  if (setsockopt(fd_, SOL_SOCKET, SO_REUSEPORT, &int_flag, sizeof(int_flag)) == -1) {
+    err = errno;
+    return Status::NetworkError(std::string("failed to set SO_REUSEPORT: ") +
+                                ErrnoToString(err), Slice(), err);
+  }
+  return Status::OK();
+}
+
 Status Socket::BindAndListen(const Sockaddr &sockaddr,
                              int listen_queue_size) {
   RETURN_NOT_OK(SetReuseAddr(true));
