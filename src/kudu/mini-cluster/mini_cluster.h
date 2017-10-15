@@ -27,6 +27,7 @@
 namespace kudu {
 
 class HostPort;
+class Socket;
 
 namespace client {
 class KuduClient;

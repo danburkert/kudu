@@ -47,8 +47,7 @@ TEST_F(KuduTest, TestWebUIDoesNotCrashCluster) {
   const int kNumTablets = 50;
 
   ExternalMiniClusterOptions opts;
-  opts.master_rpc_ports = { 11010, 11011, 11012 };
-  opts.num_masters = opts.master_rpc_ports.size();
+  opts.num_masters = 3;
 
   ExternalMiniCluster cluster(opts);
   ASSERT_OK(cluster.Start());

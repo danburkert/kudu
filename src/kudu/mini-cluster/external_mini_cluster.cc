@@ -182,17 +182,10 @@ Status ExternalMiniCluster::Start() {
                           "could not set krb5 client env");
   }
 
-  if (opts_.num_masters != 1) {
-    RETURN_NOT_OK_PREPEND(StartDistributedMasters(),
-                          "Failed to add distributed masters");
-  } else {
-    RETURN_NOT_OK_PREPEND(StartSingleMaster(),
-                          Substitute("Failed to start a single Master"));
-  }
+  RETURN_NOT_OK_PREPEND(StartMasters(), "failed to start masters");
 
   for (int i = 1; i <= opts_.num_tablet_servers; i++) {
-    RETURN_NOT_OK_PREPEND(AddTabletServer(),
-                          Substitute("Failed starting tablet server $0", i));
+    RETURN_NOT_OK_PREPEND(AddTabletServer(), Substitute("failed starting tablet server $0", i));
   }
   RETURN_NOT_OK(WaitForTabletServerCount(
                   opts_.num_tablet_servers,
@@ -289,8 +282,7 @@ string ExternalMiniCluster::GetWalPath(const string& daemon_id) const {
 }
 
 namespace {
-vector<string> SubstituteInFlags(const vector<string>& orig_flags,
-                                 int index) {
+vector<string> SubstituteInFlags(const vector<string>& orig_flags, int index) {
   string str_index = strings::Substitute("$0", index);
   vector<string> ret;
   for (const string& orig : orig_flags) {
@@ -298,54 +290,36 @@ vector<string> SubstituteInFlags(const vector<string>& orig_flags,
   }
   return ret;
 }
-
 } // anonymous namespace
 
-Status ExternalMiniCluster::StartSingleMaster() {
-  string daemon_id = "master-0";
-
-  ExternalDaemonOptions opts;
-  opts.messenger = messenger_;
-  opts.exe = GetBinaryPath(kMasterBinaryName);
-  opts.wal_dir = GetWalPath(daemon_id);
-  opts.data_dirs = GetDataPaths(daemon_id);
-  opts.log_dir = GetLogPath(daemon_id);
-  opts.block_manager_type = opts_.block_manager_type;
-  if (FLAGS_perf_record) {
-    opts.perf_record_filename =
-        Substitute("$0/perf-$1.data", opts.log_dir, daemon_id);
-  }
-  opts.extra_flags = SubstituteInFlags(opts_.extra_master_flags, 0);
-  opts.start_process_timeout = opts_.start_process_timeout;
-  opts.logtostderr = opts_.logtostderr;
-
-  opts.rpc_bind_address = HostPort(GetBindIpForMaster(0), 0);
-  scoped_refptr<ExternalMaster> master = new ExternalMaster(opts);
-  if (opts_.enable_kerberos) {
-    // The bind host here is the hostname that will be used to generate the
-    // Kerberos principal, so it has to match the bind address for the master
-    // rpc endpoint.
-    RETURN_NOT_OK_PREPEND(master->EnableKerberos(kdc_.get(), opts.rpc_bind_address.host()),
-                          "could not enable Kerberos");
-  }
-
-  RETURN_NOT_OK(master->Start());
-  masters_.push_back(master);
-  return Status::OK();
-}
-
-Status ExternalMiniCluster::StartDistributedMasters() {
+Status ExternalMiniCluster::StartMasters() {
   int num_masters = opts_.num_masters;
 
-  if (opts_.master_rpc_ports.size() != num_masters) {
-    LOG(FATAL) << num_masters << " masters requested, but only " <<
-        opts_.master_rpc_ports.size() << " ports specified in 'master_rpc_ports'";
+  vector<HostPort> master_rpc_addrs;
+
+  for (int i = 0; i < num_masters; i++) {
+    string ip = GetBindIpForMaster(i);
+    Sockaddr bind_addr;
+    RETURN_NOT_OK(bind_addr.ParseString(ip, 0));
+
+    unique_ptr<Socket> socket(new Socket());
+    RETURN_NOT_OK(socket->Init(0));
+    RETURN_NOT_OK(socket->SetReusePort(true));
+    RETURN_NOT_OK(socket->SetReuseAddr(true));
+    RETURN_NOT_OK(socket->Bind(bind_addr));
+
+    Sockaddr addr;
+    RETURN_NOT_OK(socket->GetSocketAddress(&addr));
+    master_rpc_addrs.emplace_back(ip, addr.port());
+    reserved_sockets_.emplace_back(std::move(socket));
   }
 
-  vector<HostPort> peer_hostports = master_rpc_addrs();
   vector<string> flags = opts_.extra_master_flags;
-  flags.push_back(Substitute("--master_addresses=$0",
-                             HostPort::ToCommaSeparatedString(peer_hostports)));
+  flags.push_back("--rpc_reuseport=true");
+  if (num_masters > 1) {
+    flags.push_back(Substitute("--master_addresses=$0",
+                               HostPort::ToCommaSeparatedString(master_rpc_addrs)));
+  }
   string exe = GetBinaryPath(kMasterBinaryName);
 
   // Start the masters.
@@ -365,12 +339,12 @@ Status ExternalMiniCluster::StartDistributedMasters() {
     }
     opts.extra_flags = SubstituteInFlags(flags, i);
     opts.start_process_timeout = opts_.start_process_timeout;
-    opts.rpc_bind_address = peer_hostports[i];
+    opts.rpc_bind_address = master_rpc_addrs[i];
     opts.logtostderr = opts_.logtostderr;
 
     scoped_refptr<ExternalMaster> peer = new ExternalMaster(opts);
     if (opts_.enable_kerberos) {
-      RETURN_NOT_OK_PREPEND(peer->EnableKerberos(kdc_.get(), peer_hostports[i].host()),
+      RETURN_NOT_OK_PREPEND(peer->EnableKerberos(kdc_.get(), master_rpc_addrs[i].host()),
                             "could not enable Kerberos");
     }
     RETURN_NOT_OK_PREPEND(peer->Start(),
@@ -396,10 +370,7 @@ Status ExternalMiniCluster::AddTabletServer() {
   int idx = tablet_servers_.size();
   string daemon_id = Substitute("ts-$0", idx);
 
-  vector<HostPort> master_hostports;
-  for (int i = 0; i < num_masters(); i++) {
-    master_hostports.push_back(DCHECK_NOTNULL(master(i))->bound_rpc_hostport());
-  }
+  vector<HostPort> master_hostports = master_rpc_addrs();
   string bind_host = GetBindIpForTabletServer(idx);
 
   ExternalDaemonOptions opts;
@@ -605,13 +576,11 @@ vector<ExternalDaemon*> ExternalMiniCluster::daemons() const {
 }
 
 vector<HostPort> ExternalMiniCluster::master_rpc_addrs() const {
-  vector<HostPort> master_rpc_addrs;
-  for (int i = 0; i < opts_.master_rpc_ports.size(); i++) {
-    master_rpc_addrs.emplace_back(
-        GetBindIpForDaemon(MiniCluster::MASTER, i, opts_.bind_mode),
-        opts_.master_rpc_ports[i]);
+  vector<HostPort> master_hostports;
+  for (int i = 0; i < num_masters(); i++) {
+    master_hostports.push_back(DCHECK_NOTNULL(master(i))->bound_rpc_hostport());
   }
-  return master_rpc_addrs;
+  return master_hostports;
 }
 
 std::shared_ptr<rpc::Messenger> ExternalMiniCluster::messenger() const {

@@ -107,7 +107,6 @@ static Status CreateTable(ExternalMiniCluster* cluster,
 
 // Tests migration of a deployment from one master to multiple masters.
 TEST_F(MasterMigrationTest, TestEndToEndMigration) {
-  const vector<uint16_t> kMasterRpcPorts = { 11010, 11011, 11012 };
   const string kTableName = "test";
   const string kBinPath = cluster_->GetBinaryPath("kudu");
 
@@ -118,10 +117,11 @@ TEST_F(MasterMigrationTest, TestEndToEndMigration) {
   // List of every master's UUID and port. Used when rewriting the single
   // master's cmeta.
   vector<pair<string, uint64_t>> master_uuids_and_ports;
-  master_uuids_and_ports.emplace_back(cluster_->master()->uuid(), kMasterRpcPorts[0]);
+  master_uuids_and_ports.emplace_back(cluster_->master()->uuid(),
+                                      cluster_->master_rpc_addrs()[0].port());
 
   // Format a filesystem tree for each of the new masters and get the uuids.
-  for (int i = 1; i < kMasterRpcPorts.size(); i++) {
+  for (int i = 1; i < cluster_->num_masters(); i++) {
     string data_root = cluster_->GetDataPath(Substitute("master-$0", i));
     string wal_dir = cluster_->GetWalPath(Substitute("master-$0", i));
     ASSERT_OK(env_->CreateDir(DirName(data_root)));
@@ -148,7 +148,7 @@ TEST_F(MasterMigrationTest, TestEndToEndMigration) {
       string uuid;
       ASSERT_OK(Subprocess::Call(args, "", &uuid));
       StripWhiteSpace(&uuid);
-      master_uuids_and_ports.emplace_back(uuid, kMasterRpcPorts[i]);
+      master_uuids_and_ports.emplace_back(uuid, cluster_->master_rpc_addrs()[i].port());
     }
   }
 
@@ -181,7 +181,7 @@ TEST_F(MasterMigrationTest, TestEndToEndMigration) {
 
   // Use remote bootstrap to copy the master tablet to each of the new masters'
   // filesystems.
-  for (int i = 1; i < kMasterRpcPorts.size(); i++) {
+  for (int i = 1; i < cluster_->num_masters(); i++) {
     string data_root = cluster_->GetDataPath(Substitute("master-$0", i));
     string wal_dir = cluster_->GetWalPath(Substitute("master-$0", i));
     vector<string> args = {
@@ -201,8 +201,7 @@ TEST_F(MasterMigrationTest, TestEndToEndMigration) {
   ExternalMiniClusterOptions opts;
   // Required since we use 127.0.0.1 in the config above.
   opts.bind_mode = cluster::MiniCluster::LOOPBACK;
-  opts.master_rpc_ports = kMasterRpcPorts;
-  opts.num_masters = kMasterRpcPorts.size();
+  opts.num_masters = 3;
   ExternalMiniCluster migrated_cluster(std::move(opts));
   ASSERT_OK(migrated_cluster.Start());
 

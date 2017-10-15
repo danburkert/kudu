@@ -32,6 +32,7 @@ namespace kudu {
 
 class Env;
 class HostPort;
+class Socket;
 class Status;
 
 namespace client {
@@ -77,12 +78,6 @@ struct InternalMiniClusterOptions {
 
   MiniCluster::BindMode bind_mode;
 
-  // List of RPC ports for the master to run on.
-  // Defaults to an empty list.
-  // In single-master mode, an empty list implies port 0 (transient port).
-  // In multi-master mode, an empty list is illegal and will result in a CHECK failure.
-  std::vector<uint16_t> master_rpc_ports;
-
   // List of RPC ports for the tservers to run on.
   // Defaults to an empty list.
   // When adding a tablet server to the cluster via AddTabletServer(), if the
@@ -109,10 +104,8 @@ class InternalMiniCluster : public MiniCluster {
 
   void ShutdownNodes(ClusterNodes nodes) override;
 
-  // Setup a consensus configuration of distributed masters, with count specified in
-  // 'options'. Requires that a reserve RPC port is specified in
-  // 'options' for each master.
-  Status StartDistributedMasters();
+  // Creates and starts the cluster masters.
+  Status StartMasters();
 
   // Add a new standalone master to the cluster. The new master is started.
   Status StartSingleMaster();
@@ -149,9 +142,7 @@ class InternalMiniCluster : public MiniCluster {
     return opts_.bind_mode;
   }
 
-  std::vector<uint16_t> master_rpc_ports() const override {
-    return opts_.master_rpc_ports;
-  }
+  std::vector<uint16_t> master_rpc_ports() const override;
 
   std::vector<HostPort> master_rpc_addrs() const override;
 
@@ -210,10 +201,17 @@ class InternalMiniCluster : public MiniCluster {
 
   bool running_;
 
-  std::vector<std::shared_ptr<master::MiniMaster> > mini_masters_;
-  std::vector<std::shared_ptr<tserver::MiniTabletServer> > mini_tablet_servers_;
+  std::vector<std::shared_ptr<master::MiniMaster>> mini_masters_;
+  std::vector<std::shared_ptr<tserver::MiniTabletServer>> mini_tablet_servers_;
 
   std::shared_ptr<rpc::Messenger> messenger_;
+
+  std::vector<HostPort> master_rpc_addrs_;
+
+  // Set of sockets which have been reserved for use by child daemons. These
+  // sockets are bound with SO_REUSEPORT so that the child daemon can re-use
+  // them.
+  std::vector<std::unique_ptr<Socket>> reserved_sockets_;
 
   DISALLOW_COPY_AND_ASSIGN(InternalMiniCluster);
 };

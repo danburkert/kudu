@@ -76,8 +76,7 @@ class MasterFailoverTest : public KuduTest {
   };
 
   MasterFailoverTest() {
-    opts_.master_rpc_ports = { 11010, 11011, 11012 };
-    opts_.num_masters = num_masters_ = opts_.master_rpc_ports.size();
+    opts_.num_masters = num_masters_ = 3;
     opts_.num_tablet_servers = kNumTabletServerReplicas;
 
     // Reduce various timeouts below as to make the detection of

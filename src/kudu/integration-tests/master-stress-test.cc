@@ -103,8 +103,7 @@ class MasterStressTest : public KuduTest {
     KuduTest::SetUp();
 
     ExternalMiniClusterOptions opts;
-    opts.master_rpc_ports = { 11010, 11011, 11012 };
-    opts.num_masters = opts.master_rpc_ports.size();
+    opts.num_masters = 3;
     opts.num_tablet_servers = 3;
 
     // Don't preallocate log segments, since we're creating many tablets here.
