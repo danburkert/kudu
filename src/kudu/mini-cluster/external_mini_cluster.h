@@ -35,6 +35,7 @@
 #include "kudu/gutil/macros.h"
 #include "kudu/gutil/port.h"
 #include "kudu/gutil/ref_counted.h"
+#include "kudu/hms/mini_hms.h"
 #include "kudu/mini-cluster/mini_cluster.h"
 #include "kudu/security/test/mini_kdc.h"
 #include "kudu/util/monotime.h"
@@ -133,6 +134,9 @@ struct ExternalMiniClusterOptions {
   //
   // Default: false.
   bool enable_kerberos;
+
+  // If true, set up a Hive Metastore as part of this ExternalMiniCluster.
+  bool enable_hive_metastore;
 
   // If true, sends logging output to stderr instead of a log file.
   //
@@ -234,6 +238,10 @@ class ExternalMiniCluster : public MiniCluster {
 
   MiniKdc* kdc() const {
     return kdc_.get();
+  }
+
+  hms::MiniHms* hms() const {
+    return hms_.get();
   }
 
   const std::string& data_root() const {
@@ -345,6 +353,7 @@ class ExternalMiniCluster : public MiniCluster {
   std::vector<scoped_refptr<ExternalMaster> > masters_;
   std::vector<scoped_refptr<ExternalTabletServer> > tablet_servers_;
   std::unique_ptr<MiniKdc> kdc_;
+  std::unique_ptr<hms::MiniHms> hms_;
 
   std::shared_ptr<rpc::Messenger> messenger_;
 
