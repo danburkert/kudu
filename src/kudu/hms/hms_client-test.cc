@@ -22,16 +22,19 @@
 #include <utility>
 #include <vector>
 
+#include <boost/optional/optional.hpp>
 #include <glog/stl_logging.h> // IWYU pragma: keep
 #include <gtest/gtest.h>
 
 #include "kudu/hms/hive_metastore_constants.h"
 #include "kudu/hms/hive_metastore_types.h"
 #include "kudu/hms/mini_hms.h"
+#include "kudu/security/test/mini_kdc.h"
 #include "kudu/util/status.h"
 #include "kudu/util/test_macros.h"
 #include "kudu/util/test_util.h"
 
+using boost::optional;
 using std::make_pair;
 using std::string;
 using std::vector;
@@ -39,7 +42,8 @@ using std::vector;
 namespace kudu {
 namespace hms {
 
-class HmsClientTest : public KuduTest {
+class HmsClientTest : public KuduTest,
+                      public ::testing::WithParamInterface<optional<Protection>> {
  public:
 
   Status CreateTable(HmsClient* client,
@@ -71,11 +75,43 @@ class HmsClientTest : public KuduTest {
   }
 };
 
-TEST_F(HmsClientTest, TestHmsOperations) {
-  MiniHms hms;
-  ASSERT_OK(hms.Start());
+INSTANTIATE_TEST_CASE_P(ProtectionTypes,
+                        HmsClientTest,
+                        ::testing::Values(boost::none
+                                        , Protection::kIntegrity
+// On macos, krb5 has issues repeatedly spinning up new KDCs ('unable to reach
+// any KDC in realm KRBTEST.COM, tried 1 KDC'). Integrity protection gives us
+// good coverage, so we disable the other variants.
+#ifndef __APPLE__
+                                        , Protection::kAuthentication
+                                        , Protection::kPrivacy
+#endif
+                                          ));
 
-  HmsClient client(hms.address());
+TEST_P(HmsClientTest, TestHmsOperations) {
+  optional<Protection> protection = GetParam();
+  MiniKdc kdc;
+  MiniHms hms;
+
+  if (protection) {
+    ASSERT_OK(kdc.Start());
+
+    string spn = "hive/127.0.0.1";
+    string ktpath;
+    ASSERT_OK(kdc.CreateServiceKeytab(spn, &ktpath));
+
+    hms.EnableKerberos(kdc.GetEnvVars()["KRB5_CONFIG"],
+                       spn,
+                       ktpath,
+                       *protection);
+
+    ASSERT_OK(kdc.CreateUserPrincipal("alice"));
+    ASSERT_OK(kdc.Kinit("alice"));
+    ASSERT_OK(kdc.SetKrb5Environment());
+  }
+
+  ASSERT_OK(hms.Start());
+  HmsClient client(hms.address(), protection ? EnableKerberos::kTrue : EnableKerberos::kFalse);
   ASSERT_OK(client.Start());
 
   // Create a database.
@@ -123,7 +159,7 @@ TEST_F(HmsClientTest, TestHmsOperations) {
   hive::Table altered_table(my_table);
   altered_table.tableName = new_table_name;
   altered_table.parameters[HmsClient::kKuduTableIdKey] = "bogus-table-id";
-  ASSERT_TRUE(client.AlterTable(database_name, table_name, altered_table).IsRuntimeError());
+  ASSERT_TRUE(client.AlterTable(database_name, table_name, altered_table).IsRemoteError());
 
   // Rename the table.
   altered_table.parameters[HmsClient::kKuduTableIdKey] = table_id;
@@ -157,7 +193,7 @@ TEST_F(HmsClientTest, TestHmsOperations) {
       << "Tables: " << tables;
 
   // Check that the HMS rejects Kudu table drops with a bogus table ID.
-  ASSERT_TRUE(DropTable(&client, database_name, new_table_name, "bogus-table-id").IsRuntimeError());
+  ASSERT_TRUE(DropTable(&client, database_name, new_table_name, "bogus-table-id").IsRemoteError());
   // Check that the HMS rejects non-existent table drops.
   ASSERT_TRUE(DropTable(&client, database_name, "foo-bar", "bogus-table-id").IsNotFound());
 
@@ -196,7 +232,7 @@ TEST_F(HmsClientTest, TestHmsOperations) {
   ASSERT_OK(client.Stop());
 }
 
-TEST_F(HmsClientTest, TestDeserializeJsonTable) {
+TEST(HmsClientTest, TestDeserializeJsonTable) {
   string json = R"#({"1":{"str":"table_name"},"2":{"str":"database_name"}})#";
   hive::Table table;
   ASSERT_OK(HmsClient::DeserializeJsonTable(json, &table));

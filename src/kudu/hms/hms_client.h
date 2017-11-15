@@ -41,6 +41,12 @@ enum class Cascade {
   kFalse,
 };
 
+// Whether to use SASL Kerberos authentication when connecting to the HMS.
+enum class EnableKerberos {
+  kTrue,
+  kFalse,
+};
+
 // A client for the Hive MetaStore.
 //
 // All operations are synchronous, and may block.
@@ -66,7 +72,8 @@ class HmsClient {
   static const char* const kDbNotificationListener;
   static const char* const kKuduMetastorePlugin;
 
-  explicit HmsClient(const HostPort& hms_address);
+  explicit HmsClient(const HostPort& hms_address,
+                     EnableKerberos enable_kerberos = EnableKerberos::kFalse);
   ~HmsClient();
 
   // Starts the HMS client.

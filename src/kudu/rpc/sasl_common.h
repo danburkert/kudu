@@ -97,15 +97,37 @@ sasl_callback_t SaslBuildCallback(int id, int (*proc)(void), void* context);
 // initiating the SASL negotiation.
 Status EnableIntegrityProtection(sasl_conn_t* sasl_conn) WARN_UNUSED_RESULT;
 
-// Encode the provided data and append it to 'encoded'.
-Status SaslEncode(sasl_conn_t* conn,
-                  const std::string& plaintext,
-                  std::string* encoded) WARN_UNUSED_RESULT;
+// Allow integrity or confidentiality protection on the SASL connection. Should
+// be called before initiating the SASL negotiation.
+Status AllowProtection(sasl_conn_t* sasl_conn) WARN_UNUSED_RESULT;
 
-// Decode the provided SASL-encoded data and append it to 'plaintext'.
+// Returns true if the SASL connection has been negotiated with auth-int or
+// auth-conf. 'sasl_conn' must already be negotiated.
+bool NeedsWrap(sasl_conn_t* sasl_conn);
+
+// Retrieves the negotiated maximum buffer size for auth-int or auth-conf
+// protected channels.
+uint32_t GetMaxBufferSize(sasl_conn_t* sasl_conn) WARN_UNUSED_RESULT;
+
+// Encode the provided data.
+//
+// The ciphertext data must not be greater than the maximum buffer size.
+//
+// The output 'encoded' slice is only valid until the next use of the SASL
+// connection.
+Status SaslEncode(sasl_conn_t* conn,
+                  Slice plaintext,
+                  Slice* ciphertext) WARN_UNUSED_RESULT;
+
+// Decode the provided SASL-encoded data.
+//
+// The encoded data must not be greater than the maximum buffer size.
+//
+// The output 'plaintext' slice is only valid until the next use of the SASL
+// connection.
 Status SaslDecode(sasl_conn_t* conn,
-                  const std::string& encoded,
-                  std::string* plaintext) WARN_UNUSED_RESULT;
+                  Slice ciphertext,
+                  Slice* plaintext) WARN_UNUSED_RESULT;
 
 // Deleter for sasl_conn_t instances, for use with gscoped_ptr after calling sasl_*_new()
 struct SaslDeleter {

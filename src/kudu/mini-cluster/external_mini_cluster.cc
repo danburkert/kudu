@@ -180,6 +180,16 @@ Status ExternalMiniCluster::Start() {
 
   if (opts_.enable_hive_metastore) {
     hms_.reset(new hms::MiniHms());
+
+    if (opts_.enable_kerberos) {
+      string spn = "hive/_HOST";
+      string ktpath;
+      RETURN_NOT_OK_PREPEND(kdc_->CreateServiceKeytab(spn, &ktpath),
+                            "could not create keytab");
+      hms_->EnableKerberos(kdc_->GetEnvVars()["KRB5_CONFIG"], spn, ktpath,
+                           hms::Protection::kAuthentication);
+    }
+
     RETURN_NOT_OK_PREPEND(hms_->Start(),
                           "Failed to start the Hive Metastore");
   }

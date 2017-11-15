@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <ostream>
 #include <string>
 
 #include <glog/logging.h>
@@ -32,6 +33,22 @@
 namespace kudu {
 namespace hms {
 
+// The RPC protection configuration for a Kerberos-enabled HMS.
+enum class Protection {
+  kAuthentication,
+  kIntegrity,
+  kPrivacy,
+};
+
+std::ostream& operator<<(std::ostream& o, Protection p) {
+    switch (p) {
+      case Protection::kAuthentication: o << "authentication"; break;
+      case Protection::kIntegrity: o << "integrity"; break;
+      case Protection::kPrivacy: o << "privacy"; break;
+    }
+    return o;
+}
+
 class MiniHms {
  public:
 
@@ -43,6 +60,20 @@ class MiniHms {
   void SetNotificationLogTtl(MonoDelta ttl) {
     CHECK(hms_process_);
     notification_log_ttl_ = ttl;
+  }
+
+  // Configures the mini HMS to use Kerberos.
+  void EnableKerberos(std::string krb5_conf,
+                      std::string service_principal,
+                      std::string keytab_file,
+                      Protection protection) {
+    CHECK(!krb5_conf.empty());
+    CHECK(!service_principal.empty());
+    CHECK(!keytab_file.empty());
+    krb5_conf_ = std::move(krb5_conf);
+    service_principal_ = std::move(service_principal);
+    keytab_file_ = std::move(keytab_file);
+    protection_ = protection;
   }
 
   // Starts the mini Hive metastore.
@@ -59,12 +90,21 @@ class MiniHms {
   // Creates a hive-site.xml for the mini HMS.
   Status CreateHiveSite(const std::string& tmp_dir) const WARN_UNUSED_RESULT;
 
+  // Creates a core-site.xml for the mini HMS.
+  Status CreateCoreSite(const std::string& tmp_dir) const WARN_UNUSED_RESULT;
+
   // Waits for the metastore process to bind to a port.
   Status WaitForHmsPorts() WARN_UNUSED_RESULT;
 
   std::unique_ptr<Subprocess> hms_process_;
   MonoDelta notification_log_ttl_ = MonoDelta::FromSeconds(86400);
   uint16_t port_ = 0;
+
+  // Kerberos configuration
+  std::string krb5_conf_;
+  std::string service_principal_;
+  std::string keytab_file_;
+  Protection protection_ = Protection::kAuthentication;
 };
 
 } // namespace hms

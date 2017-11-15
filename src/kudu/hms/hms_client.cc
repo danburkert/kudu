@@ -36,6 +36,8 @@
 #include "kudu/gutil/strings/substitute.h"
 #include "kudu/hms/ThriftHiveMetastore.h"
 #include "kudu/hms/hive_metastore_constants.h"
+#include "kudu/hms/sasl_client_transport.h"
+#include "kudu/rpc/sasl_common.h"
 #include "kudu/util/net/net_util.h"
 #include "kudu/util/status.h"
 #include "kudu/util/stopwatch.h"
@@ -46,6 +48,8 @@ using apache::thrift::protocol::TJSONProtocol;
 using apache::thrift::transport::TBufferedTransport;
 using apache::thrift::transport::TMemoryBuffer;
 using apache::thrift::transport::TSocket;
+using apache::thrift::transport::TTransport;
+using apache::thrift::transport::TTransportException;
 using std::make_shared;
 using std::shared_ptr;
 using std::string;
@@ -73,9 +77,13 @@ namespace hms {
   } catch (const hive::InvalidOperationException& e) { \
     return Status::IllegalState((msg), e.what()); \
   } catch (const hive::MetaException& e) { \
-    return Status::RuntimeError((msg), e.what()); \
+    return Status::RemoteError((msg), e.what()); \
+  } catch (const SaslException& e) { \
+    return e.status().CloneAndPrepend((msg)); \
   } catch (const TException& e) { \
     return Status::IOError((msg), e.what()); \
+  } catch (const std::exception& e) { \
+    return Status::RuntimeError((msg), e.what()); \
   }
 
 const char* const HmsClient::kKuduTableIdKey = "kudu.table_id";
@@ -91,10 +99,19 @@ const char* const HmsClient::kKuduMetastorePlugin =
 
 const int kSlowExecutionWarningThresholdMs = 500;
 
-HmsClient::HmsClient(const HostPort& hms_address)
+HmsClient::HmsClient(const HostPort& hms_address, EnableKerberos enable_kerberos)
     : client_(nullptr) {
   auto socket = make_shared<TSocket>(hms_address.host(), hms_address.port());
-  auto transport = make_shared<TBufferedTransport>(std::move(socket));
+  shared_ptr<TTransport> transport;
+
+  if (enable_kerberos == EnableKerberos::kTrue) {
+    // TODO(dan): check necessary?
+    CHECK_OK(rpc::SaslInit());
+    transport = make_shared<SaslClientTransport>(hms_address.host(), std::move(socket));
+  } else {
+    transport = make_shared<TBufferedTransport>(std::move(socket));
+  }
+
   auto protocol = make_shared<TBinaryProtocol>(std::move(transport));
   client_ = hive::ThriftHiveMetastoreClient(std::move(protocol));
 }
@@ -105,6 +122,7 @@ HmsClient::~HmsClient() {
 
 Status HmsClient::Start() {
   SCOPED_LOG_SLOW_EXECUTION(WARNING, 1000 /* ms */, "starting HMS client");
+
   HMS_RET_NOT_OK(client_.getOutputProtocol()->getTransport()->open(),
                  "failed to open Hive MetaStore connection");
 

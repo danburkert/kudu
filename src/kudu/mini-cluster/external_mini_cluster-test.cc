@@ -76,12 +76,12 @@ class ExternalMiniClusterTest : public KuduTest,
                                 public testing::WithParamInterface<pair<Kerberos, HiveMetastore>> {
 };
 
-// TODO(dan): Add ENABLED/ENABLED when the mini HMS supports Kerberos.
 INSTANTIATE_TEST_CASE_P(KerberosOnAndOff,
                         ExternalMiniClusterTest,
                         testing::Values(make_pair(Kerberos::DISABLED, HiveMetastore::DISABLED),
                                         make_pair(Kerberos::ENABLED, HiveMetastore::DISABLED),
-                                        make_pair(Kerberos::DISABLED, HiveMetastore::ENABLED)));
+                                        make_pair(Kerberos::DISABLED, HiveMetastore::ENABLED),
+                                        make_pair(Kerberos::ENABLED, HiveMetastore::ENABLED)));
 
 void SmokeTestKerberizedCluster(ExternalMiniClusterOptions opts) {
   ASSERT_TRUE(opts.enable_kerberos);
