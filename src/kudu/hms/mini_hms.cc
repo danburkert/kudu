@@ -48,12 +48,34 @@ static constexpr int kHmsStartTimeoutMs = 60000;
 namespace kudu {
 namespace hms {
 
+std::ostream& operator<<(std::ostream& o, Protection p) {
+    switch (p) {
+      case Protection::kAuthentication: o << "authentication"; break;
+      case Protection::kIntegrity: o << "integrity"; break;
+      case Protection::kPrivacy: o << "privacy"; break;
+    }
+    return o;
+}
+
 MiniHms::~MiniHms() {
   WARN_NOT_OK(Stop(), "Failed to stop MiniHms");
 }
 
-namespace {
+void MiniHms::EnableKerberos(string krb5_conf,
+                             string service_principal,
+                             string keytab_file,
+                             Protection protection) {
+  CHECK(!hms_process_);
+  CHECK(!krb5_conf.empty());
+  CHECK(!service_principal.empty());
+  CHECK(!keytab_file.empty());
+  krb5_conf_ = std::move(krb5_conf);
+  service_principal_ = std::move(service_principal);
+  keytab_file_ = std::move(keytab_file);
+  protection_ = protection;
+}
 
+namespace {
 Status FindHomeDir(const char* name, const string& bin_dir, string* home_dir) {
   string name_upper;
   ToUpperCase(name, &name_upper);
@@ -67,7 +89,6 @@ Status FindHomeDir(const char* name, const string& bin_dir, string* home_dir) {
   }
   return Status::OK();
 }
-
 } // anonymous namespace
 
 Status MiniHms::Start() {
@@ -92,6 +113,7 @@ Status MiniHms::Start() {
   auto tmp_dir = GetTestDataDirectory();
 
   RETURN_NOT_OK(CreateHiveSite(tmp_dir));
+  RETURN_NOT_OK(CreateCoreSite(tmp_dir));
 
   // Comma-separated list of additional jars to add to the HMS classpath.
   string aux_jars = Substitute("$0/hms-plugin.jar", bin_dir);
@@ -101,7 +123,11 @@ Status MiniHms::Start() {
       { "HIVE_AUX_JARS_PATH", aux_jars },
       { "HIVE_CONF_DIR", tmp_dir },
       { "JAVA_TOOL_OPTIONS",  "-Dhive.log.level=WARN -Dhive.root.logger=console" },
+      { "HADOOP_CONF_DIR", tmp_dir },
   };
+  if (!krb5_conf_.empty()) {
+    env_vars["JAVA_TOOL_OPTIONS"] += Substitute(" -Djava.security.krb5.conf=$0", krb5_conf_);
+  }
 
   // Start the HMS.
   hms_process_.reset(new Subprocess({
@@ -150,10 +176,19 @@ Status MiniHms::Resume() {
 }
 
 Status MiniHms::CreateHiveSite(const string& tmp_dir) const {
-  // 'datanucleus.schema.autoCreateAll' and 'hive.metastore.schema.verification'
-  // allow Hive to startup and run without first running the schemaTool.
-  // 'hive.metastore.event.db.listener.timetolive' configures how long the
-  // Metastore will store notification log events before GCing them.
+
+  // - datanucleus.schema.autoCreateAll
+  // - hive.metastore.schema.verification
+  //     Allow Hive to startup and run without first running the schemaTool.
+  //
+  // - hive.metastore.event.db.listener.timetolive
+  //     Configures how long the Metastore will store notification log events
+  //     before GCing them.
+  //
+  // - hive.metastore.sasl.enabled
+  // - hive.metastore.kerberos.keytab.file
+  // - hive.metastore.kerberos.principal
+  //     Configures the HMS to use Kerberos for its Thrift RPC interface.
   static const string kFileTemplate = R"(
 <configuration>
   <property>
@@ -188,16 +223,69 @@ Status MiniHms::CreateHiveSite(const string& tmp_dir) const {
     <name>hive.metastore.event.db.listener.timetolive</name>
     <value>$0s</value>
   </property>
+
+  <property>
+    <name>hive.metastore.sasl.enabled</name>
+    <value>$2</value>
+  </property>
+
+  <property>
+    <name>hive.metastore.kerberos.keytab.file</name>
+    <value>$3</value>
+  </property>
+
+  <property>
+    <name>hive.metastore.kerberos.principal</name>
+    <value>$4</value>
+  </property>
+
+  <property>
+    <name>hadoop.rpc.protection</name>
+    <value>$5</value>
+  </property>
 </configuration>
   )";
 
+  std::stringstream protection;
+  protection << protection_;
+
   string file_contents = strings::Substitute(kFileTemplate,
                                              notification_log_ttl_.ToSeconds(),
-                                             tmp_dir);
+                                             tmp_dir,
+                                             !keytab_file_.empty(),
+                                             keytab_file_,
+                                             service_principal_,
+                                             protection.str());
 
   return WriteStringToFile(Env::Default(),
                            file_contents,
                            JoinPathSegments(tmp_dir, "hive-site.xml"));
+}
+
+Status MiniHms::CreateCoreSite(const string& tmp_dir) const {
+
+  // - hadoop.security.authentication
+  //     The HMS uses Hadoop's UGI contraption which will refuse to login a user
+  //     with Kerberos unless this special property is set. The property must
+  //     not be in hive-site.xml because a new Configuration object is created
+  //     to search for the property, and it only checks places Hadoop knows
+  //     about.
+
+  static const string kFileTemplate = R"(
+<configuration>
+  <property>
+    <name>hadoop.security.authentication</name>
+    <value>$0</value>
+  </property>
+</configuration>
+  )";
+
+  string file_contents = strings::Substitute(kFileTemplate,
+                                             keytab_file_.empty() ? "simple" : "kerberos");
+
+  return WriteStringToFile(Env::Default(),
+                           file_contents,
+                           JoinPathSegments(tmp_dir, "core-site.xml"));
 }
 
 } // namespace hms

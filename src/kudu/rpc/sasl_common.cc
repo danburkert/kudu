@@ -17,7 +17,6 @@
 
 #include "kudu/rpc/sasl_common.h"
 
-#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <limits>
@@ -46,7 +45,7 @@ namespace rpc {
 
 const char* const kSaslMechPlain = "PLAIN";
 const char* const kSaslMechGSSAPI = "GSSAPI";
-extern const size_t kSaslMaxOutBufLen = 1024;
+extern const size_t kSaslMaxOutBufLen = 32 * 1024;
 
 // See WrapSaslCall().
 static __thread string* g_auth_failure_capture = nullptr;
@@ -351,27 +350,58 @@ Status WrapSaslCall(sasl_conn_t* conn, const std::function<int()>& call) {
   }
 }
 
-Status SaslEncode(sasl_conn_t* conn, const std::string& plaintext, std::string* encoded) {
+bool NeedsWrap(sasl_conn_t* sasl_conn) {
+  const unsigned* ssf;
+  int rc = sasl_getprop(sasl_conn, SASL_SSF, reinterpret_cast<const void**>(&ssf));
+  CHECK_EQ(rc, SASL_OK) << "Failed to get SSF property on authenticated SASL connection";
+  return *ssf != 0;
+}
+
+uint32_t GetMaxBufferSize(sasl_conn_t* sasl_conn) {
+  const unsigned* max_buf_size;
+  int rc = sasl_getprop(sasl_conn, SASL_MAXOUTBUF, reinterpret_cast<const void**>(&max_buf_size));
+  CHECK_EQ(rc, SASL_OK)
+      << "Failed to get max output buffer property on authenticated SASL connection";
+  return *max_buf_size;
+}
+
+Status SaslEncode(sasl_conn_t* conn, Slice plaintext, Slice* ciphertext) {
+  const char* out;
+  unsigned out_len;
+  RETURN_NOT_OK(WrapSaslCall(conn, [&] {
+      return sasl_encode(conn,
+                         reinterpret_cast<const char*>(plaintext.data()),
+                         plaintext.size(),
+                         &out, &out_len);
+  }));
+  *ciphertext = Slice(out, out_len);
+
+  LOG(INFO) << "Encode; plaintext.size(): " << plaintext.size()
+            << ", ciphertext.size(): " << ciphertext->size();
+
+  return Status::OK();
+}
+
+Status SaslDecode(sasl_conn_t* conn, Slice ciphertext, faststring* plaintext) {
   size_t offset = 0;
 
-  // The SASL library can only encode up to a maximum amount at a time, so we
-  // have to call encode multiple times if our input is larger than this max.
-  while (offset < plaintext.size()) {
+  // The SASL library can only decode up to a maximum amount at a time, so we
+  // have to call decode multiple times if our input is larger than this max.
+  while (offset < ciphertext.size()) {
     const char* out;
     unsigned out_len;
-    size_t len = std::min(kSaslMaxOutBufLen, plaintext.size() - offset);
+    size_t len = std::min(kSaslMaxOutBufLen, ciphertext.size() - offset);
 
     RETURN_NOT_OK(WrapSaslCall(conn, [&]() {
-        return sasl_encode(conn, plaintext.data() + offset, len, &out, &out_len);
+        return sasl_decode(conn, &ciphertext.data()[offset], len, &out, &out_len);
     }));
 
-    encoded->append(out, out_len);
+    plaintext->append(out, out_len);
     offset += len;
   }
 
   return Status::OK();
 }
-
 Status SaslDecode(sasl_conn_t* conn, const string& encoded, string* plaintext) {
   size_t offset = 0;
 
@@ -429,6 +459,18 @@ Status EnableIntegrityProtection(sasl_conn_t* sasl_conn) {
   sasl_security_properties_t sec_props;
   memset(&sec_props, 0, sizeof(sec_props));
   sec_props.min_ssf = 1;
+  sec_props.max_ssf = std::numeric_limits<sasl_ssf_t>::max();
+  sec_props.maxbufsize = kSaslMaxOutBufLen;
+
+  RETURN_NOT_OK_PREPEND(WrapSaslCall(sasl_conn, [&] () {
+    return sasl_setprop(sasl_conn, SASL_SEC_PROPS, &sec_props);
+  }), "failed to set SASL security properties");
+  return Status::OK();
+}
+
+Status AllowProtection(sasl_conn_t* sasl_conn) {
+  sasl_security_properties_t sec_props;
+  memset(&sec_props, 0, sizeof(sec_props));
   sec_props.max_ssf = std::numeric_limits<sasl_ssf_t>::max();
   sec_props.maxbufsize = kSaslMaxOutBufLen;
 
