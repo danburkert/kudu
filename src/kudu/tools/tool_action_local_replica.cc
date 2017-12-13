@@ -655,6 +655,9 @@ Status DumpCFileBlockInternal(FsManager* fs_manager,
 
   cout << Indent(indent) << "CFile Header: "
        << pb_util::SecureShortDebugString(reader->header()) << endl;
+  cout << Indent(indent) << "CFile Footer: "
+       << pb_util::SecureShortDebugString(reader->footer()) << endl;
+
   if (!FLAGS_dump_data) {
     return Status::OK();
   }
