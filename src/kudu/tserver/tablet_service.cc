@@ -1887,6 +1887,9 @@ Status TabletServiceImpl::HandleContinueScanRequest(const ScanRequestPB* req,
           << SecureShortDebugString(*req);
   TRACE("Found scanner $0", scanner->id());
 
+  LOG(INFO) << "Continuing scan: " << scanner->iter()->ToString();
+
+
   if (batch_size_bytes == 0 && req->close_scanner()) {
     *has_more_results = false;
     return Status::OK();

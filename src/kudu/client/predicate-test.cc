@@ -23,6 +23,7 @@
 #include <vector>
 
 #include <glog/logging.h>
+#include <glog/stl_logging.h>
 #include <gtest/gtest.h>
 
 #include "kudu/client/client.h"
@@ -99,6 +100,7 @@ class PredicateTest : public KuduTest {
   int DoCountRows(const shared_ptr<KuduTable>& table,
                   const vector<KuduPredicate*>& predicates) {
     KuduScanner scanner(table.get());
+    //scanner.SetProjectedColumnNames({});
     for (KuduPredicate* predicate : predicates) {
       CHECK_OK(scanner.AddConjunctPredicate(predicate));
     }
@@ -985,19 +987,21 @@ TEST_F(PredicateTest, TestBinaryPredicates) {
   CheckStringPredicates(table);
 }
 
-TEST_F(PredicateTest, TestFoo) {
+TEST_F(PredicateTest, TestFooGenerate) {
   ASSERT_OK(KuduClientBuilder().add_master_server_addr("127.0.0.1").Build(&client_));
   string kTableName = "foo";
   KuduSchema schema;
   {
     KuduSchemaBuilder builder;
-    builder.AddColumn("k1")->NotNull()->Type(KuduColumnSchema::INT64);
-    builder.AddColumn("k2")->NotNull()->Type(KuduColumnSchema::INT64);
-    builder.AddColumn("k3")->NotNull()->Type(KuduColumnSchema::INT64);
-    builder.AddColumn("v1")->Type(KuduColumnSchema::INT64);
-    builder.AddColumn("v2")->Type(KuduColumnSchema::INT64);
-    builder.AddColumn("v3")->Type(KuduColumnSchema::INT64);
-    builder.SetPrimaryKey({ "k1", "k2", "k3" });
+    builder.AddColumn("k1")->NotNull()->Type(KuduColumnSchema::INT64)->Encoding(KuduColumnStorageAttributes::BIT_SHUFFLE);
+    builder.AddColumn("k2")->NotNull()->Type(KuduColumnSchema::INT64)->Encoding(KuduColumnStorageAttributes::BIT_SHUFFLE);
+    builder.AddColumn("k3")->NotNull()->Type(KuduColumnSchema::INT64)->Encoding(KuduColumnStorageAttributes::BIT_SHUFFLE);
+    builder.AddColumn("k4")->NotNull()->Type(KuduColumnSchema::INT64)->Encoding(KuduColumnStorageAttributes::BIT_SHUFFLE);
+    builder.AddColumn("v1")->Type(KuduColumnSchema::INT64)->Encoding(KuduColumnStorageAttributes::BIT_SHUFFLE);
+    builder.AddColumn("v2")->Type(KuduColumnSchema::INT64)->Encoding(KuduColumnStorageAttributes::BIT_SHUFFLE);
+    builder.AddColumn("v3")->Type(KuduColumnSchema::INT64)->Encoding(KuduColumnStorageAttributes::BIT_SHUFFLE);
+    builder.AddColumn("v4")->Type(KuduColumnSchema::INT64)->Encoding(KuduColumnStorageAttributes::BIT_SHUFFLE);
+    builder.SetPrimaryKey({ "k1", "k2", "k3", "k4" });
     CHECK_OK(builder.Build(&schema));
   }
   unique_ptr<client::KuduTableCreator> table_creator(client_->NewTableCreator());
@@ -1011,27 +1015,34 @@ TEST_F(PredicateTest, TestFoo) {
   CHECK_OK(client_->OpenTable(kTableName, &table));
 
   auto session = CreateSession();
-  for (int k1 = 0; k1 < 1000; k1++) {
-    for (int k2 = 0; k2 < 1000; k2++) {
-      for (int k3 = 0; k3 < 1000; k3++) {
-        unique_ptr<KuduInsert> insert(table->NewInsert());
-        ASSERT_OK(insert->mutable_row()->SetInt64("k1", k1));
-        ASSERT_OK(insert->mutable_row()->SetInt64("k2", k2));
-        ASSERT_OK(insert->mutable_row()->SetInt64("k3", k3));
-        ASSERT_OK(insert->mutable_row()->SetInt64("v1", k1));
-        ASSERT_OK(insert->mutable_row()->SetInt64("v2", k2));
-        ASSERT_OK(insert->mutable_row()->SetInt64("v3", k3));
-        ASSERT_OK(session->Apply(insert.release()));
+  for (int k1 = 0; k1 < 100; k1++) {
+    for (int k2 = 0; k2 < 100; k2++) {
+      for (int k3 = 0; k3 < 100; k3++) {
+        for (int k4 = 0; k4 < 100; k4++) {
+          unique_ptr<KuduInsert> insert(table->NewInsert());
+          ASSERT_OK(insert->mutable_row()->SetInt64("k1", k1));
+          ASSERT_OK(insert->mutable_row()->SetInt64("k2", k2));
+          ASSERT_OK(insert->mutable_row()->SetInt64("k3", k3));
+          ASSERT_OK(insert->mutable_row()->SetInt64("k4", k4));
+          ASSERT_OK(insert->mutable_row()->SetInt64("v1", k1));
+          ASSERT_OK(insert->mutable_row()->SetInt64("v2", k2));
+          ASSERT_OK(insert->mutable_row()->SetInt64("v3", k3));
+          ASSERT_OK(insert->mutable_row()->SetInt64("v4", k4));
+          ASSERT_OK(session->Apply(insert.release()));
+        }
       }
     }
   }
 
   ASSERT_OK(session->Flush());
-  /*
+}
 
-  cluster_->mini_tablet_server(0);
+TEST_F(PredicateTest, TestFoo) {
+  ASSERT_OK(KuduClientBuilder().add_master_server_addr("127.0.0.1").Build(&client_));
+  string kTableName = "foo";
 
-  //SleepFor(MonoDelta::FromSeconds(30));
+  shared_ptr<KuduTable> table;
+  CHECK_OK(client_->OpenTable(kTableName, &table));
 
 
   LOG(INFO) << "---------------------------- SCAN STARTING ----------------------------";
@@ -1039,14 +1050,25 @@ TEST_F(PredicateTest, TestFoo) {
   {
     MonoTime start = MonoTime::Now();
     rows = DoCountRows(table, {
-        table->NewComparisonPredicate("k2", KuduPredicate::EQUAL, KuduValue::FromInt(45)),
-        table->NewComparisonPredicate("v1", KuduPredicate::EQUAL, KuduValue::FromInt(22)),
+        table->NewComparisonPredicate("k3", KuduPredicate::EQUAL, KuduValue::FromInt(45)),
+        //table->NewComparisonPredicate("v2", KuduPredicate::EQUAL, KuduValue::FromInt(22)),
     });
     LOG(INFO) << "Scan duration: " << MonoTime::Now().GetDeltaSince(start).ToString();
   }
   LOG(INFO) << "---------------------------- SCAN FINISHED ----------------------------";
-  ASSERT_EQ(100, rows);
-  */
+  ASSERT_EQ(100000, rows);
+}
+
+TEST_F(PredicateTest, TestBar) {
+  ASSERT_OK(KuduClientBuilder().add_master_server_addr("139.219.224.245").Build(&client_));
+
+  shared_ptr<KuduTable> table;
+  CHECK_OK(client_->OpenTable("test_kudu_bug", &table));
+
+  vector<int> indexes;
+  table->schema().GetPrimaryKeyColumnIndexes(&indexes);
+
+  LOG(INFO) << "pk indexes: " << indexes;
 }
 
 } // namespace client

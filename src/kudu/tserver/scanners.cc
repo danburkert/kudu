@@ -146,6 +146,21 @@ bool ScannerManager::LookupScanner(const string& scanner_id, SharedScanner* scan
 }
 
 bool ScannerManager::UnregisterScanner(const string& scanner_id) {
+  SharedScanner scanner;
+  CHECK(LookupScanner(scanner_id, &scanner));
+  const Schema& projection = scanner->iter()->schema();
+
+  vector<IteratorStats> stats;
+  scanner->GetIteratorStats(&stats);
+
+  LOG(INFO) << "Scanner " << scanner->id() << " finished";
+  for (int idx = 0; idx < stats.size(); idx++) {
+    LOG(INFO) << "column: " << projection.column(idx).name() << ", "
+              << "data_blocks_read_from_disk: " << stats[idx].data_blocks_read_from_disk << ", "
+              << "bytes_read_from_disk: " << stats[idx].bytes_read_from_disk << ", "
+              << "cells_read_from_disk: " << stats[idx].cells_read_from_disk;
+  }
+
   ScannerMapStripe& stripe = GetStripeByScannerId(scanner_id);
   std::lock_guard<RWMutex> l(stripe.lock_);
   return stripe.scanners_by_id_.erase(scanner_id) > 0;
