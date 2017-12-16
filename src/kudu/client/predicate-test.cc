@@ -1050,7 +1050,7 @@ TEST_F(PredicateTest, TestFoo) {
   {
     MonoTime start = MonoTime::Now();
     rows = DoCountRows(table, {
-        table->NewComparisonPredicate("k3", KuduPredicate::EQUAL, KuduValue::FromInt(45)),
+        table->NewComparisonPredicate("v3", KuduPredicate::EQUAL, KuduValue::FromInt(45)),
         //table->NewComparisonPredicate("v2", KuduPredicate::EQUAL, KuduValue::FromInt(22)),
     });
     LOG(INFO) << "Scan duration: " << MonoTime::Now().GetDeltaSince(start).ToString();

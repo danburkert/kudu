@@ -896,6 +896,7 @@ Status CFileIterator::ReadCurrentDataBlock(const IndexTreeIterator &idx_iter,
   prep_block->dblk_ptr_ = idx_iter.GetCurrentBlockPointer();
   RETURN_NOT_OK(reader_->ReadBlock(prep_block->dblk_ptr_, cache_control_, &prep_block->dblk_data_));
 
+
   uint32_t num_rows_in_block = 0;
   Slice data_block = prep_block->dblk_data_.data();
   if (reader_->is_nullable()) {
@@ -928,13 +929,12 @@ Status CFileIterator::ReadCurrentDataBlock(const IndexTreeIterator &idx_iter,
   prep_block->needs_rewind_ = false;
   prep_block->rewind_idx_ = 0;
 
-  DVLOG(2) << "Read dblk " << prep_block->ToString();
+  LOG(INFO) << "Read dblk " << prep_block->ToString();
   return Status::OK();
 }
 
 Status CFileIterator::QueueCurrentDataBlock(const IndexTreeIterator &idx_iter) {
-  pblock_pool_scoped_ptr b = prepared_block_pool_.make_scoped_ptr(
-    prepared_block_pool_.Construct());
+  pblock_pool_scoped_ptr b = prepared_block_pool_.make_scoped_ptr(prepared_block_pool_.Construct());
   RETURN_NOT_OK(ReadCurrentDataBlock(idx_iter, b.get()));
   prepared_blocks_.push_back(b.release());
   return Status::OK();
