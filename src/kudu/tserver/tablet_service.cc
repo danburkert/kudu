@@ -1833,7 +1833,7 @@ Status TabletServiceImpl::HandleNewScanRequest(TabletReplica* replica,
   unreg_scanner.Cancel();
   *scanner_id = scanner->id();
 
-  VLOG(1) << "Started scanner " << scanner->id() << ": " << scanner->iter()->ToString();
+  LOG(INFO) << "Started scanner " << scanner->id() << ": " << scanner->iter()->ToString();
 
   size_t batch_size_bytes = GetMaxBatchSizeBytesHint(req);
   if (batch_size_bytes > 0) {

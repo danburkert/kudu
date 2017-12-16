@@ -985,5 +985,69 @@ TEST_F(PredicateTest, TestBinaryPredicates) {
   CheckStringPredicates(table);
 }
 
+TEST_F(PredicateTest, TestFoo) {
+  ASSERT_OK(KuduClientBuilder().add_master_server_addr("127.0.0.1").Build(&client_));
+  string kTableName = "foo";
+  KuduSchema schema;
+  {
+    KuduSchemaBuilder builder;
+    builder.AddColumn("k1")->NotNull()->Type(KuduColumnSchema::INT64);
+    builder.AddColumn("k2")->NotNull()->Type(KuduColumnSchema::INT64);
+    builder.AddColumn("k3")->NotNull()->Type(KuduColumnSchema::INT64);
+    builder.AddColumn("v1")->Type(KuduColumnSchema::INT64);
+    builder.AddColumn("v2")->Type(KuduColumnSchema::INT64);
+    builder.AddColumn("v3")->Type(KuduColumnSchema::INT64);
+    builder.SetPrimaryKey({ "k1", "k2", "k3" });
+    CHECK_OK(builder.Build(&schema));
+  }
+  unique_ptr<client::KuduTableCreator> table_creator(client_->NewTableCreator());
+  CHECK_OK(table_creator->table_name(kTableName)
+      .schema(&schema)
+      .set_range_partition_columns({})
+      .num_replicas(1)
+      .Create());
+
+  shared_ptr<KuduTable> table;
+  CHECK_OK(client_->OpenTable(kTableName, &table));
+
+  auto session = CreateSession();
+  for (int k1 = 0; k1 < 1000; k1++) {
+    for (int k2 = 0; k2 < 1000; k2++) {
+      for (int k3 = 0; k3 < 1000; k3++) {
+        unique_ptr<KuduInsert> insert(table->NewInsert());
+        ASSERT_OK(insert->mutable_row()->SetInt64("k1", k1));
+        ASSERT_OK(insert->mutable_row()->SetInt64("k2", k2));
+        ASSERT_OK(insert->mutable_row()->SetInt64("k3", k3));
+        ASSERT_OK(insert->mutable_row()->SetInt64("v1", k1));
+        ASSERT_OK(insert->mutable_row()->SetInt64("v2", k2));
+        ASSERT_OK(insert->mutable_row()->SetInt64("v3", k3));
+        ASSERT_OK(session->Apply(insert.release()));
+      }
+    }
+  }
+
+  ASSERT_OK(session->Flush());
+  /*
+
+  cluster_->mini_tablet_server(0);
+
+  //SleepFor(MonoDelta::FromSeconds(30));
+
+
+  LOG(INFO) << "---------------------------- SCAN STARTING ----------------------------";
+  int rows;
+  {
+    MonoTime start = MonoTime::Now();
+    rows = DoCountRows(table, {
+        table->NewComparisonPredicate("k2", KuduPredicate::EQUAL, KuduValue::FromInt(45)),
+        table->NewComparisonPredicate("v1", KuduPredicate::EQUAL, KuduValue::FromInt(22)),
+    });
+    LOG(INFO) << "Scan duration: " << MonoTime::Now().GetDeltaSince(start).ToString();
+  }
+  LOG(INFO) << "---------------------------- SCAN FINISHED ----------------------------";
+  ASSERT_EQ(100, rows);
+  */
+}
+
 } // namespace client
 } // namespace kudu

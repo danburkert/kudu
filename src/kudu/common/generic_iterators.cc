@@ -455,6 +455,7 @@ MaterializingIterator::MaterializingIterator(shared_ptr<ColumnwiseIterator> iter
 }
 
 Status MaterializingIterator::Init(ScanSpec *spec) {
+  LOG(INFO) << "MaterializingIterator::Init";
   RETURN_NOT_OK(iter_->Init(spec));
 
   int32_t num_columns = schema().num_columns();
@@ -471,7 +472,7 @@ Status MaterializingIterator::Init(ScanSpec *spec) {
       if (col_idx == Schema::kColumnNotFound) {
         return Status::InvalidArgument("No such column", col_pred.first);
       }
-      VLOG(1) << "Pushing down predicate " << pred.ToString();
+      LOG(INFO) << "Pushing down predicate " << pred.ToString();
       col_idx_predicates_.emplace_back(col_idx, col_pred.second);
     }
 
