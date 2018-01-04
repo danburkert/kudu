@@ -38,6 +38,8 @@
 #include "kudu/util/slice.h"
 #include "kudu/util/status.h"
 
+#include "kudu/gutil/strings/human_readable.h"
+
 using std::shared_ptr;
 using std::string;
 using std::unordered_map;
@@ -262,6 +264,12 @@ RowSetInfo::RowSetInfo(RowSet* rs, double init_cdf)
     size_mb_(std::max(implicit_cast<int>(size_bytes_ / 1024 / 1024), kMinSizeMb)),
     cdf_min_key_(init_cdf),
     cdf_max_key_(init_cdf) {
+
+  uint64_t size_bytes = rs->OnDiskDataSizeNoUndos();
+  CHECK_LT(size_bytes, std::numeric_limits<int>::max());
+  LOG(INFO) << "RowSetInfo size_bytes: " << HumanReadableNumBytes::ToString(size_bytes)
+            << ", size_bytes_with_undoes: " << HumanReadableNumBytes::ToString(rs->OnDiskSize());
+
   has_bounds_ = rs->GetBounds(&min_key_, &max_key_).ok();
 }
 

@@ -47,6 +47,8 @@
 #include "kudu/util/faststring.h"
 #include "kudu/util/monotime.h"
 #include "kudu/util/net/sockaddr.h"
+#include "kudu/util/random.h"
+#include "kudu/util/random_util.h"
 #include "kudu/util/status.h"
 #include "kudu/util/stopwatch.h"
 #include "kudu/util/test_macros.h"
@@ -90,7 +92,8 @@ using client::sp::shared_ptr;
 // FATALs.
 class UpdateScanDeltaCompactionTest : public KuduTest {
  protected:
-  UpdateScanDeltaCompactionTest() {
+  UpdateScanDeltaCompactionTest()
+      : rand_(SeedRandom()) {
     KuduSchemaBuilder b;
     b.AddColumn("key")->Type(KuduColumnSchema::INT64)->NotNull()->PrimaryKey();
     b.AddColumn("string")->Type(KuduColumnSchema::STRING)->NotNull();
@@ -146,8 +149,8 @@ class UpdateScanDeltaCompactionTest : public KuduTest {
 
   shared_ptr<KuduSession> CreateSession() {
     shared_ptr<KuduSession> session = client_->NewSession();
-    session->SetTimeoutMillis(5000);
-    CHECK_OK(session->SetFlushMode(KuduSession::MANUAL_FLUSH));
+    session->SetTimeoutMillis(30000);
+    CHECK_OK(session->SetFlushMode(KuduSession::AUTO_FLUSH_BACKGROUND));
     return session;
   }
 
@@ -162,7 +165,7 @@ class UpdateScanDeltaCompactionTest : public KuduTest {
 
   // Sets the passed values on the row.
   // TODO randomize the string column.
-  void MakeRow(int64_t key, int64_t val, KuduPartialRow* row) const;
+  void MakeRow(int64_t key, int64_t val, KuduPartialRow* row);
 
   // If 'key' is a multiple of kSessionBatchSize, it uses 'last_s' to wait for the previous batch
   // to finish and then flushes the current one.
@@ -175,6 +178,7 @@ class UpdateScanDeltaCompactionTest : public KuduTest {
   std::shared_ptr<InternalMiniCluster> cluster_;
   shared_ptr<KuduTable> table_;
   shared_ptr<KuduClient> client_;
+  Random rand_;
 };
 
 const char* const UpdateScanDeltaCompactionTest::kTableName = "update-scan-delta-compact-tbl";
@@ -196,6 +200,7 @@ TEST_F(UpdateScanDeltaCompactionTest, TestAll) {
   ASSERT_NO_FATAL_FAILURE(CreateTable());
   ASSERT_NO_FATAL_FAILURE(InsertBaseData());
   ASSERT_NO_FATAL_FAILURE(RunThreads());
+  CHECK(false);
 }
 
 void UpdateScanDeltaCompactionTest::InsertBaseData() {
@@ -319,9 +324,9 @@ void UpdateScanDeltaCompactionTest::CurlWebPages(CountDownLatch* stop_latch) con
 
 void UpdateScanDeltaCompactionTest::MakeRow(int64_t key,
                                             int64_t val,
-                                            KuduPartialRow* row) const {
+                                            KuduPartialRow* row) {
   CHECK_OK(row->SetInt64(kKeyCol, key));
-  CHECK_OK(row->SetStringCopy(kStrCol, "TODO random string"));
+  CHECK_OK(row->SetStringCopy(kStrCol, RandomString(1024 * 64, &rand_)));
   CHECK_OK(row->SetInt64(kInt64Col, val));
 }
 
