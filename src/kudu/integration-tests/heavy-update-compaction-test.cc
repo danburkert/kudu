@@ -137,11 +137,13 @@ const char* const HeavyUpdateCompactionTest::kTableName = "heavy-update-compacti
 // maintanance manager to schedule rowset compactions, which reliably reproduces
 // the overflow.
 TEST_F(HeavyUpdateCompactionTest, KUDU2231) {
+  /*
   // More rounds makes the bug more likely to occur, but the test takes longer.
   OverrideFlagForSlowTests("rounds", "200");
   // More rows results in more rowsets being updated. The default fast value
   // typically results in one rowset.
   OverrideFlagForSlowTests("rows", "1000");
+  */
 
   ASSERT_NO_FATAL_FAILURE(CreateTable());
   shared_ptr<KuduSession> session = CreateSession();
