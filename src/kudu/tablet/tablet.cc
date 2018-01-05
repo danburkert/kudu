@@ -1377,9 +1377,11 @@ void Tablet::RegisterMaintenanceOps(MaintenanceManager* maint_mgr) {
   maint_mgr->RegisterOp(minor_delta_compact_op.get());
   maintenance_ops.push_back(minor_delta_compact_op.release());
 
+  /*
   gscoped_ptr<MaintenanceOp> major_delta_compact_op(new MajorDeltaCompactionOp(this));
   maint_mgr->RegisterOp(major_delta_compact_op.get());
   maintenance_ops.push_back(major_delta_compact_op.release());
+  */
 
   if (FLAGS_enable_undo_delta_block_gc) {
     gscoped_ptr<MaintenanceOp> undo_delta_block_gc_op(new UndoDeltaBlockGCOp(this));
