@@ -521,11 +521,6 @@ Status DeltaFileIterator::PrepareBatch(size_t nrows, PrepareFlag flag) {
 
     RETURN_NOT_OK(ReadCurrentBlockOntoQueue());
 
-    if (delta_blocks_.back()->first_updated_idx_ > stop_row) {
-      delta_blocks_.pop_back();
-      break;
-    }
-
     Status s = index_iter_->Next();
     if (s.IsNotFound()) {
       exhausted_ = true;
