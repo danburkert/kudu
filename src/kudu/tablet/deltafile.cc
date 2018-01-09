@@ -103,11 +103,8 @@ DeltaFileWriter::DeltaFileWriter(unique_ptr<WritableBlock> block)
   opts.storage_attributes.encoding = PLAIN_ENCODING;
   opts.storage_attributes.compression = GetCompressionCodecType(
       FLAGS_deltafile_default_compression_codec);
-  // No optimization for deltafiles because a deltafile index key must decode into a DeltaKey
-  opts.optimize_index_keys = false;
   writer_.reset(new cfile::CFileWriter(opts, GetTypeInfo(BINARY), false, std::move(block)));
 }
-
 
 Status DeltaFileWriter::Start() {
   return writer_->Start();
@@ -469,8 +466,12 @@ Status DeltaFileIterator::ReadCurrentBlockOntoQueue() {
                                    dfr_->cfile_reader()->block_id().ToString(),
                                    dblk_ptr.ToString()));
 
-  RETURN_NOT_OK(GetFirstRowIndexInCurrentBlock(&pdb->first_updated_idx_));
   RETURN_NOT_OK(GetLastRowIndexInDecodedBlock(*pdb->decoder_, &pdb->last_updated_idx_));
+
+  DeltaKey k;
+  Slice s = pdb->decoder_->string_at_index(0);
+  RETURN_NOT_OK(k.DecodeFrom(&s));
+  pdb->first_updated_idx_ = k.row_idx();
 
   #ifndef NDEBUG
   VLOG(2) << "Read delta block which updates " <<
@@ -479,16 +480,6 @@ Status DeltaFileIterator::ReadCurrentBlockOntoQueue() {
   #endif
 
   delta_blocks_.emplace_back(std::move(pdb));
-  return Status::OK();
-}
-
-Status DeltaFileIterator::GetFirstRowIndexInCurrentBlock(rowid_t *idx) {
-  DCHECK(index_iter_) << "Must call SeekToOrdinal()";
-
-  Slice index_entry = index_iter_->GetCurrentKey();
-  DeltaKey k;
-  RETURN_NOT_OK(k.DecodeFrom(&index_entry));
-  *idx = k.row_idx();
   return Status::OK();
 }
 
@@ -501,7 +492,6 @@ Status DeltaFileIterator::GetLastRowIndexInDecodedBlock(const BinaryPlainBlockDe
   *idx = k.row_idx();
   return Status::OK();
 }
-
 
 string DeltaFileIterator::PreparedDeltaBlock::ToString() const {
   return StringPrintf("%d-%d (%s)", first_updated_idx_, last_updated_idx_,
@@ -525,15 +515,16 @@ Status DeltaFileIterator::PrepareBatch(size_t nrows, PrepareFlag flag) {
   }
 
   while (!exhausted_) {
-    rowid_t next_block_rowidx;
-    RETURN_NOT_OK(GetFirstRowIndexInCurrentBlock(&next_block_rowidx));
-    VLOG(2) << "Current delta block starting at row " << next_block_rowidx;
-
-    if (next_block_rowidx > stop_row) {
+    if (!delta_blocks_.empty() && delta_blocks_.back()->last_updated_idx_ > stop_row) {
       break;
     }
 
     RETURN_NOT_OK(ReadCurrentBlockOntoQueue());
+
+    if (delta_blocks_.back()->first_updated_idx_ > stop_row) {
+      delta_blocks_.pop_back();
+      break;
+    }
 
     Status s = index_iter_->Next();
     if (s.IsNotFound()) {
