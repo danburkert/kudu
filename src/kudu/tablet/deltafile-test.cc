@@ -54,6 +54,7 @@
 #include "kudu/util/test_macros.h"
 #include "kudu/util/test_util.h"
 
+DECLARE_bool(deltafile_optimize_index_keys);
 DECLARE_int32(deltafile_default_block_size);
 DEFINE_int32(first_row_to_update, 10000, "the first row to update");
 DEFINE_int32(last_row_to_update, 100000, "the last row to update");
@@ -120,7 +121,6 @@ class TestDeltaFile : public KuduTest {
     dfw.WriteDeltaStats(stats);
     ASSERT_OK(dfw.Finish());
   }
-
 
   void DoTestRoundTrip() {
     // First write the file.
@@ -225,10 +225,10 @@ TEST_F(TestDeltaFile, TestDumpDeltaFileIterator) {
   ASSERT_OK(s);
   vector<string> it_contents;
   ASSERT_OK(DebugDumpDeltaIterator(REDO,
-                                          it.get(),
-                                          schema_,
-                                          ITERATE_OVER_ALL_ROWS,
-                                          &it_contents));
+                                   it.get(),
+                                   schema_,
+                                   ITERATE_OVER_ALL_ROWS,
+                                   &it_contents));
   for (const string& str : it_contents) {
     VLOG(1) << str;
   }
@@ -262,10 +262,10 @@ TEST_F(TestDeltaFile, TestWriteDeltaFileIteratorToFile) {
   ASSERT_OK(OpenDeltaFileIterator(block_id, &it));
   vector<string> it_contents;
   ASSERT_OK(DebugDumpDeltaIterator(REDO,
-                                          it.get(),
-                                          schema_,
-                                          ITERATE_OVER_ALL_ROWS,
-                                          &it_contents));
+                                   it.get(),
+                                   schema_,
+                                   ITERATE_OVER_ALL_ROWS,
+                                   &it_contents));
   for (const string& str : it_contents) {
     VLOG(1) << str;
   }
@@ -282,7 +282,14 @@ TEST_F(TestDeltaFile, TestRoundTripTinyDeltaBlocks) {
   DoTestRoundTrip();
 }
 
-TEST_F(TestDeltaFile, TestRoundTrip) {
+// See KUDU-2253 for details.
+TEST_F(TestDeltaFile, OptimizeIndexKeysCompatibility) {
+  // Forwards compatibility.
+  FLAGS_deltafile_optimize_index_keys = true;
+  DoTestRoundTrip();
+
+  // Backwards compatibility.
+  FLAGS_deltafile_optimize_index_keys = false;
   DoTestRoundTrip();
 }
 
@@ -323,7 +330,6 @@ TEST_F(TestDeltaFile, TestCollectMutations) {
       start_row += mutations.size();
     }
   }
-
 }
 
 TEST_F(TestDeltaFile, TestSkipsDeltasOutOfRange) {

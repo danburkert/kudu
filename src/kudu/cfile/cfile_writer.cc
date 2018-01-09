@@ -90,7 +90,8 @@ WriterOptions::WriterOptions()
     block_restart_interval(16),
     write_posidx(false),
     write_validx(false),
-    optimize_index_keys(true) {
+    optimize_index_keys(true),
+    incompatible_features(IncompatibleFeatures::NONE) {
 }
 
 
@@ -220,7 +221,7 @@ Status CFileWriter::FinishAndReleaseBlock(BlockCreationTransaction* transaction)
 
   state_ = kWriterFinished;
 
-  uint32_t incompatible_features = 0;
+  uint32_t incompatible_features = options_.incompatible_features;
   if (FLAGS_cfile_write_checksums) {
     incompatible_features |= IncompatibleFeatures::CHECKSUM;
   }

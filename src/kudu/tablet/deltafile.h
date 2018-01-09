@@ -290,14 +290,6 @@ class DeltaFileIterator : public DeltaIterator {
                     const Schema *projection, MvccSnapshot snap,
                     DeltaType delta_type);
 
-  // Determine the row index of the first update in the block currently
-  // pointed to by index_iter_.
-  Status GetFirstRowIndexInCurrentBlock(rowid_t *idx);
-
-  // Determine the last updated row index contained in the given decoded block.
-  static Status GetLastRowIndexInDecodedBlock(
-    const cfile::BinaryPlainBlockDecoder &dec, rowid_t *idx);
-
   // Read the current block of data from the current position in the file
   // onto the end of the delta_blocks_ queue.
   Status ReadCurrentBlockOntoQueue();

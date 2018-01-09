@@ -41,7 +41,11 @@ enum IncompatibleFeatures {
   // Write a crc32 checksum at the end of each cfile block
   CHECKSUM = 1 << 0,
 
-  SUPPORTED = NONE | CHECKSUM
+  // Whether DeltaFile index keys are suffix truncated using the
+  // WriterOptions::optimize_index_keys option.
+  DELTAFILE_OPTIMIZED_INDEX_KEYS = 1 << 1,
+
+  SUPPORTED = NONE | CHECKSUM | DELTAFILE_OPTIMIZED_INDEX_KEYS
 };
 
 struct WriterOptions {
@@ -74,6 +78,10 @@ struct WriterOptions {
   // Default: all default values as specified in the constructor in
   // schema.h
   ColumnStorageAttributes storage_attributes;
+
+  // Bitset of incompatible features used in the CFile. Only flags defined in
+  // the IncompatibleFeatures enum should be set.
+  uint32_t incompatible_features;
 
   WriterOptions();
 };

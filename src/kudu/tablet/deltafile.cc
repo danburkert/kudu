@@ -64,6 +64,14 @@ DEFINE_string(deltafile_default_compression_codec, "lz4",
               "The compression codec used when writing deltafiles.");
 TAG_FLAG(deltafile_default_compression_codec, experimental);
 
+// TODO(KUDU-2253): enable this by default in Kudu 1.8.
+DEFINE_bool(deltafile_optimize_index_keys, false,
+            "Whether to optimize DeltaFile index keys. This can improve the "
+            "on-disk size and efficiency of updates, but enabling it prohibits "
+            "later downgrading to a Kudu version without support for the "
+            "optimization.");
+TAG_FLAG(deltafile_optimize_index_keys, experimental);
+
 using std::shared_ptr;
 using std::string;
 using std::unique_ptr;
@@ -103,11 +111,12 @@ DeltaFileWriter::DeltaFileWriter(unique_ptr<WritableBlock> block)
   opts.storage_attributes.encoding = PLAIN_ENCODING;
   opts.storage_attributes.compression = GetCompressionCodecType(
       FLAGS_deltafile_default_compression_codec);
-  // No optimization for deltafiles because a deltafile index key must decode into a DeltaKey
-  opts.optimize_index_keys = false;
+  opts.optimize_index_keys = FLAGS_deltafile_optimize_index_keys;
+  if (FLAGS_deltafile_optimize_index_keys) {
+    opts.incompatible_features |= cfile::IncompatibleFeatures::DELTAFILE_OPTIMIZED_INDEX_KEYS;
+  }
   writer_.reset(new cfile::CFileWriter(opts, GetTypeInfo(BINARY), false, std::move(block)));
 }
-
 
 Status DeltaFileWriter::Start() {
   return writer_->Start();
@@ -469,39 +478,26 @@ Status DeltaFileIterator::ReadCurrentBlockOntoQueue() {
                                    dfr_->cfile_reader()->block_id().ToString(),
                                    dblk_ptr.ToString()));
 
-  RETURN_NOT_OK(GetFirstRowIndexInCurrentBlock(&pdb->first_updated_idx_));
-  RETURN_NOT_OK(GetLastRowIndexInDecodedBlock(*pdb->decoder_, &pdb->last_updated_idx_));
+  // Retrieve the first and last index from the decoded block.
+  DeltaKey k;
+  Slice s;
 
-  #ifndef NDEBUG
-  VLOG(2) << "Read delta block which updates " <<
-    pdb->first_updated_idx_ << " through " <<
-    pdb->last_updated_idx_;
-  #endif
+  s = pdb->decoder_->string_at_index(0);
+  RETURN_NOT_OK_PREPEND(k.DecodeFrom(&s), "failed to decode first delta value key");
+  pdb->first_updated_idx_ = k.row_idx();
+
+  s = pdb->decoder_->string_at_index(pdb->decoder_->Count() - 1);
+  RETURN_NOT_OK_PREPEND(k.DecodeFrom(&s), "failed to decode last delta value key");
+  pdb->last_updated_idx_ = k.row_idx();
+
+#ifndef NDEBUG
+  VLOG(2) << "Read delta block which updates " << pdb->first_updated_idx_
+          << " through " << pdb->last_updated_idx_;
+#endif
 
   delta_blocks_.emplace_back(std::move(pdb));
   return Status::OK();
 }
-
-Status DeltaFileIterator::GetFirstRowIndexInCurrentBlock(rowid_t *idx) {
-  DCHECK(index_iter_) << "Must call SeekToOrdinal()";
-
-  Slice index_entry = index_iter_->GetCurrentKey();
-  DeltaKey k;
-  RETURN_NOT_OK(k.DecodeFrom(&index_entry));
-  *idx = k.row_idx();
-  return Status::OK();
-}
-
-Status DeltaFileIterator::GetLastRowIndexInDecodedBlock(const BinaryPlainBlockDecoder &dec,
-                                                        rowid_t *idx) {
-  DCHECK_GT(dec.Count(), 0);
-  Slice s(dec.string_at_index(dec.Count() - 1));
-  DeltaKey k;
-  RETURN_NOT_OK(k.DecodeFrom(&s));
-  *idx = k.row_idx();
-  return Status::OK();
-}
-
 
 string DeltaFileIterator::PreparedDeltaBlock::ToString() const {
   return StringPrintf("%d-%d (%s)", first_updated_idx_, last_updated_idx_,
@@ -524,12 +520,12 @@ Status DeltaFileIterator::PrepareBatch(size_t nrows, PrepareFlag flag) {
     delta_blocks_.pop_front();
   }
 
+  // Read blocks until a block is encountered with a last_updated_idx past our
+  // stop row. This can 'overshoot' and read an extra block in cases where the
+  // stop row falls in between two blocks, but we keep the extra block in the
+  // queue to be reused if there is another batch requested.
   while (!exhausted_) {
-    rowid_t next_block_rowidx;
-    RETURN_NOT_OK(GetFirstRowIndexInCurrentBlock(&next_block_rowidx));
-    VLOG(2) << "Current delta block starting at row " << next_block_rowidx;
-
-    if (next_block_rowidx > stop_row) {
+    if (!delta_blocks_.empty() && delta_blocks_.back()->last_updated_idx_ > stop_row) {
       break;
     }
 
@@ -557,10 +553,10 @@ Status DeltaFileIterator::PrepareBatch(size_t nrows, PrepareFlag flag) {
     block.prepared_block_start_idx_ = i;
   }
 
-  #ifndef NDEBUG
+#ifndef NDEBUG
   VLOG(2) << "Done preparing deltas for " << start_row << "-" << stop_row
           << ": row block spans " << delta_blocks_.size() << " delta blocks";
-  #endif
+#endif
   prepared_idx_ = start_row;
   prepared_count_ = nrows;
   prepared_ = true;
