@@ -21,6 +21,8 @@
 #include <iostream>
 #include <memory>
 
+#include <boost/optional/optional.hpp>
+
 #include "kudu/common/schema.h"
 #include "kudu/util/slice.h"
 #include "kudu/util/status.h"
@@ -43,6 +45,8 @@ enum IncompatibleFeatures {
 
   SUPPORTED = NONE | CHECKSUM
 };
+
+typedef std::function<void(const void*, faststring*)> ValidxKeyEncoder;
 
 struct WriterOptions {
   // Approximate size of index blocks.
@@ -74,6 +78,10 @@ struct WriterOptions {
   // Default: all default values as specified in the constructor in
   // schema.h
   ColumnStorageAttributes storage_attributes;
+
+  // An optional value index key encoder. If not set, the default encoder
+  // encodes the entire value.
+  boost::optional<ValidxKeyEncoder> validx_key_encoder;
 
   WriterOptions();
 };
