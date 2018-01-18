@@ -420,6 +420,15 @@ inline void* memrchr(const void* bytes, int find_char, size_t len) {
 #define ATTRIBUTE_NO_SANITIZE_THREAD
 #endif
 
+// Tell UBSAN to ignore integer overflows in a given function. There is no
+// __SANITIZE_UNDEFINED__ macro or equivalent, so ASAN support is used as a proxy.
+#if defined(__SANITIZE_ADDRESS__) || defined(ADDRESS_SANITIZER)
+#define ATTRIBUTE_NO_SANITIZE_INTEGER \
+    __attribute__((no_sanitize("integer")))
+#else
+#define ATTRIBUTE_NO_SANITIZE_INTEGER
+#endif
+
 #ifndef HAVE_ATTRIBUTE_SECTION  // may have been pre-set to 0, e.g. for Darwin
 #define HAVE_ATTRIBUTE_SECTION 1
 #endif
