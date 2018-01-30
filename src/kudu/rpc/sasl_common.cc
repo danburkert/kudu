@@ -327,6 +327,7 @@ Status WrapSaslCall(sasl_conn_t* conn, const std::function<int()>& call) {
   if (has_kerberos_keytab) kudu::security::KerberosReinitLock()->ReadUnlock();
   g_auth_failure_capture = nullptr;
 
+  LOG(INFO) << "Sasl call rc: " << rc;
   switch (rc) {
     case SASL_OK:
       return Status::OK();
@@ -366,7 +367,7 @@ uint32_t GetMaxBufferSize(sasl_conn_t* sasl_conn) {
   return *max_buf_size;
 }
 
-Status SaslEncode(sasl_conn_t* conn, Slice plaintext, faststring* ciphertext) {
+Status SaslEncode(sasl_conn_t* conn, Slice plaintext, string* ciphertext) {
   size_t max_buf_size = GetMaxBufferSize(conn);
   size_t offset = 0;
 
@@ -378,12 +379,16 @@ Status SaslEncode(sasl_conn_t* conn, Slice plaintext, faststring* ciphertext) {
     size_t len = std::min(max_buf_size, plaintext.size() - offset);
 
     RETURN_NOT_OK(WrapSaslCall(conn, [&]() {
-        return sasl_encode(conn, plaintext.data() + offset, len, &out, &out_len);
+        return sasl_encode(conn, reinterpret_cast<const char*>(&plaintext.data()[offset]), len, &out, &out_len);
     }));
+
 
     ciphertext->append(out, out_len);
     offset += len;
   }
+
+  LOG(INFO) << "Encode; plaintext.size(): " << plaintext.size()
+            << ", ciphertext.size(): " << ciphertext->size();
 
   return Status::OK();
 }
@@ -392,6 +397,8 @@ Status SaslDecode(sasl_conn_t* conn, Slice ciphertext, string* plaintext) {
   size_t max_buf_size = GetMaxBufferSize(conn);
   size_t offset = 0;
 
+  LOG(INFO) << "Decode; ciphertext.size(): " << ciphertext.size();
+
   // The SASL library can only decode up to a maximum amount at a time, so we
   // have to call decode multiple times if our input is larger than this max.
   while (offset < ciphertext.size()) {
@@ -399,8 +406,10 @@ Status SaslDecode(sasl_conn_t* conn, Slice ciphertext, string* plaintext) {
     unsigned out_len;
     size_t len = std::min(max_buf_size, ciphertext.size() - offset);
 
+    LOG(INFO) << "Decode; decoding " << len << " bytes";
+
     RETURN_NOT_OK(WrapSaslCall(conn, [&]() {
-        return sasl_decode(conn, &ciphertext.data()[offset], len, &out, &out_len);
+        return sasl_decode(conn, reinterpret_cast<const char*>(&ciphertext.data()[offset]), len, &out, &out_len);
     }));
 
     plaintext->append(out, out_len);

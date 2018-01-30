@@ -885,11 +885,9 @@ Status ServerNegotiation::SendSaslSuccess() {
       string plaintext_channel_bindings;
       RETURN_NOT_OK(cert.GetServerEndPointChannelBindings(&plaintext_channel_bindings));
 
-      Slice ciphertext;
       RETURN_NOT_OK(SaslEncode(sasl_conn_.get(),
                                plaintext_channel_bindings,
-                               &ciphertext));
-      *response.mutable_channel_bindings() = ciphertext.ToString();
+                               response.mutable_channel_bindings()));
     }
   }
 
@@ -922,7 +920,7 @@ Status ServerNegotiation::RecvConnectionContext(faststring* recv_buf) {
       return Status::NotAuthorized("ConnectionContextPB wrapped nonce missing");
     }
 
-    Slice decoded_nonce;
+    string decoded_nonce;
     s = SaslDecode(sasl_conn_.get(), conn_context.encoded_nonce(), &decoded_nonce);
     if (!s.ok()) {
       return Status::NotAuthorized("failed to decode nonce", s.message());

@@ -158,7 +158,7 @@ void SaslClientTransport::ReadFrame() {
     if (!s.ok()) {
       throw SaslException(s.CloneAndPrepend("failed to SASL decode data"));
     }
-    read_buf_.assign_copy(plaintext.data(), plaintext.size());
+    read_buf_.assign_copy(reinterpret_cast<const uint8_t*>(plaintext.data()), plaintext.size());
     read_slice_ = read_buf_;
   } else {
     read_slice_ = read_buf_;
@@ -201,7 +201,7 @@ void SaslClientTransport::flush() {
   if (needs_wrap_) {
     Slice plaintext(write_buf_);
     plaintext.remove_prefix(kFrameHeaderSize);
-    faststring ciphertext;
+    string ciphertext;
     Status s = rpc::SaslEncode(sasl_conn_.get(), plaintext, &ciphertext);
     if (!s.ok()) {
       throw SaslException(s.CloneAndPrepend("failed to SASL encode data"));
@@ -210,7 +210,7 @@ void SaslClientTransport::flush() {
     // Note: when the SASL C library encodes the plaintext, it prefixes the
     // ciphertext with the length. Since this happens to match the SASL/Thrift
     // frame format, we can send the ciphertext unmodified to the remote server.
-    transport_->write(ciphertext.data(), ciphertext.size());
+    transport_->write(reinterpret_cast<const uint8_t*>(ciphertext.data()), ciphertext.size());
   } else {
     size_t payload_len = write_buf_.size() - kFrameHeaderSize;
     NetworkByteOrder::Store32(write_buf_.data(), payload_len);

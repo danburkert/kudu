@@ -120,7 +120,7 @@ uint32_t GetMaxBufferSize(sasl_conn_t* sasl_conn) WARN_UNUSED_RESULT;
 // connection.
 Status SaslEncode(sasl_conn_t* conn,
                   Slice plaintext,
-                  faststring* ciphertext) WARN_UNUSED_RESULT;
+                  std::string* ciphertext) WARN_UNUSED_RESULT;
 
 // Decode the provided SASL-encoded data.
 Status SaslDecode(sasl_conn_t* conn,
