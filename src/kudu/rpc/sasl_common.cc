@@ -33,6 +33,7 @@
 #include "kudu/gutil/macros.h"
 #include "kudu/rpc/constants.h"
 #include "kudu/security/init.h"
+#include "kudu/util/faststring.h"
 #include "kudu/util/mutex.h"
 #include "kudu/util/net/sockaddr.h"
 #include "kudu/util/rw_mutex.h"
@@ -365,24 +366,30 @@ uint32_t GetMaxBufferSize(sasl_conn_t* sasl_conn) {
   return *max_buf_size;
 }
 
-Status SaslEncode(sasl_conn_t* conn, Slice plaintext, Slice* ciphertext) {
-  const char* out;
-  unsigned out_len;
-  RETURN_NOT_OK(WrapSaslCall(conn, [&] {
-      return sasl_encode(conn,
-                         reinterpret_cast<const char*>(plaintext.data()),
-                         plaintext.size(),
-                         &out, &out_len);
-  }));
-  *ciphertext = Slice(out, out_len);
+Status SaslEncode(sasl_conn_t* conn, Slice plaintext, faststring* ciphertext) {
+  size_t max_buf_size = GetMaxBufferSize(conn);
+  size_t offset = 0;
 
-  LOG(INFO) << "Encode; plaintext.size(): " << plaintext.size()
-            << ", ciphertext.size(): " << ciphertext->size();
+  // The SASL library can only encode up to a maximum amount at a time, so we
+  // have to call encode multiple times if our input is larger than this max.
+  while (offset < plaintext.size()) {
+    const char* out;
+    unsigned out_len;
+    size_t len = std::min(max_buf_size, plaintext.size() - offset);
+
+    RETURN_NOT_OK(WrapSaslCall(conn, [&]() {
+        return sasl_encode(conn, plaintext.data() + offset, len, &out, &out_len);
+    }));
+
+    ciphertext->append(out, out_len);
+    offset += len;
+  }
 
   return Status::OK();
 }
 
-Status SaslDecode(sasl_conn_t* conn, Slice ciphertext, faststring* plaintext) {
+Status SaslDecode(sasl_conn_t* conn, Slice ciphertext, string* plaintext) {
+  size_t max_buf_size = GetMaxBufferSize(conn);
   size_t offset = 0;
 
   // The SASL library can only decode up to a maximum amount at a time, so we
@@ -390,30 +397,10 @@ Status SaslDecode(sasl_conn_t* conn, Slice ciphertext, faststring* plaintext) {
   while (offset < ciphertext.size()) {
     const char* out;
     unsigned out_len;
-    size_t len = std::min(kSaslMaxOutBufLen, ciphertext.size() - offset);
+    size_t len = std::min(max_buf_size, ciphertext.size() - offset);
 
     RETURN_NOT_OK(WrapSaslCall(conn, [&]() {
         return sasl_decode(conn, &ciphertext.data()[offset], len, &out, &out_len);
-    }));
-
-    plaintext->append(out, out_len);
-    offset += len;
-  }
-
-  return Status::OK();
-}
-Status SaslDecode(sasl_conn_t* conn, const string& encoded, string* plaintext) {
-  size_t offset = 0;
-
-  // The SASL library can only decode up to a maximum amount at a time, so we
-  // have to call decode multiple times if our input is larger than this max.
-  while (offset < encoded.size()) {
-    const char* out;
-    unsigned out_len;
-    size_t len = std::min(kSaslMaxOutBufLen, encoded.size() - offset);
-
-    RETURN_NOT_OK(WrapSaslCall(conn, [&]() {
-        return sasl_decode(conn, encoded.data() + offset, len, &out, &out_len);
     }));
 
     plaintext->append(out, out_len);

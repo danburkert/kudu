@@ -150,7 +150,7 @@ void SaslClientTransport::ReadFrame() {
   transport_->readAll(&read_buf_.data()[kFrameHeaderSize], payload_len);
 
   if (needs_wrap_) {
-    faststring plaintext;
+    string plaintext;
 
     // Point read_slice_ directly at the SASL library's internal buffer. This
     // avoids having to copy the decoded data back into read_buf_.
@@ -158,7 +158,7 @@ void SaslClientTransport::ReadFrame() {
     if (!s.ok()) {
       throw SaslException(s.CloneAndPrepend("failed to SASL decode data"));
     }
-    read_buf_ = std::move(plaintext);
+    read_buf_.assign_copy(plaintext.data(), plaintext.size());
     read_slice_ = read_buf_;
   } else {
     read_slice_ = read_buf_;
@@ -201,7 +201,7 @@ void SaslClientTransport::flush() {
   if (needs_wrap_) {
     Slice plaintext(write_buf_);
     plaintext.remove_prefix(kFrameHeaderSize);
-    Slice ciphertext;
+    faststring ciphertext;
     Status s = rpc::SaslEncode(sasl_conn_.get(), plaintext, &ciphertext);
     if (!s.ok()) {
       throw SaslException(s.CloneAndPrepend("failed to SASL encode data"));

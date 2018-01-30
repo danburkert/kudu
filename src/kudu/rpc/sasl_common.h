@@ -33,6 +33,7 @@
 namespace kudu {
 
 class Sockaddr;
+class faststring;
 
 namespace rpc {
 
@@ -119,7 +120,7 @@ uint32_t GetMaxBufferSize(sasl_conn_t* sasl_conn) WARN_UNUSED_RESULT;
 // connection.
 Status SaslEncode(sasl_conn_t* conn,
                   Slice plaintext,
-                  Slice* ciphertext) WARN_UNUSED_RESULT;
+                  faststring* ciphertext) WARN_UNUSED_RESULT;
 
 // Decode the provided SASL-encoded data.
 Status SaslDecode(sasl_conn_t* conn,
