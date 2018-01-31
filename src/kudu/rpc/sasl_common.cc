@@ -378,7 +378,7 @@ Status SaslEncode(sasl_conn_t* conn, Slice plaintext, string* ciphertext) {
     unsigned out_len;
     size_t len = std::min(max_buf_size, plaintext.size() - offset);
 
-    RETURN_NOT_OK(WrapSaslCall(conn, [&]() {
+    RETURN_NOT_OK(WrapSaslCall(conn, [&] {
         return sasl_encode(conn, reinterpret_cast<const char*>(&plaintext.data()[offset]), len, &out, &out_len);
     }));
 
@@ -408,7 +408,7 @@ Status SaslDecode(sasl_conn_t* conn, Slice ciphertext, string* plaintext) {
 
     LOG(INFO) << "Decode; decoding " << len << " bytes";
 
-    RETURN_NOT_OK(WrapSaslCall(conn, [&]() {
+    RETURN_NOT_OK(WrapSaslCall(conn, [&] {
         return sasl_decode(conn, reinterpret_cast<const char*>(&ciphertext.data()[offset]), len, &out, &out_len);
     }));
 

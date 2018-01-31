@@ -122,7 +122,7 @@ Status MiniHms::Start() {
       { "HADOOP_HOME", hadoop_home },
       { "HIVE_AUX_JARS_PATH", aux_jars },
       { "HIVE_CONF_DIR", tmp_dir },
-      { "JAVA_TOOL_OPTIONS",  "-Dhive.log.level=WARN -Dhive.root.logger=console" },
+      { "JAVA_TOOL_OPTIONS",  "-Dhive.log.level=trace -Dhive.root.logger=console -Djavax.security.sasl.rawsendsize=1024 -Djavax.security.sasl.maxbuffer=1024 -Djavax.security.sasl.level=FINEST" },
       { "HADOOP_CONF_DIR", tmp_dir },
   };
   if (!krb5_conf_.empty()) {
@@ -242,6 +242,11 @@ Status MiniHms::CreateHiveSite(const string& tmp_dir) const {
   <property>
     <name>hadoop.rpc.protection</name>
     <value>$5</value>
+  </property>
+
+  <property>
+    <name>javax.security.sasl.rawsendsize</name>
+    <value>2048</value>
   </property>
 </configuration>
   )";
