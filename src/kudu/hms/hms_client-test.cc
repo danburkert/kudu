@@ -22,6 +22,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <thread>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -42,6 +43,7 @@
 #include "kudu/util/status.h"
 #include "kudu/util/test_macros.h"
 #include "kudu/util/test_util.h"
+#include "kudu/gutil/strings/substitute.h"
 
 using boost::optional;
 using kudu::rpc::SaslProtection;
@@ -56,7 +58,7 @@ class HmsClientTest : public KuduTest,
                       public ::testing::WithParamInterface<optional<SaslProtection::Type>> {
  public:
 
-  Status CreateTable(HmsClient* client,
+  static Status CreateTable(HmsClient* client,
                      const string& database_name,
                      const string& table_name,
                      const string& table_id) {
@@ -401,6 +403,28 @@ TEST_F(HmsClientTest, TestDeserializeJsonTable) {
   ASSERT_OK(HmsClient::DeserializeJsonTable(json, &table));
   ASSERT_EQ("table_name", table.tableName);
   ASSERT_EQ("database_name", table.dbName);
+}
+
+TEST_F(HmsClientTest, TestConcurrent) {
+  MiniHms hms;
+  ASSERT_OK(hms.Start());
+
+  HmsClientOptions options;
+
+  vector<std::thread> threads;
+  for (int i = 0; i < 2; i++) {
+    threads.emplace_back([i, &hms, &options] {
+        HmsClient client(hms.address(), options);
+        CHECK_OK(client.Start());
+        for (int j = 0; j < 1; j++) {
+          CHECK_OK(CreateTable(&client, "default", strings::Substitute("table_$0_$1", i, j), "id"));
+        }
+    });
+  }
+
+  for (auto& thread : threads) {
+    thread.join();
+  }
 }
 
 } // namespace hms

@@ -148,6 +148,20 @@ namespace {
 void ThriftOutputFunction(const char* output) {
   LOG(INFO) << output;
 }
+
+class ScopedLog {
+ public:
+  ScopedLog(string msg) : msg_(std::move(msg)) {
+    LOG(INFO) << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>> " << msg_;
+  }
+
+  ~ScopedLog() {
+    LOG(INFO) << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<< " << msg_;
+  }
+
+  string msg_;
+};
+
 } // anonymous namespace
 
 HmsClient::HmsClient(const HostPort& hms_address, const HmsClientOptions& options)
@@ -195,7 +209,10 @@ Status HmsClient::Start() {
   vector<string> listeners = strings::Split(event_listener_config, ",", strings::SkipWhitespace());
   for (auto& listener : listeners) {
     StripWhiteSpace(&listener);
+    LOG(INFO) << "Listener: " << listener;
   }
+
+  LOG(INFO) << "num listeners: " << listeners.size();
 
   for (const auto& required_listener : { kDbNotificationListener, kKuduMetastorePlugin }) {
     if (std::find(listeners.begin(), listeners.end(), required_listener) == listeners.end()) {
@@ -274,6 +291,9 @@ Status HmsClient::GetDatabase(const string& pattern, hive::Database* database) {
 
 Status HmsClient::CreateTable(const hive::Table& table, const hive::EnvironmentContext& env_ctx) {
   SCOPED_LOG_SLOW_EXECUTION(WARNING, kSlowExecutionWarningThresholdMs, "create HMS table");
+  std::stringstream s;
+  s << table;
+  auto l = ScopedLog(Substitute("HmsClient::CreateTable: $0", s.str()));
   HMS_RET_NOT_OK(client_.create_table_with_environment_context(table, env_ctx),
                  "failed to create Hive MetaStore table");
   return Status::OK();
@@ -284,6 +304,9 @@ Status HmsClient::AlterTable(const std::string& database_name,
                              const hive::Table& table,
                              const hive::EnvironmentContext& env_ctx) {
   SCOPED_LOG_SLOW_EXECUTION(WARNING, kSlowExecutionWarningThresholdMs, "alter HMS table");
+  std::stringstream s;
+  s << table;
+  auto l = ScopedLog(Substitute("HmsClient::AlterTable: $0.$1: $2", database_name, table_name, s.str()));
   HMS_RET_NOT_OK(client_.alter_table_with_environment_context(database_name, table_name,
                                                               table, env_ctx),
                  "failed to alter Hive MetaStore table");
@@ -294,6 +317,7 @@ Status HmsClient::DropTable(const string& database_name,
                             const string& table_name,
                             const hive::EnvironmentContext& env_ctx) {
   SCOPED_LOG_SLOW_EXECUTION(WARNING, kSlowExecutionWarningThresholdMs, "drop HMS table");
+  auto l = ScopedLog(Substitute("HmsClient::DropTable: $0.$1", database_name, table_name));
   HMS_RET_NOT_OK(client_.drop_table_with_environment_context(database_name, table_name,
                                                              true, env_ctx),
                  "failed to drop Hive Metastore table");
@@ -314,6 +338,7 @@ Status HmsClient::GetTable(const string& database_name,
                            hive::Table* table) {
   DCHECK(table);
   SCOPED_LOG_SLOW_EXECUTION(WARNING, kSlowExecutionWarningThresholdMs, "get HMS table");
+  auto l = ScopedLog(Substitute("HmsClient::GetTable: $0.$1", database_name, table_name));
   HMS_RET_NOT_OK(client_.get_table(*table, database_name, table_name),
                  "failed to get Hive Metastore table");
   return Status::OK();
@@ -323,6 +348,7 @@ Status HmsClient::GetCurrentNotificationEventId(int64_t* event_id) {
   DCHECK(event_id);
   SCOPED_LOG_SLOW_EXECUTION(WARNING, kSlowExecutionWarningThresholdMs,
                             "get HMS current notification event ID");
+  auto l = ScopedLog("HmsClient::GetCurrentNotificationEventId");
   hive::CurrentNotificationEventId response;
   HMS_RET_NOT_OK(client_.get_current_notificationEventId(response),
                  "failed to get Hive Metastore current event ID");
@@ -336,6 +362,7 @@ Status HmsClient::GetNotificationEvents(int64_t last_event_id,
   DCHECK(events);
   SCOPED_LOG_SLOW_EXECUTION(WARNING, kSlowExecutionWarningThresholdMs,
                             "get HMS notification events");
+  auto l = ScopedLog(Substitute("HmsClient::GetNotificationEvents: last_event_id: $0", last_event_id));
   hive::NotificationEventRequest request;
   request.lastEvent = last_event_id;
   request.__set_maxEvents(max_events);
@@ -370,7 +397,6 @@ Status HmsClient::GetPartitions(const string& database_name,
                  "failed to get Hive Metastore table partitions");
   return Status::OK();
 }
-
 
 Status HmsClient::DeserializeJsonTable(Slice json, hive::Table* table)  {
   shared_ptr<TMemoryBuffer> membuffer(new TMemoryBuffer(json.size()));
