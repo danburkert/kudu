@@ -1577,6 +1577,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
       // TODO(dan): figure out how to test this.
       if (hms_catalog_) {
         TRACE("Rolling back HMS table creation");
+        LOG(INFO) << "Rolling back HMS table creation: " << req.name() << " [" << table->id() << "]";
         WARN_NOT_OK(hms_catalog_->DropTable(table->id(), req.name()),
                     "an error occurred while attempting to delete orphaned HMS table entry");
       }

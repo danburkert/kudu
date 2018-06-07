@@ -359,13 +359,16 @@ class MasterStressTest : public KuduTest,
 
     MonoTime now(MonoTime::Now());
     while (now < deadline) {
-      ExternalMaster* master = cluster_->master(
-          rand_.Uniform(cluster_->num_masters()));
+
+      uint32_t idx = rand_.Uniform(cluster_->num_masters());
+      ExternalMaster* master = cluster_->master(idx);
+      LOG(INFO) << "shutting down master " << idx << ": " << master->bound_rpc_hostport().ToString() << ": " << master->uuid();
       master->Shutdown();
 
       // Give the rest of the test a chance to operate with the master down.
       SleepFor(MonoDelta::FromMilliseconds(rand_.Uniform(500)));
 
+      LOG(INFO) << "starting master " << idx << ": " << master->bound_rpc_hostport().ToString() << ": " << master->uuid();
       CHECK_OK(master->Restart());
 
       // Wait for the master to start servicing requests before restarting the
@@ -376,6 +379,7 @@ class MasterStressTest : public KuduTest,
       // client requests.
       CHECK_OK(WaitForMasterUpAndRunning(messenger, master));
       num_masters_restarted_.Increment();
+      LOG(INFO) << "master " << idx << " started: " << master->bound_rpc_hostport().ToString() << ": " << master->uuid();
 
       SleepFor(MonoDelta::FromMilliseconds(rand_.Uniform(200)));
       now = MonoTime::Now();

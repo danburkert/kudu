@@ -251,7 +251,7 @@ Status HmsNotificationLogListenerTask::Poll() {
                           "failed to retrieve notification log events");
 
     for (const auto& event : events) {
-      VLOG(1) << "Processing notification log event: " << EventDebugString(event);
+      LOG(INFO) << "Processing notification log event: " << EventDebugString(event);
 
       // Check for out-of-order events. Out-of-order events are skipped, since
       // refusing to process them by returning early would result in the
@@ -360,7 +360,7 @@ Status HmsNotificationLogListenerTask::HandleAlterTableEvent(const hive::Notific
   string after_table_name = Substitute("$0.$1", event.dbName, event.tableName);
 
   if (before_table_name == after_table_name) {
-    VLOG(2) << "Ignoring non-rename alter table event on table "
+    LOG(INFO) << "Ignoring non-rename alter table event on table "
             << *table_id << " " << before_table_name;
     return Status::OK();
   }
