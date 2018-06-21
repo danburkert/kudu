@@ -16,10 +16,11 @@
 // under the License.
 //
 // Utility functions which are handy when doing async/callback-based programming.
-#ifndef KUDU_UTIL_ASYNC_UTIL_H
-#define KUDU_UTIL_ASYNC_UTIL_H
+
+#pragma once
 
 #include <functional>
+#include <memory>
 
 #include "kudu/gutil/bind.h"
 #include "kudu/gutil/macros.h"
@@ -37,54 +38,59 @@ namespace kudu {
 class Synchronizer {
  public:
   Synchronizer()
-    : l_(1) {
+    : data_(std::make_shared<Data>()) {
   }
 
   void StatusCB(const Status& status) {
-    s_ = status;
-    l_.CountDown();
+    data_->status = status;
+    data_->latch.CountDown();
   }
 
   StatusCallback AsStatusCallback() {
-    // Synchronizers are often declared on the stack, so it doesn't make
-    // sense for a callback to take a reference to its synchronizer.
-    //
-    // Note: this means the returned callback _must_ go out of scope before
-    // its synchronizer.
-    return Bind(&Synchronizer::StatusCB, Unretained(this));
+    return Bind(Data::Callback, std::weak_ptr<Data>(data_));
   }
 
   StdStatusCallback AsStdStatusCallback() {
-    // Synchronizers are often declared on the stack, so it doesn't make
-    // sense for a callback to take a reference to its synchronizer.
-    //
-    // Note: this means the returned callback _must_ go out of scope before
-    // its synchronizer.
-    return std::bind(&Synchronizer::StatusCB, this, std::placeholders::_1);
+    return std::bind(Data::Callback, std::weak_ptr<Data>(data_), std::placeholders::_1);
   }
 
-  Status Wait() {
-    l_.Wait();
-    return s_;
+  Status Wait() const {
+    data_->latch.Wait();
+    return data_->status;
   }
 
-  Status WaitFor(const MonoDelta& delta) {
-    if (PREDICT_FALSE(!l_.WaitFor(delta))) {
-      return Status::TimedOut("Timed out while waiting for the callback to be called.");
+  Status WaitFor(const MonoDelta& delta) const {
+    if (PREDICT_FALSE(!data_->latch.WaitFor(delta))) {
+      return Status::TimedOut("timed out while waiting for the callback to be called");
     }
-    return s_;
+    return data_->status;
   }
 
   void Reset() {
-    l_.Reset(1);
+    // Calling this when a callback may still be outstanding will cause a race.
+    DCHECK_EQ(data_.use_count(), 1);
+    data_->status = Status::OK();
+    data_->latch.Reset(1);
   }
 
  private:
-  Status s_;
-  CountDownLatch l_;
 
-  DISALLOW_COPY_AND_ASSIGN(Synchronizer);
+  struct Data {
+    Data() : latch(1) {
+    }
+
+    static void Callback(std::weak_ptr<Data> weak, const Status& status) {
+      auto ptr = weak.lock();
+      if (ptr) {
+        ptr->status = status;
+        ptr->latch.CountDown();
+      }
+    }
+
+    Status status;
+    CountDownLatch latch;
+  };
+
+  std::shared_ptr<Data> data_;
 };
-
 } // namespace kudu
-#endif /* KUDU_UTIL_ASYNC_UTIL_H */
