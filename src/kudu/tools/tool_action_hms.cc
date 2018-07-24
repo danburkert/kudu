@@ -669,10 +669,70 @@ Status FixHmsMetadata(const RunnerContext& context) {
   return Status::RuntimeError("Failed to fix some catalog metadata inconsistencies");
 }
 
+Status Precheck(const RunnerContext& context) {
+  const string& master_addrs = FindOrDie(context.required_args, kMasterAddressesArg);
+  shared_ptr<KuduClient> client;
+  RETURN_NOT_OK(KuduClientBuilder()
+      .default_rpc_timeout(MonoDelta::FromMilliseconds(FLAGS_timeout_ms))
+      .master_server_addrs(Split(master_addrs, ","))
+      .Build(&client));
+
+  vector<string> tables;
+  RETURN_NOT_OK(client->ListTables(&tables));
+
+  // Map of normalized table name to table names.
+  bool conflicting_tables = false;
+  unordered_map<string, vector<string>> normalized_tables;
+  for (string& table : tables) {
+    string normalized_table_name(table.data(), table.size());
+    Status s = hms::HmsCatalog::NormalizeTableName(&normalized_table_name);
+    if (!s.ok()) {
+      // This is not a Hive-compatible table name, so there can't be a conflict
+      // among normalized names (see CatalogManager::NormalizeTableName).
+      continue;
+    }
+    vector<string>& tables = normalized_tables[normalized_table_name];
+    tables.emplace_back(std::move(table));
+    conflicting_tables |= tables.size() > 1;
+  }
+
+  if (!conflicting_tables) {
+    return Status::OK();
+  }
+
+  DataTable data_table({ "conflicting table names" });
+  for (auto& table : normalized_tables) {
+    if (table.second.size() > 1) {
+      for (string& kudu_table : table.second) {
+        data_table.AddRow({ std::move(kudu_table) });
+      }
+    }
+  }
+
+  cout << "Found Kudu tables whose names are not unique according to Hive's case-insensitive"
+       << endl
+       << "identifier requirements. These conflicting tables will cause master startup to" << endl
+       << "fail when the Hive Metastore integration is enabled:";
+  RETURN_NOT_OK(data_table.PrintTo(cout));
+  cout << endl
+       << "Suggestion: rename the conflicting tables to case-insensitive unique names:" << endl
+       << "\t$ kudu table rename_table " << master_addrs
+       << " <conflicting_table_name> <new_table_name>" << endl;
+
+  return Status::IllegalState("found tables in Kudu with case-conflicting names");
+}
+
 unique_ptr<Mode> BuildHmsMode() {
   unique_ptr<Action> hms_check =
       ActionBuilder("check", &CheckHmsMetadata)
           .Description("Check metadata consistency between Kudu and the Hive Metastore catalogs")
+          .AddRequiredParameter({ kMasterAddressesArg, kMasterAddressesArgDesc })
+          .Build();
+
+  unique_ptr<Action> hms_downgrade =
+      ActionBuilder("downgrade", &HmsDowngrade)
+          .Description("Downgrade the metadata to legacy format for "
+                       "Kudu and the Hive Metastores")
           .AddRequiredParameter({ kMasterAddressesArg, kMasterAddressesArgDesc })
           .Build();
 
@@ -688,19 +748,18 @@ unique_ptr<Mode> BuildHmsMode() {
         .AddOptionalParameter("upgrade_hms_tables")
         .Build();
 
-  // TODO(dan): add 'hms precheck' tool to check for overlapping normalized table names.
-
-  unique_ptr<Action> hms_downgrade =
-      ActionBuilder("downgrade", &HmsDowngrade)
-          .Description("Downgrade the metadata to legacy format for "
-                       "Kudu and the Hive Metastores")
-          .AddRequiredParameter({ kMasterAddressesArg, kMasterAddressesArgDesc })
-          .Build();
+  unique_ptr<Action> hms_precheck =
+    ActionBuilder("precheck", &Precheck)
+        .Description("Check that the Kudu cluster is prepared to enable the Hive "
+                     "Metastore integration")
+        .AddRequiredParameter({ kMasterAddressesArg, kMasterAddressesArgDesc })
+        .Build();
 
   return ModeBuilder("hms").Description("Operate on remote Hive Metastores")
-                           .AddAction(std::move(hms_downgrade))
                            .AddAction(std::move(hms_check))
+                           .AddAction(std::move(hms_downgrade))
                            .AddAction(std::move(hms_fix))
+                           .AddAction(std::move(hms_precheck))
                            .Build();
 }
 

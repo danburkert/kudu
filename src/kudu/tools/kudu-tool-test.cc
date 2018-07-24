@@ -2591,6 +2591,81 @@ TEST_F(ToolTest, TestCheckAndManualFixHmsMetadata) {
   }));
 }
 
+TEST_F(ToolTest, TestHmsPrecheck) {
+  ExternalMiniClusterOptions opts;
+  opts.hms_mode = HmsMode::ENABLE_HIVE_METASTORE;
+  NO_FATALS(StartExternalMiniCluster(std::move(opts)));
+
+  string master_addr = cluster_->master()->bound_rpc_addr().ToString();
+
+  shared_ptr<KuduClient> client;
+  ASSERT_OK(cluster_->CreateClient(nullptr, &client));
+
+  // Create test tables.
+  KuduSchemaBuilder schema_builder;
+  schema_builder.AddColumn("key")->Type(client::KuduColumnSchema::INT32)->NotNull()->PrimaryKey();
+  KuduSchema schema;
+  ASSERT_OK(schema_builder.Build(&schema));
+  for (const string& table_name : {
+      "a.b",
+      "foo.bar",
+      "FOO.bar",
+      "foo.BAR",
+      "fuzz",
+      "FUZZ",
+      "a.b!",
+      "A.B!",
+  }) {
+      ASSERT_OK(CreateKuduTable(client, table_name));
+  }
+
+  // Run the precheck tool. It should complain about the conflicting tables.
+  string out;
+  string err;
+  Status s = RunActionStdoutStderrString(Substitute("hms precheck $0", master_addr), &out, &err);
+  ASSERT_FALSE(s.ok());
+  ASSERT_STR_CONTAINS(err, "found tables in Kudu with case-conflicting names");
+  ASSERT_STR_CONTAINS(out, "foo.bar");
+  ASSERT_STR_CONTAINS(out, "FOO.bar");
+  ASSERT_STR_CONTAINS(out, "foo.BAR");
+
+  // It should not complain about tables which don't have conflicting names.
+  ASSERT_STR_NOT_CONTAINS(out, "a.b");
+
+  // It should not complain about tables which have Hive-incompatible names.
+  ASSERT_STR_NOT_CONTAINS(out, "fuzz");
+  ASSERT_STR_NOT_CONTAINS(out, "FUZZ");
+  ASSERT_STR_NOT_CONTAINS(out, "a.b!");
+  ASSERT_STR_NOT_CONTAINS(out, "A.B!");
+
+  // Rename the conflicting tables. Use the rename table tool to match the actual workflow.
+  RunActionStdoutNone(Substitute("table rename_table $0 FOO.bar foo.bar2", master_addr));
+  RunActionStdoutNone(Substitute("table rename_table $0 foo.BAR foo.bar3", master_addr));
+
+  // Precheck should now pass, and the cluster should upgrade succesfully.
+  RunActionStdoutNone(Substitute("hms precheck $0", master_addr));
+
+  // Enable the HMS integration.
+  cluster_->ShutdownNodes(cluster::ClusterNodes::MASTERS_ONLY);
+  cluster_->EnableMetastoreIntegration();
+  ASSERT_OK(cluster_->Restart());
+
+  // Sanity-check the tables.
+  vector<string> tables;
+  ASSERT_OK(client->ListTables(&tables));
+  std::sort(tables.begin(), tables.end());
+  ASSERT_EQ(tables, vector<string>({
+      "A.B!",
+      "FUZZ",
+      "a.b",
+      "a.b!",
+      "foo.bar",
+      "foo.bar2",
+      "foo.bar3",
+      "fuzz",
+  }));
+}
+
 // This test is parameterized on the serialization mode and Kerberos.
 class ControlShellToolTest :
     public ToolTest,
