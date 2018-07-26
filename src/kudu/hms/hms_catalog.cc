@@ -497,6 +497,8 @@ Status HmsCatalog::PopulateTable(const string& id,
   // Workaround for HIVE-19253.
   table->parameters[HmsClient::kExternalTableKey] = "TRUE";
 
+  table->parameters["spark.sql.sources.provider"] = "kudu";
+
   // Set the table type to external so that the table's (HD)FS directory will
   // not be deleted when the table is dropped. Deleting the directory is
   // unnecessary, and causes a race in the HMS between concurrent DROP TABLE and
