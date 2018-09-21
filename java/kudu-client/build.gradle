@@ -38,6 +38,7 @@ dependencies {
   optional libs.yetusAnnotations
 
   testCompile libs.hamcrestCore
+  testCompile libs.hiveMetastore
   testCompile libs.junit
   testCompile libs.log4j
   testCompile libs.mockitoCore
