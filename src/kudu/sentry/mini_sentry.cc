@@ -65,6 +65,14 @@ void MiniSentry::EnableKerberos(std::string krb5_conf,
   keytab_file_ = std::move(keytab_file);
 }
 
+void MiniSentry::EnableHms(string hms_uris) {
+  hms_uris_ = hms_uris;
+}
+
+void MiniSentry::SetDataRoot(string data_root) {
+  data_root_ = std::move(data_root);
+}
+
 Status MiniSentry::Start() {
   SCOPED_LOG_SLOW_EXECUTION(WARNING, kSentryStartTimeoutMs / 2, "Starting Sentry");
   CHECK(!sentry_process_);
@@ -84,15 +92,18 @@ Status MiniSentry::Start() {
   RETURN_NOT_OK(FindHomeDir("sentry", bin_dir, &sentry_home));
   RETURN_NOT_OK(FindHomeDir("java", bin_dir, &java_home));
 
-  auto tmp_dir = GetTestDataDirectory();
+  if (data_root_.empty()) {
+    data_root_ = GetTestDataDirectory();
+  }
 
-  RETURN_NOT_OK(CreateSentryConfigs(tmp_dir));
+  RETURN_NOT_OK(CreateSentryConfigs(data_root_));
 
   // List of JVM environment options to pass to the Sentry service.
   string java_options;
   if (!krb5_conf_.empty()) {
     java_options += Substitute(" -Djava.security.krb5.conf=$0", krb5_conf_);
   }
+  java_options += Substitute(" -Dhive.metastore.uris=$0", hms_uris_);
 
   map<string, string> env_vars {
       { "JAVA_HOME", java_home },
@@ -104,7 +115,7 @@ Status MiniSentry::Start() {
   sentry_process_.reset(new Subprocess({
       Substitute("$0/bin/sentry", sentry_home),
       "--command", "service",
-      "--conffile", JoinPathSegments(tmp_dir, "sentry-site.xml"),
+      "--conffile", JoinPathSegments(data_root_, "sentry-site.xml"),
   }));
 
   sentry_process_->SetEnvVars(env_vars);

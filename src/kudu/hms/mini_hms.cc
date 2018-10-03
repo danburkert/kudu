@@ -73,6 +73,10 @@ void MiniHms::EnableKerberos(string krb5_conf,
   protection_ = protection;
 }
 
+void MiniHms::EnableSentry(HostPort sentry_address) {
+  sentry_address_ = sentry_address.ToString();
+}
+
 void MiniHms::SetDataRoot(string data_root) {
   data_root_ = std::move(data_root);
 }

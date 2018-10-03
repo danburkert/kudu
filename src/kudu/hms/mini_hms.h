@@ -49,6 +49,9 @@ class MiniHms {
                       std::string keytab_file,
                       rpc::SaslProtection::Type protection);
 
+  // Configures the mini HMS to enable the Sentry plugin.
+  void EnableSentry(HostPort sentry_address);
+
   // Configures the mini HMS to store its data in the provided path. If not set,
   // it uses a test-only temporary directory.
   void SetDataRoot(std::string data_root);
@@ -100,6 +103,9 @@ class MiniHms {
   std::string service_principal_;
   std::string keytab_file_;
   rpc::SaslProtection::Type protection_ = rpc::SaslProtection::kAuthentication;
+
+  // Sentry configuration
+  std::string sentry_address_;
 };
 
 } // namespace hms

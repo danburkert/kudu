@@ -44,8 +44,7 @@
 namespace kudu {
 namespace cluster {
 
-using std::make_pair;
-using std::pair;
+using std::make_pair; using std::pair;
 using std::string;
 using std::vector;
 using strings::Substitute;
@@ -230,6 +229,18 @@ TEST_P(ExternalMiniClusterTest, TestBasicOperation) {
   ASSERT_TRUE(ts->IsProcessAlive());
 
   cluster.Shutdown();
+}
+
+TEST_F(ExternalMiniClusterTest, TestFoo) {
+  ExternalMiniClusterOptions opts;
+  opts.hms_mode = HmsMode::ENABLE_HIVE_METASTORE;
+  opts.enable_sentry = true;
+
+  opts.num_masters = 0;
+  opts.num_tablet_servers = 0;
+
+  ExternalMiniCluster cluster(opts);
+  ASSERT_OK(cluster.Start());
 }
 
 } // namespace cluster

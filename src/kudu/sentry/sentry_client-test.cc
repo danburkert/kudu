@@ -50,10 +50,10 @@ TEST_P(SentryClientTest, TestMiniSentryLifecycle) {
   ASSERT_OK(mini_sentry.Start());
 
   ASSERT_OK(mini_sentry.Stop());
-  ASSERT_OK(mini_sentry.Start());
+  //ASSERT_OK(mini_sentry.Start());
 
-  ASSERT_OK(mini_sentry.Pause());
-  ASSERT_OK(mini_sentry.Resume());
+  //ASSERT_OK(mini_sentry.Pause());
+  //ASSERT_OK(mini_sentry.Resume());
 }
 
 // Basic functionality test of the Sentry client. The goal is not an exhaustive

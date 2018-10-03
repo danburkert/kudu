@@ -48,6 +48,7 @@
 #include "kudu/rpc/sasl_common.h"
 #include "kudu/rpc/user_credentials.h"
 #include "kudu/security/test/mini_kdc.h"
+#include "kudu/sentry/mini_sentry.h"
 #include "kudu/server/server_base.pb.h"
 #include "kudu/server/server_base.proxy.h"
 #include "kudu/tablet/metadata.pb.h"
@@ -108,6 +109,7 @@ ExternalMiniClusterOptions::ExternalMiniClusterOptions()
       num_data_dirs(1),
       enable_kerberos(false),
       hms_mode(HmsMode::NONE),
+      enable_sentry(false),
       logtostderr(true),
       start_process_timeout(MonoDelta::FromSeconds(30)),
       rpc_negotiation_timeout(MonoDelta::FromSeconds(3)) {
@@ -206,8 +208,33 @@ Status ExternalMiniCluster::Start() {
       hms_->EnableKerberos(kdc_->GetEnvVars()["KRB5_CONFIG"], spn, ktpath,
                            rpc::SaslProtection::kAuthentication);
     }
+    if (opts_.enable_sentry) {
+
+    }
 
     RETURN_NOT_OK_PREPEND(hms_->Start(),
+                          "Failed to start the Hive Metastore");
+  }
+
+  LOG(WARNING) << "Mini HMS spun up!  Waiting 5s...";
+  SleepFor(MonoDelta::FromSeconds(5));
+
+  if (opts_.enable_sentry) {
+    sentry_.reset(new sentry::MiniSentry());
+    sentry_->SetDataRoot(opts_.cluster_root);
+    if (hms_) {
+      sentry_->EnableHms(hms_->uris());
+    }
+
+    if (opts_.enable_kerberos) {
+      string spn = "sentry/127.0.0.1";
+      string ktpath;
+      RETURN_NOT_OK_PREPEND(kdc_->CreateServiceKeytab(spn, &ktpath),
+                            "could not create keytab");
+      sentry_->EnableKerberos(kdc_->GetEnvVars()["KRB5_CONFIG"], spn, ktpath);
+    }
+
+    RETURN_NOT_OK_PREPEND(sentry_->Start(),
                           "Failed to start the Hive Metastore");
   }
 
