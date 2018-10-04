@@ -216,9 +216,6 @@ Status ExternalMiniCluster::Start() {
                           "Failed to start the Hive Metastore");
   }
 
-  LOG(WARNING) << "Mini HMS spun up!  Waiting 5s...";
-  SleepFor(MonoDelta::FromSeconds(5));
-
   if (opts_.enable_sentry) {
     sentry_.reset(new sentry::MiniSentry());
     sentry_->SetDataRoot(opts_.cluster_root);

@@ -116,16 +116,19 @@ Status MiniHms::Start() {
     // Ensure IPv4 is used.
     "-Djava.net.preferIPv4Stack=true "
     // Make logging less verbose.
-    "-Dhive.log.level=WARN "
+    "-Dhive.log.level=DEBUG "
     // Log to the console.
-    "-Dhive.root.logger=console "
+    //"-Dhive.root.logger=DRFA "
+
     // Tune down the Derby deadlock timeout. The HMS's use of Derby with the
     // NOTIFICATION_SEQUENCE table is prone to deadlocks, at which point Derby
     // cancels a conflicting transaction after waiting out the timeout. This
     // typically doesn't cause issues since the HMS auto retries these
     // transactions, however the default period of 20 seconds causes tests to
     // timeout.
-    "-Dderby.locks.deadlockTimeout=1";
+    "-Dderby.locks.deadlockTimeout=1 ";
+
+  string hadoop_options = Substitute("-Dhive.log.dir=$0", data_root_);
 
   if (!krb5_conf_.empty()) {
     java_options += Substitute(" -Djava.security.krb5.conf=$0", krb5_conf_);
@@ -138,6 +141,7 @@ Status MiniHms::Start() {
       { "HIVE_CONF_DIR", data_root_ },
       { "JAVA_TOOL_OPTIONS", java_options },
       { "HADOOP_CONF_DIR", data_root_ },
+      { "HADOOP_OPTS", hadoop_options },
   };
 
   // Start the HMS.

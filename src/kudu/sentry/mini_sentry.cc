@@ -104,6 +104,7 @@ Status MiniSentry::Start() {
     java_options += Substitute(" -Djava.security.krb5.conf=$0", krb5_conf_);
   }
   java_options += Substitute(" -Dhive.metastore.uris=$0", hms_uris_);
+  java_options += " -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005";
 
   map<string, string> env_vars {
       { "JAVA_HOME", java_home },
@@ -114,6 +115,7 @@ Status MiniSentry::Start() {
   // Start Sentry.
   sentry_process_.reset(new Subprocess({
       Substitute("$0/bin/sentry", sentry_home),
+      "--log4jConf", JoinPathSegments(data_root_, "log4j.properties"),
       "--command", "service",
       "--conffile", JoinPathSegments(data_root_, "sentry-site.xml"),
   }));
@@ -261,8 +263,30 @@ test-user=user
 kudu=admin
 joe-interloper=""
 )";
-
   RETURN_NOT_OK(WriteStringToFile(Env::Default(), kUsers, users_ini_path));
+
+  // Configure the Sentry service to output to the console at INFO level, and to
+  // a file at the DEBUG level.
+  static const string kLogPropertiesTemplate = R"(
+log4j.rootLogger = INFO, out
+
+log4j.appender.out = org.apache.log4j.ConsoleAppender
+log4j.appender.out.layout = org.apache.log4j.PatternLayout
+log4j.appender.out.layout.ConversionPattern = %d{HH:mm:ss.SSS} [%p - %t] (%F:%L) %m%n
+
+log4j.appender.file = org.apache.log4j.FileAppender
+log4j.appender.file.File = $0
+log4j.appender.file.layout = org.apache.log4j.PatternLayout
+log4j.appender.file.layout.ConversionPattern = %d{HH:mm:ss.SSS} [%p - %t] (%F:%L) %m%n
+
+log4j.logger.org.apache.sentry=DEBUG, out, file
+log4j.additivity.org.apache.sentry=false
+)";
+  string log_properties = Substitute(
+      kLogPropertiesTemplate,
+      JoinPathSegments(tmp_dir, "sentry.log"));
+  RETURN_NOT_OK(WriteStringToFile(Env::Default(), log_properties, JoinPathSegments(tmp_dir, "log4j.properties")));
+
   return Status::OK();
 }
 

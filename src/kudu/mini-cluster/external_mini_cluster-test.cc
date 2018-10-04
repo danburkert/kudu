@@ -27,6 +27,8 @@
 #include <glog/stl_logging.h> // IWYU pragma: keep
 #include <gtest/gtest.h>
 
+#include "kudu/hms/ThriftHiveMetastore.h"
+#include "kudu/hms/hive_metastore_types.h"
 #include "kudu/common/common.pb.h"
 #include "kudu/gutil/strings/substitute.h"
 #include "kudu/gutil/strings/util.h" // IWYU pragma: keep
@@ -241,6 +243,37 @@ TEST_F(ExternalMiniClusterTest, TestFoo) {
 
   ExternalMiniCluster cluster(opts);
   ASSERT_OK(cluster.Start());
+
+  thrift::ClientOptions hms_client_opts;
+  hms::HmsClient hms_client(cluster.hms()->address(), hms_client_opts);
+  ASSERT_OK(hms_client.Start());
+
+  vector<hive::NotificationEvent> events;
+  ASSERT_OK(hms_client.GetNotificationEvents(0, 100, &events));
+  ASSERT_EQ(0, events.size());
+
+  LOG(INFO) << "Sleeping...";
+  SleepFor(MonoDelta::FromSeconds(5));
+
+  ASSERT_OK(hms_client.GetNotificationEvents(0, 100, &events));
+  ASSERT_EQ(0, events.size());
+
+  LOG(INFO) << "Creating table...";
+
+  hive::Table table;
+  table.dbName = "default";
+  table.tableName = "foo";
+  table.tableType = hms::HmsClient::kExternalTable;
+  ASSERT_OK(hms_client.CreateTable(table));
+
+  ASSERT_OK(hms_client.GetNotificationEvents(0, 100, &events));
+  ASSERT_EQ(1, events.size());
+
+  LOG(INFO) << "Table created...";
+  SleepFor(MonoDelta::FromSeconds(5));
+
+  // Fail the test so that cluster state will be preserved.
+  ASSERT_TRUE(false);
 }
 
 } // namespace cluster

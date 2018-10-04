@@ -414,22 +414,33 @@ Status WaitForBind(pid_t pid, uint16_t* port, const char* kind, MonoDelta timeou
   }
 
   // The '-Ffn' flag gets lsof to output something like:
-  //   p19730
-  //   f123
-  //   n*:41254
+  //   p5801
+  //   f548
+  //   n127.0.0.1:43954->127.0.0.1:43617
+  //   f549
+  //   n*:8038
+  //
   // The first line is the pid. We ignore it.
-  // The second line is the file descriptor number. We ignore it.
-  // The third line has the bind address and port.
-  // Subsequent lines show active connections.
-  vector<string> lines = strings::Split(lsof_out, "\n");
+  // Subsequent lines come in pairs.
+  // In this example the first pair is an outbound TCP socket. We ignore it.
+  // The second pair is the listening TCP socket bind address and port.
+  //
+  // We use the first encountered listening TCP socket, since that's most likely
+  // to be the primary service port. Note, however, that this may not hold for
+  // all processes, such as JVM processes configured with JDWP.
   int32_t p = -1;
-  if (lines.size() < 3 ||
-      lines[2].substr(0, 3) != "n*:" ||
-      !safe_strto32(lines[2].substr(3), &p) ||
-      p <= 0) {
+  vector<string> lines = strings::Split(lsof_out, "\n");
+  for (int i = 2; i < lines.size(); i += 2) {
+    if (lines[i].substr(0, 3) == "n*:") {
+      if (!safe_strto32(lines[i].substr(3), &p)) {
+        return Status::RuntimeError("unexpected lsof output", lsof_out);
+      }
+      break;
+    }
+  }
+  if (p <= 0 || p > std::numeric_limits<uint16_t>::max()) {
     return Status::RuntimeError("unexpected lsof output", lsof_out);
   }
-  CHECK(p > 0 && p < std::numeric_limits<uint16_t>::max()) << "parsed invalid port: " << p;
   VLOG(1) << "Determined bound port: " << p;
   *port = p;
   return Status::OK();
