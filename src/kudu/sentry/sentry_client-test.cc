@@ -18,6 +18,7 @@
 #include "kudu/sentry/sentry_client.h"
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -33,6 +34,7 @@
 #include "kudu/util/test_macros.h"
 #include "kudu/util/test_util.h"
 
+using std::set;
 using std::string;
 using std::vector;
 
@@ -151,5 +153,146 @@ TEST_P(SentryClientTest, TestCreateDropRole) {
     ASSERT_TRUE(s.IsNotFound()) << s.ToString();
   }
 }
+
+// Similar to above test to verify that the client can communicate with the
+// Sentry service to list privileges, and errors are converted to Status
+// instances.
+TEST_P(SentryClientTest, TestListPrivilege) {
+  MiniKdc kdc;
+  MiniSentry sentry;
+  thrift::ClientOptions sentry_client_opts;
+
+  if (KerberosEnabled()) {
+    ASSERT_OK(kdc.Start());
+
+    string spn = "sentry/127.0.0.1@KRBTEST.COM";
+    string ktpath;
+    ASSERT_OK(kdc.CreateServiceKeytab("sentry/127.0.0.1", &ktpath));
+
+    ASSERT_OK(rpc::SaslInit());
+    sentry.EnableKerberos(kdc.GetEnvVars()["KRB5_CONFIG"], spn, ktpath);
+
+    ASSERT_OK(kdc.CreateUserPrincipal("kudu"));
+    ASSERT_OK(kdc.Kinit("kudu"));
+    ASSERT_OK(kdc.SetKrb5Environment());
+    sentry_client_opts.enable_kerberos = true;
+    sentry_client_opts.service_principal = "sentry";
+  }
+  ASSERT_OK(sentry.Start());
+
+  SentryClient client(sentry.address(), sentry_client_opts);
+  ASSERT_OK(client.Start());
+
+  // Attempt to access Sentry privileges by a non admin user.
+  ::sentry::TSentryAuthorizable authorizable;
+  authorizable.server = "server";
+  authorizable.db = "db";
+  authorizable.table = "table";
+  ::sentry::TListSentryPrivilegesRequest request;
+  request.requestorUserName = "joe-interloper";
+  request.authorizableHierarchy = authorizable;
+  request.__set_principalName("viewer");
+  ::sentry::TListSentryPrivilegesResponse response;
+  Status s = client.ListPrivilegesByUser(request, &response);
+  ASSERT_TRUE(s.IsNotAuthorized()) << s.ToString();
+
+  // Attempt to access Sentry privileges by a user without
+  // group mapping.
+  request.requestorUserName = "user-without-mapping";
+  s = client.ListPrivilegesByUser(request, &response);
+  ASSERT_TRUE(s.IsNotAuthorized()) << s.ToString();
+
+  // Attempt to access Sentry privileges of a non-exist user.
+  request.requestorUserName = "test-admin";
+  s = client.ListPrivilegesByUser(request, &response);
+  ASSERT_TRUE(s.IsNotAuthorized()) << s.ToString();
+
+  // List the privileges of user 'test-user' .
+  request.__set_principalName("test-user");
+  ASSERT_OK(client.ListPrivilegesByUser(request, &response));
+}
+
+// Similar to above test to verify that the client can communicate with the
+// Sentry service to grant privileges, and errors are converted to Status
+// instances.
+TEST_P(SentryClientTest, TestGrantPrivilege) {
+  MiniKdc kdc;
+  MiniSentry sentry;
+  thrift::ClientOptions sentry_client_opts;
+
+  if (KerberosEnabled()) {
+    ASSERT_OK(kdc.Start());
+
+    string spn = "sentry/127.0.0.1@KRBTEST.COM";
+    string ktpath;
+    ASSERT_OK(kdc.CreateServiceKeytab("sentry/127.0.0.1", &ktpath));
+
+    ASSERT_OK(rpc::SaslInit());
+    sentry.EnableKerberos(kdc.GetEnvVars()["KRB5_CONFIG"], spn, ktpath);
+
+    ASSERT_OK(kdc.CreateUserPrincipal("kudu"));
+    ASSERT_OK(kdc.Kinit("kudu"));
+    ASSERT_OK(kdc.SetKrb5Environment());
+    sentry_client_opts.enable_kerberos = true;
+    sentry_client_opts.service_principal = "sentry";
+  }
+  ASSERT_OK(sentry.Start());
+
+  SentryClient client(sentry.address(), sentry_client_opts);
+  ASSERT_OK(client.Start());
+
+  // Attempt to alter role by a non admin user.
+
+  ::sentry::TSentryGroup group;
+  group.groupName = "user";
+  set<::sentry::TSentryGroup> groups;
+  groups.insert(group);
+
+  ::sentry::TAlterSentryRoleAddGroupsRequest group_requset;
+  ::sentry::TAlterSentryRoleAddGroupsResponse group_response;
+  group_requset.requestorUserName = "joe-interloper";
+  group_requset.roleName = "viewer";
+  group_requset.groups = groups;
+
+  Status s = client.AlterRoleAddGroups(group_requset, &group_response);
+  ASSERT_TRUE(s.IsNotAuthorized()) << s.ToString();
+
+  // Attempt to alter a non-exist role.
+  group_requset.requestorUserName = "test-admin";
+  s = client.AlterRoleAddGroups(group_requset, &group_response);
+  ASSERT_TRUE(s.IsNotFound()) << s.ToString();
+
+  // Alter role 'viewer' to add group 'user'.
+  ::sentry::TCreateSentryRoleRequest role_request;
+  role_request.requestorUserName = "test-admin";
+  role_request.roleName = "viewer";
+  ASSERT_OK(client.CreateRole(role_request));
+  ASSERT_OK(client.AlterRoleAddGroups(group_requset, &group_response));
+
+  // Attempt to alter role by a non admin user.
+  ::sentry::TAlterSentryRoleGrantPrivilegeRequest privilege_request;
+  ::sentry::TAlterSentryRoleGrantPrivilegeResponse privilege_response;
+  privilege_request.requestorUserName = "joe-interloper";
+  privilege_request.roleName = "viewer";
+  ::sentry::TSentryPrivilege privilege;
+  privilege.serverName = "server";
+  privilege.dbName = "db";
+  privilege.tableName = "table";
+  privilege.action = "SELECT";
+  privilege_request.__set_privilege(privilege);
+  s = client.AlterRoleGrantPrivilege(privilege_request, &privilege_response);
+  ASSERT_TRUE(s.IsNotAuthorized()) << s.ToString();
+
+  // Attempt to alter a non-exist role.
+  privilege_request.requestorUserName = "test-admin";
+  privilege_request.roleName = "not-exist";
+  s = client.AlterRoleGrantPrivilege(privilege_request, &privilege_response);
+  ASSERT_TRUE(s.IsNotFound()) << s.ToString();
+
+  privilege_request.requestorUserName = "test-admin";
+  privilege_request.roleName = "viewer";
+  ASSERT_OK(client.AlterRoleGrantPrivilege(privilege_request, &privilege_response));
+}
+
 } // namespace sentry
 } // namespace kudu
