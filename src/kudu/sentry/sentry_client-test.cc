@@ -245,8 +245,7 @@ TEST_P(SentryClientTest, TestGrantPrivilege) {
 
   ::sentry::TSentryGroup group;
   group.groupName = "user";
-  set<::sentry::TSentryGroup> groups;
-  groups.insert(group);
+  vector<::sentry::TSentryGroup> groups({ group });
 
   ::sentry::TAlterSentryRoleAddGroupsRequest group_requset;
   ::sentry::TAlterSentryRoleAddGroupsResponse group_response;

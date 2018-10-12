@@ -93,7 +93,7 @@ struct TAlterSentryRoleAddGroupsRequest {
 1: required i32 protocol_version = sentry_common_service.TSENTRY_SERVICE_V2,
 2: required string requestorUserName, # user on whose behalf the request is issued
 3: required string roleName,
-5: required set<TSentryGroup> groups
+5: required list<TSentryGroup> groups
 }
 
 struct TAlterSentryRoleAddGroupsResponse {
@@ -105,7 +105,7 @@ struct TAlterSentryRoleAddUsersRequest {
 1: required i32 protocol_version = sentry_common_service.TSENTRY_SERVICE_V1,
 2: required string requestorUserName, # user on whose behalf the request is issued
 3: required string roleName,
-4: required set<string> users
+4: required list<string> users
 }
 
 struct TAlterSentryRoleAddUsersResponse {
@@ -117,7 +117,7 @@ struct TAlterSentryRoleDeleteGroupsRequest {
 1: required i32 protocol_version = sentry_common_service.TSENTRY_SERVICE_V2,
 2: required string requestorUserName, # user on whose behalf the request is issued
 3: required string roleName,
-5: required set<TSentryGroup> groups
+5: required list<TSentryGroup> groups
 }
 struct TAlterSentryRoleDeleteGroupsResponse {
 1: required sentry_common_service.TSentryResponseStatus status
@@ -140,12 +140,12 @@ struct TAlterSentryRoleGrantPrivilegeRequest {
 2: required string requestorUserName, # user on whose behalf the request is issued
 3: required string roleName,
 5: optional TSentryPrivilege privilege,
-6: optional set<TSentryPrivilege> privileges
+6: optional list<TSentryPrivilege> privileges
 }
 struct TAlterSentryRoleGrantPrivilegeResponse {
 1: required sentry_common_service.TSentryResponseStatus status
 2: optional TSentryPrivilege privilege
-3: optional set<TSentryPrivilege> privileges
+3: optional list<TSentryPrivilege> privileges
 }
 
 # REVOKE ... ON ... FROM ROLE ...
@@ -154,7 +154,7 @@ struct TAlterSentryRoleRevokePrivilegeRequest {
 2: required string requestorUserName, # user on whose behalf the request is issued
 3: required string roleName,
 5: optional TSentryPrivilege privilege,
-6: optional set<TSentryPrivilege> privileges
+6: optional list<TSentryPrivilege> privileges
 }
 struct TAlterSentryRoleRevokePrivilegeResponse {
 1: required sentry_common_service.TSentryResponseStatus status
@@ -176,12 +176,12 @@ struct TListSentryRolesForUserRequest {
 # used only for TListSentryRolesResponse
 struct TSentryRole {
 1: required string roleName,
-2: required set<TSentryGroup> groups,
+2: required list<TSentryGroup> groups,
 3: required string grantorPrincipal #Deprecated
 }
 struct TListSentryRolesResponse {
 1: required sentry_common_service.TSentryResponseStatus status
-2: optional set<TSentryRole> roles
+2: optional list<TSentryRole> roles
 }
 
 struct TSentryAuthorizable {
@@ -210,7 +210,7 @@ struct TListSentryPrivilegesRequest {
 
 struct TListSentryPrivilegesResponse {
 1: required sentry_common_service.TSentryResponseStatus status
-2: optional set<TSentryPrivilege> privileges
+2: optional list<TSentryPrivilege> privileges
 }
 
 # Drop privilege
@@ -258,12 +258,12 @@ struct TListSentryPrivilegesForProviderResponse {
 # List role:set<privileges> for the given authorizable
 # Optionally use the set of groups to filter the roles
 struct TSentryPrivilegeMap {
-1: required map<string, set<TSentryPrivilege>> privilegeMap
+1: required map<string, list<TSentryPrivilege>> privilegeMap
 }
 struct TListSentryPrivilegesByAuthRequest {
 1: required i32 protocol_version = sentry_common_service.TSENTRY_SERVICE_V2,
 2: required string requestorUserName, # user on whose behalf the request is issued
-3: required set<TSentryAuthorizable> authorizableSet,
+3: required list<TSentryAuthorizable> authorizableSet,
 4: optional set<string> groups,
 5: optional TSentryActiveRoleSet roleSet,
 6: optional set<string> users
@@ -294,7 +294,7 @@ struct TSentryConfigValueResponse {
 # struct for the mapping data like group to role, role to privilege
 struct TSentryMappingData {
 1: optional map<string, set<string>> groupRolesMap,                # for the groupName -> role mapping
-2: optional map<string, set<TSentryPrivilege>>  rolePrivilegesMap, # for the roleName -> privilege mapping
+2: optional map<string, list<TSentryPrivilege>>  rolePrivilegesMap, # for the roleName -> privilege mapping
 3: optional map<string, set<string>> userRolesMap                  # for the userName -> role mapping
 }
 
@@ -393,7 +393,7 @@ struct TSentryPrivilegesRequest {
 **/
 struct TSentryPrivilegesResponse {
 1: required sentry_common_service.TSentryResponseStatus status
-2: required map<string, set<TSentryPrivilege>> privilegesMap;
+2: required map<string, list<TSentryPrivilege>> privilegesMap;
 }
 
 service SentryPolicyService
